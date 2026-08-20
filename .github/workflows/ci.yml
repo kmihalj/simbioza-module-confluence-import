@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4', '8.5']
+
+    steps:
+      - name: Check out repository / Dohvati repozitorij
+        uses: actions/checkout@v5
+
+      - name: Set up PHP / Postavi PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: dom, fileinfo, libxml, mbstring, pdo_sqlite, xmlreader, zip
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate Composer metadata / Provjeri Composer metapodatke
+        run: composer validate --strict --no-interaction
+
+      - name: Resolve latest dependencies / Dohvati najnovije ovisnosti
+        run: composer update --with-all-dependencies --no-interaction --no-progress --prefer-dist --optimize-autoloader
+
+      - name: Check platform requirements / Provjeri platformske preduvjete
+        run: composer check-platform-reqs
+
+      - name: Run quality checks and tests / Pokreni provjere i testove
+        run: composer on-commit

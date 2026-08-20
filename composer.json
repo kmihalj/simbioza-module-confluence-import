@@ -1,0 +1,137 @@
+{
+    "name": "aaieduhr/simbioza-module-confluence-import",
+    "description": "Safe Confluence space import for the Simbioza knowledge application",
+    "type": "heartphrame-module",
+    "license": "EUPL-1.2",
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/kmihalj/heartphrame-module-API.git"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/kmihalj/heartphrame-module-audit.git"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/kmihalj/heartphrame-module-backup.git"
+        },
+        {
+            "type": "vcs",
+            "url": "https://gitlab.opencode.hr/srce/aai-eduhr/heartphrame/heartphrame-framework.git"
+        },
+        {
+            "type": "vcs",
+            "url": "https://gitlab.opencode.hr/srce/aai-eduhr/heartphrame/heartphrame-module-auth.git"
+        },
+        {
+            "type": "vcs",
+            "url": "https://gitlab.opencode.hr/srce/aai-eduhr/heartphrame/heartphrame-module-html-editor.git"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/kmihalj/heartphrame-module-comment.git"
+        },
+        {
+            "type": "vcs",
+            "url": "https://gitlab.opencode.hr/srce/aai-eduhr/heartphrame/heartphrame-module-menu.git"
+        },
+        {
+            "type": "vcs",
+            "url": "https://gitlab.opencode.hr/srce/aai-eduhr/heartphrame/heartphrame-module-orm.git"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/kmihalj/heartphrame-module-notification.git"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/kmihalj/heartphrame-module-workspace.git"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/kmihalj/heartphrame-module-workspace-search.git"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/kmihalj/simbioza-module-user.git"
+        }
+    ],
+    "require": {
+        "php": ">=8.2",
+        "ext-dom": "*",
+        "ext-fileinfo": "*",
+        "ext-libxml": "*",
+        "ext-xmlreader": "*",
+        "ext-zip": "*",
+        "aaieduhr/heartphrame-framework": "dev-main",
+        "aaieduhr/heartphrame-module-auth": "dev-main",
+        "aaieduhr/heartphrame-module-editor-html": "dev-main",
+        "aaieduhr/heartphrame-module-menu": "dev-main",
+        "aaieduhr/heartphrame-module-orm": "dev-main",
+        "aaieduhr/heartphrame-module-workspace": "dev-main",
+        "aaieduhr/simbioza-module-user": "dev-main"
+    },
+    "suggest": {
+        "aaieduhr/heartphrame-module-audit": "Records import decisions and outcomes in the business audit log.",
+        "aaieduhr/heartphrame-module-backup": "Includes import mappings and retained source metadata in full-site backups.",
+        "aaieduhr/heartphrame-module-calendar": "Can receive future mappings for Confluence calendar macros.",
+        "aaieduhr/heartphrame-module-comment": "Imports mapped Confluence comments into Simbioza discussions.",
+        "aaieduhr/heartphrame-module-task": "Can receive future mappings for Confluence task macros.",
+        "aaieduhr/heartphrame-module-workspace-search": "Rebuilds the derived Workspace index after a successful import."
+    },
+    "require-dev": {
+        "aaieduhr/heartphrame-module-api": "dev-main",
+        "aaieduhr/heartphrame-module-audit": "dev-main",
+        "aaieduhr/heartphrame-module-backup": "dev-main",
+        "aaieduhr/heartphrame-module-comment": "dev-main",
+        "aaieduhr/heartphrame-module-workspace-search": "dev-main",
+        "phpstan/phpstan": "^2.1",
+        "phpunit/phpunit": "^10 || ^11",
+        "rector/rector": "^2.0",
+        "squizlabs/php_codesniffer": "^3",
+        "slevomat/coding-standard": "^8"
+    },
+    "autoload": {
+        "psr-4": {
+            "AaiEduHr\\SimbiozaModuleConfluenceImport\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "AaiEduHr\\SimbiozaModuleConfluenceImport\\Tests\\": "tests/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Krešimir Mihalj"
+        }
+    ],
+    "config": {
+        "sort-packages": true,
+        "cache-dir": "build/composer",
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true,
+            "phpstan/extension-installer": true
+        },
+        "optimize-autoloader": true,
+        "composer-runtime-api": "^2.1"
+    },
+    "scripts": {
+        "pre-commit": [
+            "vendor/bin/phpcbf",
+            "vendor/bin/rector --clear-cache",
+            "vendor/bin/phpcs -p",
+            "vendor/bin/phpstan --memory-limit=1024M",
+            "vendor/bin/phpunit"
+        ],
+        "on-commit": [
+            "vendor/bin/phpcs -p",
+            "vendor/bin/rector --dry-run --clear-cache",
+            "vendor/bin/phpstan --memory-limit=1024M",
+            "vendor/bin/phpunit"
+        ]
+    }
+}

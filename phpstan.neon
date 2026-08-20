@@ -1,0 +1,7 @@
+parameters:
+    level: 7
+    paths:
+        - src
+        - heartphrame-manifest.php
+    tmpDir: build/phpstan
+    treatPhpDocTypesAsCertain: false

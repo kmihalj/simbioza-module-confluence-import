@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+use Rector\Config\RectorConfig;
+
+return RectorConfig::configure()
+    ->withPaths([
+        __DIR__ . '/src',
+        __DIR__ . '/tests',
+        __DIR__ . '/config',
+        __DIR__ . '/resources/migrations',
+        __DIR__ . '/heartphrame-manifest.php',
+    ])
+    ->withPhpSets(php82: true)
+    ->withPreparedSets(codeQuality: true, deadCode: true, typeDeclarations: true);

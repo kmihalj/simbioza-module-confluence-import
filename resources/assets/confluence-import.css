@@ -1,0 +1,82 @@
+.confluence-import-shell {
+    color: var(--bs-body-color);
+}
+
+.confluence-import-shell .confluence-import-panel,
+.confluence-import-shell .confluence-import-mapping {
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius-lg);
+    box-shadow: var(--bs-box-shadow-sm);
+}
+
+.confluence-import-shell details > summary {
+    background: color-mix(in srgb, var(--bs-primary) 10%, var(--bs-body-bg));
+    color: var(--bs-body-color);
+    cursor: pointer;
+    font-weight: 600;
+    list-style: none;
+    padding: 1rem 1.25rem;
+}
+
+.confluence-import-shell details > summary::-webkit-details-marker {
+    display: none;
+}
+
+.confluence-import-shell details[open] > summary {
+    border-bottom: 1px solid var(--bs-border-color);
+}
+
+.confluence-import-shell .confluence-import-body {
+    padding: 1.25rem;
+}
+
+.confluence-import-shell .confluence-import-progress {
+    height: .75rem;
+}
+
+.confluence-import-shell .confluence-import-table-wrap {
+    max-height: 30rem;
+    overflow: auto;
+}
+
+.confluence-import-shell .confluence-import-table-wrap thead {
+    background: var(--bs-tertiary-bg);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.confluence-import-shell .confluence-import-source-key {
+    color: var(--bs-secondary-color);
+    font-family: var(--bs-font-monospace);
+    font-size: .8rem;
+    overflow-wrap: anywhere;
+}
+
+.confluence-import-shell .confluence-import-option {
+    background: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    padding: .8rem;
+}
+
+.confluence-import-shell .confluence-import-result {
+    max-height: 22rem;
+    overflow: auto;
+    white-space: pre-wrap;
+}
+
+.confluence-import-shell .confluence-import-owner-row {
+    box-shadow: inset .25rem 0 0 var(--bs-warning);
+}
+
+@media (max-width: 767.98px) {
+    .confluence-import-shell .confluence-import-body {
+        padding: 1rem;
+    }
+
+    .confluence-import-shell .confluence-import-actions .btn {
+        width: 100%;
+    }
+}
