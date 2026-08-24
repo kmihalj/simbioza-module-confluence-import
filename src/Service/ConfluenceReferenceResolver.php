@@ -14,6 +14,7 @@ use function ltrim;
 use function preg_replace_callback;
 use function rawurldecode;
 use function rawurlencode;
+use function str_contains;
 use function trim;
 
 /** HR: Razrješava Confluence reference nakon što su sve ciljne stranice poznate. EN: Resolves Confluence references after all target pages are known. */
@@ -99,8 +100,17 @@ final readonly class ConfluenceReferenceResolver
             function (array $match) use ($attachmentUrlsByName): string {
                 $reference = $this->decode($match[1]);
                 $filename = trim((string)($reference['filename'] ?? ''));
+                $target = $attachmentUrlsByName[$filename] ?? '#';
 
-                return $attachmentUrlsByName[$filename] ?? '#';
+                // HR: Slike ostaju prikazive unutar sadržaja, dok poveznica na
+                //     datoteku koristi javni Editor ugovor za preuzimanje.
+                // EN: Images remain renderable inside the content, while a file
+                //     link uses Editor's public download contract.
+                if ($target !== '#' && ($reference['kind'] ?? 'file') !== 'image') {
+                    return $target . (str_contains($target, '?') ? '&' : '?') . 'download=1';
+                }
+
+                return $target;
             },
             $html,
         ) ?? $html;
