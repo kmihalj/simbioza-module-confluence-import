@@ -13,7 +13,9 @@ declare(strict_types=1);
  * @var string $uploadStartPath
  * @var string $uploadChunkPath
  * @var string $uploadFinishPath
+ * @var string $cancelPath
  * @var string $importPath
+ * @var string $processPath
  * @var string $stylesPath
  * @var string $csrfName
  * @var string $csrfToken
@@ -37,6 +39,9 @@ $suggestions = is_array($preparation['identity_suggestions'] ?? null)
 $groupSuggestions = is_array($preparation['group_suggestions'] ?? null)
     ? $preparation['group_suggestions']
     : [];
+$existingImport = is_array($preparation['existing_import'] ?? null)
+    ? $preparation['existing_import']
+    : null;
 $ownerSourceKey = is_scalar($space['owner_source_key'] ?? null) ? (string)$space['owner_source_key'] : '';
 $counts = is_array($scan['counts'] ?? null) ? $scan['counts'] : [];
 $statuses = is_array($scan['statuses'] ?? null) ? $scan['statuses'] : [];
@@ -52,18 +57,22 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
 ?>
 <link rel="stylesheet" href="<?= $this->escape($stylesPath) ?>">
 
-<div class="row">
-    <?php if (is_string($settingsMenuHtml) && $settingsMenuHtml !== '') : ?>
-        <?= $settingsMenuHtml ?>
-    <?php endif; ?>
-    <div class="col confluence-import-shell">
-        <div class="container-fluid px-0">
-            <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
+<div class="row g-4">
+    <aside class="col-lg-3">
+        <?php if (is_string($settingsMenuHtml) && $settingsMenuHtml !== '') : ?>
+            <?= $settingsMenuHtml ?>
+        <?php endif; ?>
+    </aside>
+
+    <main class="col-lg-9 confluence-import-shell">
+        <section class="card">
+            <div class="card-body">
+                <header class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
                 <div>
-                    <h1 class="h2 mb-1"><?= $this->escape($title) ?></h1>
+                    <h1 class="h3 mb-1"><?= $this->escape($title) ?></h1>
                     <p class="text-body-secondary mb-0"><?= $this->escape(__('Uvezite Confluence XML backup jednog područja uz kontrolirano mapiranje korisnika, grupa i ovlasti.')) ?></p>
                 </div>
-            </div>
+                </header>
 
             <div class="alert alert-info" role="note">
                 <strong><?= $this->escape(__('Sigurni tijek importa')) ?></strong>
@@ -125,6 +134,43 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                                     </select>
                                 </div>
                             </div>
+                            <?php if ($existingImport !== null && ($space['type'] ?? '') !== 'personal') : ?>
+                                <fieldset class="mt-4">
+                                    <legend class="h5"><?= $this->escape(__('Ponovni uvoz')) ?></legend>
+                                    <p class="text-body-secondary">
+                                        <?= $this->escape(sprintf(
+                                            __('Ovo Confluence područje već je uvezeno kao %1$s (%2$s).'),
+                                            (string)($existingImport['workspace_name'] ?? ''),
+                                            (string)($existingImport['workspace_slug'] ?? ''),
+                                        )) ?>
+                                    </p>
+                                    <div class="row g-2">
+                                        <div class="col-lg-6">
+                                            <label class="form-check confluence-import-option confluence-import-strategy h-100">
+                                                <input class="form-check-input" type="radio" name="reimport_strategy" value="replace" checked>
+                                                <span class="form-check-label">
+                                                    <strong><?= $this->escape(__('Zamijeni postojeće uvezeno područje')) ?></strong>
+                                                    <span class="d-block small text-body-secondary"><?= $this->escape(__('Postojeće područje i sav njegov sadržaj trajno će se ukloniti te ponovno uvesti iz ove arhive.')) ?></span>
+                                                </span>
+                                            </label>
+                                        </div>
+                                        <div class="col-lg-6">
+                                            <label class="form-check confluence-import-option confluence-import-strategy h-100">
+                                                <input class="form-check-input" type="radio" name="reimport_strategy" value="copy">
+                                                <span class="form-check-label">
+                                                    <strong><?= $this->escape(__('Zadrži postojeće i uvezi novu kopiju')) ?></strong>
+                                                    <span class="d-block small text-body-secondary"><?= $this->escape(__('Postojeće područje ostaje nepromijenjeno, a arhiva se uvozi u novo područje s drugim nazivom i slugom.')) ?></span>
+                                                </span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </fieldset>
+                            <?php elseif ($existingImport !== null) : ?>
+                                <input type="hidden" name="reimport_strategy" value="replace">
+                                <div class="alert alert-info mt-3 mb-0"><?= $this->escape(__('Postojeće osobno područje bit će zamijenjeno novim uvozom.')) ?></div>
+                            <?php else : ?>
+                                <input type="hidden" name="reimport_strategy" value="new">
+                            <?php endif; ?>
                             <?php if (($space['type'] ?? '') === 'personal') : ?>
                                 <div class="alert alert-info mt-3 mb-0"><?= $this->escape(__('Osobni Confluence space bit će uvezen u osobno područje potvrđeno mapiranog vlasnika. Naziv i slug iznad služe samo kao pregled izvora.')) ?></div>
                             <?php endif; ?>
@@ -143,7 +189,12 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                             <details class="confluence-import-mapping mt-4">
                                 <summary><?= $this->escape(sprintf(__('Korisnici i identiteti (%d)'), count($sourceUsers))) ?></summary>
                                 <div class="confluence-import-body">
-                                    <p class="text-body-secondary"><?= $this->escape(__('Import ne izrađuje lažne lokalne korisnike. Odaberite postojeći račun samo kada ste sigurni da predstavlja istu osobu.')) ?></p>
+                                    <p class="text-body-secondary"><?= $this->escape(__('Postojeći račun odaberite samo kada ste sigurni da predstavlja istu osobu. Za nemapirani identitet možete izričito izraditi neaktivan račun bez lozinke i providera.')) ?></p>
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" role="switch" id="confluence-import-create-unmapped-users">
+                                        <label class="form-check-label" for="confluence-import-create-unmapped-users"><?= $this->escape(__('Za sve trenutačno nemapirane identitete izradi neaktivne korisnike')) ?></label>
+                                        <div class="form-text"><?= $this->escape(__('Računi ostaju bez mogućnosti prijave dok administrator u Auth postavkama ne odabere provider, po potrebi postavi privremenu lozinku i aktivira korisnika.')) ?></div>
+                                    </div>
                                     <input class="form-control mb-3" type="search" data-filter-table="identity" placeholder="<?= $this->escape(__('Pretraži Confluence korisnike')) ?>">
                                     <div class="table-responsive confluence-import-table-wrap">
                                         <table class="table table-sm align-middle mb-0" data-filter-target="identity"><thead><tr><th><?= $this->escape(__('Confluence identitet')) ?></th><th><?= $this->escape(__('Ciljni korisnik')) ?></th></tr></thead><tbody>
@@ -156,10 +207,10 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                                                 <td><strong><?= $this->escape((string)($sourceUser['display_name'] ?? $sourceUser['username'] ?? $sourceKey)) ?></strong><?php if ($sourceKey === $ownerSourceKey) :
                                                     ?> <span class="badge text-bg-warning"><?= $this->escape(__('Vlasnik')) ?></span><?php
                                                             endif; ?><div class="small text-body-secondary"><?= $this->escape((string)($sourceUser['email'] ?? '')) ?></div><div class="confluence-import-source-key"><?= $this->escape($sourceKey) ?></div></td>
-                                                <td><select class="form-select form-select-sm" data-identity-map="<?= $this->escape($sourceKey) ?>"><option value=""><?= $this->escape(__('Nije mapirano — pristup ostaje blokiran')) ?></option><?php foreach ($targetUsers as $targetUser) :
+                                                <td><select class="form-select form-select-sm" data-identity-map="<?= $this->escape($sourceKey) ?>"><option value=""><?= $this->escape(__('Nije mapirano — pristup ostaje blokiran')) ?></option><option value="__create_inactive__"><?= $this->escape(__('Izradi neaktivnog korisnika bez prijave')) ?></option><?php foreach ($targetUsers as $targetUser) :
                                                     ?><?php if (!is_array($targetUser) || !is_numeric($targetUser['id'] ?? null)) {
                                                     continue;
-                                                    } $targetId = (int)$targetUser['id']; ?><option value="<?= $targetId ?>"<?= $targetId === $suggested ? ' selected' : '' ?>><?= $this->escape((string)($targetUser['display_name'] ?? $targetUser['login_identifier'] ?? $targetId)) ?><?= ($targetUser['email'] ?? '') !== '' ? ' — ' . $this->escape((string)$targetUser['email']) : '' ?></option><?php
+                                                    } $targetId = (int)$targetUser['id']; ?><option value="<?= $targetId ?>"<?= $targetId === $suggested ? ' selected' : '' ?>><?= $this->escape((string)($targetUser['display_name'] ?? $targetUser['login_identifier'] ?? $targetId)) ?><?= ($targetUser['email'] ?? '') !== '' ? ' — ' . $this->escape((string)$targetUser['email']) : '' ?><?= !(bool)($targetUser['is_active'] ?? false) ? ' (' . $this->escape(__('neaktivan')) . ')' : '' ?></option><?php
                                                                                                                   endforeach; ?></select></td>
                                             </tr>
                                         <?php endforeach; ?>
@@ -190,10 +241,13 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                                 </div>
                             </details>
 
-                            <div class="progress confluence-import-progress mt-4 d-none" id="confluence-import-run-progress" role="progressbar"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width:100%"></div></div>
+                            <div class="progress confluence-import-progress mt-4 d-none" id="confluence-import-run-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width:0"></div></div>
                             <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mt-3 confluence-import-actions">
                                 <span class="text-body-secondary" id="confluence-import-run-status" aria-live="polite"><?= $this->escape(__('Spremno za import. Izvorna arhiva briše se s poslužitelja tek nakon uspješnog završetka.')) ?></span>
-                                <button class="btn btn-primary" type="submit" id="confluence-import-run"><?= $this->escape(__('Uvezi područje')) ?></button>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <button class="btn btn-danger" type="button" data-cancel-job="<?= $this->escape((string)($job['uuid'] ?? '')) ?>"><?= $this->escape(__('Odustani od importa')) ?></button>
+                                    <button class="btn btn-primary" type="submit" id="confluence-import-run"><?= $this->escape(__('Uvezi područje')) ?></button>
+                                </div>
                             </div>
                         </form>
                         <pre class="alert alert-info confluence-import-result mt-3 d-none" id="confluence-import-result"></pre>
@@ -201,8 +255,11 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                 </details>
             <?php endif; ?>
 
-            <section class="confluence-import-panel mt-3">
-                <div class="confluence-import-body">
+            </div>
+        </section>
+
+        <section class="card mt-3">
+            <div class="card-body">
                     <h2 class="h4 mb-1"><?= $this->escape(__('Nedavni Confluence importi')) ?></h2>
                     <p class="text-body-secondary"><?= $this->escape(__('Popis se automatski osvježava i prikazuje trenutačnu fazu dugotrajnog importa.')) ?></p>
                     <p id="confluence-import-jobs-empty"<?= $jobs === [] ? '' : ' class="d-none"' ?>><?= $this->escape(__('Još nema Confluence import poslova.')) ?></p>
@@ -210,20 +267,23 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                     <?php foreach ($jobs as $recent) :
                         ?><tr><td><?= $this->escape((string)($recent['created_at_display'] ?? '')) ?></td><td><strong><?= $this->escape((string)($recent['space_name'] ?: $recent['name'] ?? '')) ?></strong><div class="confluence-import-source-key"><?= $this->escape((string)($recent['space_key'] ?? '')) ?></div></td><td><?= $this->escape((string)($recent['status_label'] ?? '')) ?><?php if (($recent['error'] ?? '') !== '') :
     ?><div class="small text-danger"><?= $this->escape((string)$recent['error']) ?></div><?php
-                        endif; ?></td><td><?= $this->escape((string)($recent['stage_label'] ?? '')) ?></td><td><?php if (is_string($recent['mapping_url'] ?? null)) :
+                        endif; ?></td><td><?= $this->escape((string)($recent['stage_label'] ?? '')) ?></td><td><div class="d-flex flex-wrap gap-2"><?php if (is_string($recent['mapping_url'] ?? null)) :
     ?><a class="btn btn-sm btn-secondary" href="<?= $this->escape($recent['mapping_url']) ?>" title="<?= $this->escape(__('Otvori mapiranje')) ?>">↗</a><?php
                         elseif (is_string($recent['workspace_url'] ?? null)) :
                             ?><a class="btn btn-sm btn-secondary" href="<?= $this->escape($recent['workspace_url']) ?>" title="<?= $this->escape(__('Otvori područje')) ?>">↗</a><?php
-                        endif; ?></td></tr><?php
+                        endif; ?><?php if (is_string($recent['report_url'] ?? null)) :
+    ?><a class="btn btn-sm btn-secondary" href="<?= $this->escape($recent['report_url']) ?>" title="<?= $this->escape(__('Otvori izvještaj importa')) ?>" aria-label="<?= $this->escape(__('Otvori izvještaj importa')) ?>"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg></a><?php
+                        endif; ?><?php if (($recent['can_cancel'] ?? false) === true) :
+    ?><button class="btn btn-sm btn-danger" type="button" data-cancel-job="<?= $this->escape((string)($recent['uuid'] ?? '')) ?>" title="<?= $this->escape(__('Odustani od importa')) ?>" aria-label="<?= $this->escape(__('Odustani od importa')) ?>">×</button><?php
+                        endif; ?></div></td></tr><?php
                     endforeach; ?>
                     </tbody></table></div>
-                </div>
-            </section>
-        </div>
-    </div>
+            </div>
+        </section>
+    </main>
 </div>
 
-<div class="toast-container position-fixed bottom-0 end-0 p-3"><div class="toast border-0" id="confluence-import-toast" role="status" aria-live="polite" aria-atomic="true"><div class="toast-header bg-primary text-white" id="confluence-import-toast-header"><strong class="me-auto" id="confluence-import-toast-title"><?= $this->escape(__('Informacija')) ?></strong><button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="<?= $this->escape(__('Zatvori')) ?>"></button></div><div class="toast-body" id="confluence-import-toast-body"></div></div></div>
+<div class="toast-container position-fixed bottom-0 end-0 p-3 confluence-import-toast-container"><div class="toast border-0 confluence-import-toast" id="confluence-import-toast" role="status" aria-live="polite" aria-atomic="true"><div class="toast-header bg-primary text-white" id="confluence-import-toast-header"><strong class="me-auto" id="confluence-import-toast-title"><?= $this->escape(__('Informacija')) ?></strong><button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="<?= $this->escape(__('Zatvori')) ?>"></button></div><div class="toast-body" id="confluence-import-toast-body"></div></div></div>
 
 <script>
 (() => {
@@ -235,7 +295,9 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         'start' => $uploadStartPath,
         'chunk' => $uploadChunkPath,
         'finish' => $uploadFinishPath,
+        'cancel' => $cancelPath,
         'run' => $importPath,
+        'process' => $processPath,
         'csrfHeader' => 'X-' . str_replace('_', '-', strtoupper($csrfName)),
         'csrfToken' => $csrfToken,
         'chunkSize' => $chunkSize,
@@ -247,13 +309,21 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         'scanning' => __('Prijenos je dovršen. Provjeravam strukturu i sadržaj arhive…'),
         'ready' => __('Arhiva je provjerena. Otvaram mapiranje…'),
         'confirmImport' => __('Pokrenuti potvrđeni Confluence import?'),
+        'confirmCancel' => __('Odustati od importa? Prenesena arhiva i podaci pripreme ovog nedovršenog posla bit će trajno obrisani.'),
+        'cancelled' => __('Confluence import je otkazan, a prenesena arhiva obrisana.'),
         'importing' => __('Import je u tijeku. Velika područja mogu potrajati nekoliko minuta.'),
+        'processingAttachments' => __('Uvoz privitaka: {done} / {total}'),
+        'processingPages' => __('Uvoz stranica: {done} / {total}'),
+        'finalizing' => __('Završavam ovlasti, komentare, poveznice i indeks pretrage…'),
         'failed' => __('Zahtjev nije uspio.'),
+        'failedHttp' => __('Poslužitelj je prekinuo zahtjev (HTTP {status}). Pogledajte pogrešku u popisu poslova ili tehničkom logu.'),
         'successTitle' => __('Uspjeh'),
         'errorTitle' => __('Pogreška'),
         'infoTitle' => __('Informacija'),
         'openMapping' => __('Otvori mapiranje'),
         'openWorkspace' => __('Otvori područje'),
+        'openReport' => __('Otvori izvještaj importa'),
+        'cancelImport' => __('Odustani od importa'),
     ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
     const query = (selector) => document.querySelector(selector);
     const uploadStorageKey = 'simbioza.confluenceImport.upload';
@@ -272,8 +342,11 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
 
     const responsePayload = async (response) => {
         const text = await response.text();
-        if (text === '') return {};
-        try { return JSON.parse(text); } catch (_error) { return {error: text}; }
+        const transportError = config.failedHttp.replace('{status}', String(response.status));
+        if (text === '') return response.ok ? {} : {error: transportError};
+        try { return JSON.parse(text); } catch (_error) {
+            return {error: response.ok ? config.failed : transportError};
+        }
     };
     const toast = (message, type = 'info') => {
         const element = query('#confluence-import-toast');
@@ -365,6 +438,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
             uuid: form.elements.uuid.value,
             workspace_name: form.elements.workspace_name.value,
             workspace_slug: form.elements.workspace_slug.value,
+            reimport_strategy: form.elements.reimport_strategy?.value || 'new',
             language: form.elements.language.value,
             include_attachments: form.elements.include_attachments.checked,
             include_comments: form.elements.include_comments.checked,
@@ -372,10 +446,14 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
             include_deleted: form.elements.include_deleted.checked,
             include_drafts: form.elements.include_drafts.checked,
             identity_map: {},
+            identity_create: {},
             group_map: {},
             group_create: {},
         };
-        document.querySelectorAll('[data-identity-map]').forEach((select) => { if (select.value !== '') payload.identity_map[select.dataset.identityMap] = Number(select.value); });
+        document.querySelectorAll('[data-identity-map]').forEach((select) => {
+            if (select.value === '__create_inactive__') payload.identity_create[select.dataset.identityMap] = true;
+            else if (select.value !== '') payload.identity_map[select.dataset.identityMap] = Number(select.value);
+        });
         document.querySelectorAll('[data-group-map]').forEach((select) => {
             if (select.value === '__create__') payload.group_create[select.dataset.groupMap] = true;
             else if (select.value !== '') payload.group_map[select.dataset.groupMap] = Number(select.value);
@@ -384,7 +462,24 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         progress.classList.remove('d-none');
         status.textContent = config.importing;
         try {
-            const data = await post(config.run, payload);
+            let data = await post(config.run, payload);
+            while (data.completed !== true) {
+                const percent = Math.max(0, Math.min(100, Number(data.progress || 0)));
+                progress.querySelector('.progress-bar').style.width = `${percent}%`;
+                progress.setAttribute('aria-valuenow', String(percent));
+                if (data.phase === 'attachments') {
+                    status.textContent = config.processingAttachments
+                        .replace('{done}', String(data.attachments_done || 0))
+                        .replace('{total}', String(data.attachments_total || 0));
+                } else if (data.phase === 'pages') {
+                    status.textContent = config.processingPages
+                        .replace('{done}', String(data.pages_done || 0))
+                        .replace('{total}', String(data.pages_total || 0));
+                } else if (data.phase === 'finalizing') {
+                    status.textContent = config.finalizing;
+                }
+                data = await post(config.process, {uuid: payload.uuid});
+            }
             status.textContent = data.message || config.ready;
             result.classList.remove('d-none');
             result.textContent = JSON.stringify(data.summary || data, null, 2);
@@ -401,6 +496,17 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
             toast(message, 'danger'); button.disabled = false;
         } finally { progress.classList.add('d-none'); }
     });
+
+    const createUnmappedUsers = query('#confluence-import-create-unmapped-users');
+    if (createUnmappedUsers instanceof HTMLInputElement) {
+        createUnmappedUsers.addEventListener('change', function () {
+            document.querySelectorAll('[data-identity-map]').forEach(function (select) {
+                if (!(select instanceof HTMLSelectElement)) return;
+                if (createUnmappedUsers.checked && select.value === '') select.value = '__create_inactive__';
+                else if (!createUnmappedUsers.checked && select.value === '__create_inactive__') select.value = '';
+            });
+        });
+    }
 
     document.querySelectorAll('[data-filter-table]').forEach((input) => input.addEventListener('input', () => {
         const table = document.querySelector(`[data-filter-target="${CSS.escape(input.dataset.filterTable)}"]`);
@@ -419,14 +525,44 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
             const values = [job.created_at_display, job.space_name || job.name, job.status_label, job.stage_label];
             values.forEach((value, index) => { const cell = document.createElement('td'); if (index === 1) { const strong = document.createElement('strong'); strong.textContent = String(value || ''); cell.appendChild(strong); if (job.space_key) { const key = document.createElement('div'); key.className = 'confluence-import-source-key'; key.textContent = String(job.space_key); cell.appendChild(key); } } else { cell.textContent = String(value || ''); } if (index === 2 && job.error) { const error = document.createElement('div'); error.className = 'small text-danger'; error.textContent = String(job.error); cell.appendChild(error); } row.appendChild(cell); });
             const action = document.createElement('td');
+            const actions = document.createElement('div');
+            actions.className = 'd-flex flex-wrap gap-2';
             const url = job.mapping_url || job.workspace_url;
-            if (url) { const link = document.createElement('a'); link.className = 'btn btn-sm btn-secondary'; link.href = url; link.title = job.mapping_url ? config.openMapping : config.openWorkspace; link.textContent = '↗'; action.appendChild(link); }
+            if (url) { const link = document.createElement('a'); link.className = 'btn btn-sm btn-secondary'; link.href = url; link.title = job.mapping_url ? config.openMapping : config.openWorkspace; link.textContent = '↗'; actions.appendChild(link); }
+            if (job.report_url) { const report = document.createElement('a'); report.className = 'btn btn-sm btn-secondary'; report.href = job.report_url; report.title = config.openReport; report.setAttribute('aria-label', config.openReport); report.innerHTML = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"></path><path d="M8 9h8M8 13h8M8 17h5"></path></svg>'; actions.appendChild(report); }
+            if (job.can_cancel) { const cancel = document.createElement('button'); cancel.className = 'btn btn-sm btn-danger'; cancel.type = 'button'; cancel.dataset.cancelJob = String(job.uuid || ''); cancel.title = config.cancelImport; cancel.setAttribute('aria-label', config.cancelImport); cancel.textContent = '×'; actions.appendChild(cancel); }
+            action.appendChild(actions);
             row.appendChild(action); body.appendChild(row);
         });
     };
     const refreshJobs = async () => {
         try { const response = await fetch(config.jobs, {headers: {Accept: 'application/json'}, cache: 'no-store'}); const data = await responsePayload(response); if (response.ok && Array.isArray(data.jobs)) renderJobs(data.jobs); } catch (_error) { /* The next refresh retries. */ }
     };
+    document.addEventListener('click', async (event) => {
+        const button = event.target instanceof Element ? event.target.closest('[data-cancel-job]') : null;
+        if (!(button instanceof HTMLButtonElement)) return;
+        const uuid = button.dataset.cancelJob || '';
+        if (uuid === '' || !window.confirm(config.confirmCancel)) return;
+
+        button.disabled = true;
+        try {
+            const data = await post(config.cancel, {uuid});
+            if (upload?.uuid === uuid) {
+                upload = null;
+                rememberUpload();
+            }
+            toast(data.message || config.cancelled, 'success');
+            const activeJob = new URL(window.location.href).searchParams.get('job');
+            if (activeJob === uuid) {
+                window.location.assign(config.settings);
+                return;
+            }
+            await refreshJobs();
+        } catch (error) {
+            toast(error instanceof Error ? error.message : config.failed, 'danger');
+            button.disabled = false;
+        }
+    });
     window.setInterval(refreshJobs, 5000);
     if (config.initialError) toast(config.initialError, 'danger');
 })();

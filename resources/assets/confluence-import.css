@@ -1,22 +1,40 @@
 .confluence-import-shell {
-    color: var(--bs-body-color);
+    color: var(--hph-surface-text, var(--bs-body-color, #212529));
+    min-width: 0;
 }
 
 .confluence-import-shell .confluence-import-panel,
 .confluence-import-shell .confluence-import-mapping {
-    background: var(--bs-body-bg);
-    border: 1px solid var(--bs-border-color);
+    background: var(--hph-surface-bg, var(--bs-body-bg, #fff));
+    border: 1px solid var(--hph-border, var(--bs-border-color, #dee2e6));
     border-radius: var(--bs-border-radius-lg);
     box-shadow: var(--bs-box-shadow-sm);
+    color: var(--hph-surface-text, var(--bs-body-color, #212529));
+    overflow: hidden;
 }
 
 .confluence-import-shell details > summary {
-    background: color-mix(in srgb, var(--bs-primary) 10%, var(--bs-body-bg));
-    color: var(--bs-body-color);
+    align-items: center;
+    background: color-mix(
+        in srgb,
+        var(--bs-primary, #0d6efd) 10%,
+        var(--hph-surface-bg, var(--bs-body-bg, #fff))
+    );
+    color: var(--hph-surface-text, var(--bs-body-color, #212529));
     cursor: pointer;
+    display: flex;
+    gap: .5rem;
     font-weight: 600;
     list-style: none;
     padding: 1rem 1.25rem;
+}
+
+.confluence-import-shell details > summary::before {
+    content: "›";
+    display: inline-block;
+    flex: 0 0 auto;
+    transform-origin: center;
+    transition: transform .15s ease-in-out;
 }
 
 .confluence-import-shell details > summary::-webkit-details-marker {
@@ -24,7 +42,11 @@
 }
 
 .confluence-import-shell details[open] > summary {
-    border-bottom: 1px solid var(--bs-border-color);
+    border-bottom: 1px solid var(--hph-border, var(--bs-border-color, #dee2e6));
+}
+
+.confluence-import-shell details[open] > summary::before {
+    transform: rotate(90deg);
 }
 
 .confluence-import-shell .confluence-import-body {
@@ -41,24 +63,40 @@
 }
 
 .confluence-import-shell .confluence-import-table-wrap thead {
-    background: var(--bs-tertiary-bg);
+    background: var(--hph-muted-bg, var(--bs-tertiary-bg, #f8f9fa));
     position: sticky;
     top: 0;
     z-index: 1;
 }
 
 .confluence-import-shell .confluence-import-source-key {
-    color: var(--bs-secondary-color);
+    color: var(--hph-muted-text, var(--bs-secondary-color, #6c757d));
     font-family: var(--bs-font-monospace);
     font-size: .8rem;
     overflow-wrap: anywhere;
 }
 
 .confluence-import-shell .confluence-import-option {
-    background: var(--bs-tertiary-bg);
-    border: 1px solid var(--bs-border-color);
+    background: var(--hph-muted-bg, var(--bs-tertiary-bg, #f8f9fa));
+    border: 1px solid var(--hph-border, var(--bs-border-color, #dee2e6));
     border-radius: var(--bs-border-radius);
     padding: .8rem;
+}
+
+/*
+ * HR: Kartice strategije cijelom su površinom klikabilne, a aktivni izbor
+ *     dobiva tematski naglasak bez uvođenja posebne fiksne boje.
+ * EN: Strategy cards are clickable across their whole surface, and the active
+ *     choice receives a themed accent without introducing a fixed colour.
+ */
+.confluence-import-shell .confluence-import-strategy {
+    cursor: pointer;
+    transition: border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+}
+
+.confluence-import-shell .confluence-import-strategy:has(.form-check-input:checked) {
+    border-color: var(--bs-primary, #0d6efd);
+    box-shadow: 0 0 0 .2rem color-mix(in srgb, var(--bs-primary, #0d6efd) 18%, transparent);
 }
 
 .confluence-import-shell .confluence-import-result {
@@ -69,6 +107,58 @@
 
 .confluence-import-shell .confluence-import-owner-row {
     box-shadow: inset .25rem 0 0 var(--bs-warning);
+}
+
+/*
+ * HR: Dinamički toast koristi iste površine i semantičke boje kao ostatak aktivne teme.
+ * EN: The dynamic toast uses the same surfaces and semantic colours as the active theme.
+ */
+.confluence-import-toast-container {
+    z-index: 1090;
+}
+
+.confluence-import-toast {
+    --bs-toast-bg: var(--hph-surface-bg, var(--bs-body-bg, #fff));
+    --bs-toast-color: var(--hph-surface-text, var(--bs-body-color, #212529));
+    --bs-toast-border-color: var(--hph-border, var(--bs-border-color, #dee2e6));
+    background-color: var(--bs-toast-bg);
+    border: 1px solid var(--bs-toast-border-color);
+    box-shadow: 0 .75rem 2rem rgba(15, 23, 42, .18);
+    color: var(--bs-toast-color);
+    max-width: calc(100vw - 2rem);
+    min-width: min(24rem, calc(100vw - 2rem));
+}
+
+.confluence-import-toast .toast-body {
+    background-color: var(--bs-toast-bg) !important;
+    color: var(--bs-toast-color) !important;
+    word-break: break-word;
+}
+
+.confluence-import-report-stat {
+    display: flex;
+    min-height: 6rem;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 1rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
+}
+
+.confluence-import-report-stat span {
+    color: var(--bs-secondary-color);
+}
+
+.confluence-import-report-stat strong {
+    font-size: 1.75rem;
+}
+
+.confluence-import-report-list .list-group-item {
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    border-color: var(--bs-border-color);
 }
 
 @media (max-width: 767.98px) {

@@ -49,7 +49,7 @@ final readonly class ConfluenceImportConfig
     /** HR: Najveća dopuštena ZIP arhiva. EN: Maximum allowed ZIP archive. */
     public function maxArchiveSize(): int
     {
-        return $this->integer('max_archive_size', 4294967296);
+        return $this->integer('max_archive_size', 8589934592);
     }
 
     /** HR: Veličina jednog nastavivog prijenosnog dijela. EN: Size of one resumable upload chunk. */
@@ -86,6 +86,12 @@ final readonly class ConfluenceImportConfig
     public function maxCompressionRatio(): int
     {
         return $this->integer('max_compression_ratio', 250);
+    }
+
+    /** HR: Najdulje trajanje provjere ili potvrđenog importa u sekundama. EN: Maximum preflight or confirmed-import execution time in seconds. */
+    public function importExecutionTimeLimit(): int
+    {
+        return $this->integer('import_execution_time_limit', 900);
     }
 
     /** HR: Jezik sadržaja kada Confluence export nema jezični metapodatak. EN: Content locale when the export has no locale metadata. */

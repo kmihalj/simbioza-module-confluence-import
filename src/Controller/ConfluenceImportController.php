@@ -80,7 +80,9 @@ final readonly class ConfluenceImportController
             'uploadStartPath' => $this->path('simbioza-confluence-import.upload.start', '/settings/confluence-import/upload/start'),
             'uploadChunkPath' => $this->path('simbioza-confluence-import.upload.chunk', '/settings/confluence-import/upload/chunk'),
             'uploadFinishPath' => $this->path('simbioza-confluence-import.upload.finish', '/settings/confluence-import/upload/finish'),
+            'cancelPath' => $this->path('simbioza-confluence-import.cancel', '/settings/confluence-import/cancel'),
             'importPath' => $this->path('simbioza-confluence-import.run', '/settings/confluence-import/run'),
+            'processPath' => $this->path('simbioza-confluence-import.process', '/settings/confluence-import/process'),
             'stylesPath' => $this->path('simbioza-confluence-import.assets.css', '/confluence-import/assets.css'),
             'csrfName' => $this->session->getCsrfTokenName(),
             'csrfToken' => $this->session->getOrGenerateCsrfToken(),
@@ -101,6 +103,43 @@ final readonly class ConfluenceImportController
         }
 
         return $this->responses->json(['jobs' => $this->jobPayloads()]);
+    }
+
+    /** HR: Prikazuje trajni izvještaj jednog dovršenog importa. EN: Shows the durable report for one completed import. */
+    public function report(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->access->isAdministrator()) {
+            return $this->denied();
+        }
+
+        try {
+            $job = $this->repository->jobByUuid($this->text($request->getAttribute('uuid')));
+            if (($job['status'] ?? '') !== 'completed') {
+                return $this->responses->text(__('Izvještaj je dostupan tek nakon dovršenog importa.'), 404);
+            }
+
+            $summary = is_array($job['summary'] ?? null) ? $job['summary'] : [];
+            $reviewPages = [];
+            foreach (is_array($summary['review_pages'] ?? null) ? $summary['review_pages'] : [] as $page) {
+                if (is_array($page)) {
+                    $reviewPages[] = $page;
+                }
+            }
+
+            return $this->views->render('settings/report', [
+                'title' => __('Izvještaj Confluence importa'),
+                'job' => $job,
+                'summary' => $summary,
+                'reviewPages' => $reviewPages,
+                'settingsPath' => $this->path('simbioza-confluence-import.settings', '/settings/confluence-import'),
+                'workspacePath' => $this->workspacePathById($this->integer($job['workspace_id'] ?? 0)),
+                'stylesPath' => $this->path('simbioza-confluence-import.assets.css', '/confluence-import/assets.css'),
+                'settingsMenuActiveSection' => 'simbioza-confluence-import.settings',
+                'menuRenderer' => $this->menuRenderer,
+            ]);
+        } catch (Throwable) {
+            return $this->responses->text(__('Izvještaj Confluence importa nije pronađen.'), 404);
+        }
     }
 
     /** HR: Vraća svježi CSRF token za svaki korak uploada. EN: Returns a fresh CSRF token for every upload step. */
@@ -180,7 +219,34 @@ final readonly class ConfluenceImportController
         }
     }
 
-    /** HR: Pokreće potvrđeni import te vraća sažetak i ciljnu poveznicu. EN: Runs the confirmed import and returns its summary and target link. */
+    /**
+     * HR: Otkazuje vlastiti nedovršeni import i odmah briše prenesenu arhivu.
+     * EN: Cancels the actor's unfinished import and immediately deletes its uploaded archive.
+     */
+    public function cancel(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->access->isAdministrator()) {
+            return $this->deniedJson();
+        }
+
+        try {
+            $body = $this->body($request);
+            $job = $this->uploads->cancel(
+                $this->text($body['uuid'] ?? ''),
+                $this->actorUserId(),
+            );
+
+            return $this->responses->json([
+                'cancelled' => true,
+                'uuid' => $this->text($job['uuid'] ?? ''),
+                'message' => __('Confluence import je otkazan, a prenesena arhiva obrisana.'),
+            ]);
+        } catch (Throwable $throwable) {
+            return $this->errorJson($throwable);
+        }
+    }
+
+    /** HR: Priprema potvrđeni nastavivi import. EN: Prepares a confirmed resumable import. */
     public function run(ServerRequestInterface $request): ResponseInterface
     {
         if (!$this->access->isAdministrator()) {
@@ -195,16 +261,49 @@ final readonly class ConfluenceImportController
                 throw new ConfluenceImportException(__('Prijavljeni administrator nije pronađen.'));
             }
 
-            $summary = $this->imports->import($uuid, $body, $actor);
+            $progress = $this->imports->queue($uuid, $body, $actor);
+
+            return $this->responses->json([
+                'imported' => false,
+                'queued' => true,
+                ...$progress,
+                'message' => __('Confluence import je pokrenut.'),
+            ]);
+        } catch (Throwable $throwable) {
+            return $this->errorJson($throwable);
+        }
+    }
+
+    /**
+     * HR: Izvodi sljedeći ograničeni korak importa i vraća stvarni napredak.
+     * EN: Runs the next bounded import step and returns actual progress.
+     */
+    public function process(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->access->isAdministrator()) {
+            return $this->deniedJson();
+        }
+
+        try {
+            $body = $this->body($request);
+            $actor = $this->access->currentUser();
+            if (!is_array($actor)) {
+                throw new ConfluenceImportException(__('Prijavljeni administrator nije pronađen.'));
+            }
+
+            $progress = $this->imports->process($this->text($body['uuid'] ?? ''), $actor);
+            $summary = is_array($progress['summary'] ?? null) ? $progress['summary'] : [];
             $slug = $this->text($summary['workspace_slug'] ?? '');
 
             return $this->responses->json([
-                'imported' => true,
-                'summary' => $summary,
-                'workspace_url' => $slug !== ''
-                    ? $this->workspacePath($slug)
-                    : $this->path('workspace.index', '/workspaces'),
-                'message' => __('Confluence područje uspješno je uvezeno.'),
+                ...$progress,
+                'imported' => ($progress['completed'] ?? false) === true,
+                'workspace_url' => ($progress['completed'] ?? false) === true
+                    ? ($slug !== '' ? $this->workspacePath($slug) : $this->path('workspace.index', '/workspaces'))
+                    : null,
+                'message' => ($progress['completed'] ?? false) === true
+                    ? __('Confluence područje uspješno je uvezeno.')
+                    : __('Confluence import je u tijeku.'),
             ]);
         } catch (Throwable $throwable) {
             return $this->errorJson($throwable);
@@ -307,6 +406,7 @@ final readonly class ConfluenceImportController
     private function jobPayloads(): array
     {
         $result = [];
+        $actorUserId = $this->actorUserId();
         foreach ($this->repository->recentJobs() as $job) {
             $result[] = [
                 'uuid' => $this->text($job['uuid'] ?? ''),
@@ -322,12 +422,17 @@ final readonly class ConfluenceImportController
                 'chunk_size' => $this->integer($job['chunk_size'] ?? $this->config->chunkSize()),
                 'created_at_display' => $this->formatUtcDateTime($job['created_at'] ?? null),
                 'error' => $this->text($job['error_message'] ?? ''),
-                'mapping_url' => ($job['status'] ?? '') === 'ready'
+                'can_cancel' => $this->integer($job['actor_user_id'] ?? 0) === $actorUserId
+                    && $this->uploads->canCancel($job),
+                'mapping_url' => in_array(($job['status'] ?? ''), ['ready', 'running'], true)
                     ? $this->path('simbioza-confluence-import.settings', '/settings/confluence-import')
                         . '?job=' . rawurlencode($this->text($job['uuid'] ?? ''))
                     : null,
                 'workspace_url' => $this->integer($job['workspace_id'] ?? 0) > 0
                     ? $this->workspacePathById($this->integer($job['workspace_id']))
+                    : null,
+                'report_url' => ($job['status'] ?? '') === 'completed'
+                    ? $this->reportPath($this->text($job['uuid'] ?? ''))
                     : null,
             ];
         }
@@ -405,6 +510,17 @@ final readonly class ConfluenceImportController
         return $slug !== '' ? $this->workspacePath($slug) : null;
     }
 
+    /** HR: Gradi administratorsku putanju trajnog izvještaja. EN: Builds the administrator path for a durable report. */
+    private function reportPath(string $uuid): string
+    {
+        if ($this->urls->namedRouteExists('simbioza-confluence-import.report')) {
+            return $this->urls->getPathFor('simbioza-confluence-import.report', ['uuid' => $uuid]);
+        }
+
+        return rtrim($this->urls->getBasePath(), '/')
+            . '/settings/confluence-import/report/' . rawurlencode($uuid);
+    }
+
     /** HR: Razrješava imenovanu rutu uz lokalni fallback. EN: Resolves a named route with a local fallback. */
     private function path(string $route, string $fallback): string
     {
@@ -448,6 +564,8 @@ final readonly class ConfluenceImportController
             'acl' => __('Primjena ovlasti'),
             'comments' => __('Uvoz komentara'),
             'links_and_search' => __('Poveznice i indeks pretrage'),
+            'preparing_content' => __('Priprema sadržaja'),
+            'finalizing' => __('Završna obrada'),
             'completed' => __('Dovršeno'),
             'failed' => __('Neuspjelo'),
             default => $stage,

@@ -95,6 +95,78 @@ final class ConfluenceImportUploadServiceTest extends TestCase
         $this->repository->jobByUuid((string)$job['uuid'], 42);
     }
 
+    /** HR: Dokazuje da odustajanje briše i privremenu datoteku i posao. EN: Proves that cancellation deletes both the temporary file and job. */
+    public function testAdministratorCanCancelOwnTransientUpload(): void
+    {
+        $job = $this->uploads->start('cancel.xml.zip', 6, 42);
+        $path = (string)$job['archive_path'];
+        self::assertFileExists($path);
+
+        $cancelled = $this->uploads->cancel((string)$job['uuid'], 42);
+
+        self::assertSame($job['uuid'], $cancelled['uuid']);
+        self::assertFileDoesNotExist($path);
+        $this->expectException(ConfluenceImportException::class);
+        $this->repository->jobByUuid((string)$job['uuid'], 42);
+    }
+
+    /** HR: Dokazuje da se posao koji je počeo mijenjati sadržaj ne može ukloniti kao privremeni upload. EN: Proves that a content-mutating job cannot be removed as a transient upload. */
+    public function testRunningImportCannotBeCancelled(): void
+    {
+        $job = $this->uploads->start('running.xml.zip', 6, 42);
+        $path = (string)$job['archive_path'];
+        $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
+            ->where('id', '=', (int)$job['id'])
+            ->update([
+                'status' => 'running',
+                'options_json' => '{}',
+            ]);
+
+        try {
+            $this->uploads->cancel((string)$job['uuid'], 42);
+            self::fail('A running import must not be cancellable.');
+        } catch (ConfluenceImportException $exception) {
+            self::assertStringContainsString('nije moguće otkazati', $exception->getMessage());
+        }
+
+        self::assertFileExists($path);
+        self::assertSame('running', $this->repository->jobByUuid((string)$job['uuid'], 42)['status']);
+    }
+
+    /** HR: Dokazuje da je i neuspjela početna provjera privremena te se uklanja po isteku. EN: Proves that a failed preflight is still transient and removed on expiry. */
+    public function testFailedPreflightUploadIsExpiredAndRemoved(): void
+    {
+        $job = $this->uploads->start('failed.xml.zip', 6, 42);
+        $path = (string)$job['archive_path'];
+        $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
+            ->where('id', '=', (int)$job['id'])
+            ->update([
+                'status' => 'failed',
+                'stage' => 'failed',
+                'expires_at' => '2000-01-01 00:00:00',
+            ]);
+
+        self::assertSame(1, $this->uploads->cleanupExpired());
+        self::assertFileDoesNotExist($path);
+        $this->expectException(ConfluenceImportException::class);
+        $this->repository->jobByUuid((string)$job['uuid'], 42);
+    }
+
+    /** HR: Dokazuje brisanje izvornog ZIP-a koje servis importa poziva nakon uspjeha. EN: Proves source-ZIP deletion invoked by the import service after success. */
+    public function testSuccessfulImportArchiveCleanupDeletesSourceFile(): void
+    {
+        $job = $this->uploads->start('completed.xml.zip', 6, 42);
+        $path = (string)$job['archive_path'];
+
+        $this->repository->completeImport((int)$job['id'], 99, ['pages' => 1]);
+        $this->uploads->deleteArchive($job);
+
+        self::assertFileDoesNotExist($path);
+        $completed = $this->repository->jobByUuid((string)$job['uuid'], 42);
+        self::assertSame('completed', $completed['status']);
+        self::assertSame('', $completed['archive_path']);
+    }
+
     private function removeDirectory(string $directory): void
     {
         if (!is_dir($directory)) {

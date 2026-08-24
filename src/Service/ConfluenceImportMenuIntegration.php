@@ -29,22 +29,10 @@ final readonly class ConfluenceImportMenuIntegration
 
         try {
             $repository = $this->container->get(self::MENU_REPOSITORY);
-            $path = is_object($repository) && method_exists($repository, 'jsonPathForSection')
-                ? $repository->jsonPathForSection('settings')
-                : null;
-            if (!is_string($path) || $path === '') {
+            if (!is_object($repository) || !method_exists($repository, 'upsertItemsForSection')) {
                 return;
             }
-
-            $items = $this->rows(is_file($path) ? json_decode((string)file_get_contents($path), true) : null);
-            $original = $items;
-            if (!$this->update($items)) {
-                $this->appendToParent($items, 'workspace.settings.group', $this->definition());
-            }
-
-            if ($items !== $original) {
-                $this->write($path, $items);
-            }
+            $repository->upsertItemsForSection('settings', [$this->definition()]);
         } catch (Throwable $throwable) {
             // HR: Settings izbornik je pogodnost i ne smije zaustaviti import ili CLI.
             // EN: The Settings menu is a convenience and must not stop import or CLI.
@@ -53,67 +41,6 @@ final readonly class ConfluenceImportMenuIntegration
                 'exception' => $throwable,
             ]);
         }
-    }
-
-    /**
-     * HR: Rekurzivno osvježava postojeću stavku bez promjene njezina redoslijeda.
-     * EN: Recursively refreshes an existing item without changing its order.
-     *
-     * @param list<array<string,mixed>> $items
-     */
-    private function update(array &$items): bool
-    {
-        foreach ($items as &$item) {
-            if (($item['id'] ?? null) === 'simbioza-confluence-import.settings') {
-                $order = $item['order'] ?? null;
-                $item = array_replace($item, $this->definition());
-                if (is_numeric($order)) {
-                    $item['order'] = (int)$order;
-                }
-                unset($item);
-                return true;
-            }
-
-            $children = $this->rows($item['children'] ?? null);
-            if ($children !== [] && $this->update($children)) {
-                $item['children'] = $children;
-                unset($item);
-                return true;
-            }
-        }
-        unset($item);
-
-        return false;
-    }
-
-    /**
-     * HR: Dodaje stavku postojećoj grupi područja.
-     * EN: Adds the item to the existing Workspace group.
-     *
-     * @param list<array<string,mixed>> $items
-     * @param array<string,mixed> $definition
-     */
-    private function appendToParent(array &$items, string $parentId, array $definition): bool
-    {
-        foreach ($items as &$item) {
-            if (($item['id'] ?? null) === $parentId) {
-                $children = $this->rows($item['children'] ?? null);
-                $children[] = $definition;
-                $item['children'] = $children;
-                unset($item);
-                return true;
-            }
-
-            $children = $this->rows($item['children'] ?? null);
-            if ($children !== [] && $this->appendToParent($children, $parentId, $definition)) {
-                $item['children'] = $children;
-                unset($item);
-                return true;
-            }
-        }
-        unset($item);
-
-        return false;
     }
 
     /**
@@ -135,46 +62,5 @@ final readonly class ConfluenceImportMenuIntegration
             'enabled' => true,
             'level' => 1,
         ];
-    }
-
-    /**
-     * HR: Atomski sprema izmijenjenu konfiguraciju menija.
-     * EN: Atomically stores the updated menu configuration.
-     *
-     * @param list<array<string,mixed>> $items
-     */
-    private function write(string $path, array $items): void
-    {
-        $json = json_encode($items, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        if (!is_string($json)) {
-            return;
-        }
-
-        $temporary = $path . '.tmp.' . bin2hex(random_bytes(6));
-        if (file_put_contents($temporary, $json . PHP_EOL, LOCK_EX) !== false) {
-            rename($temporary, $path);
-        }
-    }
-
-    /**
-     * HR: Normalizira samo valjane retke konfiguracije.
-     * EN: Normalizes only valid configuration rows.
-     *
-     * @return list<array<string,mixed>>
-     */
-    private function rows(mixed $value): array
-    {
-        if (!is_array($value)) {
-            return [];
-        }
-
-        $rows = [];
-        foreach ($value as $candidate) {
-            if (is_array($candidate)) {
-                $rows[] = $candidate;
-            }
-        }
-
-        return $rows;
     }
 }

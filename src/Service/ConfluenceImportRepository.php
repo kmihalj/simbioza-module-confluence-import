@@ -228,7 +228,7 @@ final readonly class ConfluenceImportRepository
             ->get();
         $result = [];
         foreach ($rows as $row) {
-            if (!is_array($row) || !in_array($row['status'] ?? null, ['uploading', 'scanning', 'ready'], true)) {
+            if (!is_array($row) || !$this->isTransientJobRow($row)) {
                 continue;
             }
 
@@ -244,13 +244,32 @@ final readonly class ConfluenceImportRepository
         $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
             ->where('id', '=', $jobId)
             ->first();
-        if (!is_array($row) || !in_array($row['status'] ?? null, ['uploading', 'scanning', 'ready'], true)) {
+        if (!is_array($row) || !$this->isTransientJobRow($row)) {
             return;
         }
 
         $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
             ->where('id', '=', $jobId)
             ->delete();
+    }
+
+    /**
+     * HR: Prepoznaje posao koji nije započeo sadržajni import. Neuspjela
+     * početna provjera ostaje privremena dok nema spremljenih import opcija.
+     * EN: Recognizes a job that has not started content import. A failed
+     * preflight remains transient while no import options have been stored.
+     *
+     * @param array<mixed,mixed> $row
+     */
+    private function isTransientJobRow(array $row): bool
+    {
+        if (in_array($row['status'] ?? null, ['uploading', 'scanning', 'ready'], true)) {
+            return true;
+        }
+
+        return ($row['status'] ?? null) === 'failed'
+            && (!is_scalar($row['options_json'] ?? null) || trim((string)$row['options_json']) === '')
+            && (!is_numeric($row['workspace_id'] ?? null) || (int)$row['workspace_id'] <= 0);
     }
 
     /**
@@ -295,6 +314,27 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
+     * HR: Vraća raniji import istog izvornog Confluence područja.
+     * EN: Returns an earlier import of the same source Confluence space.
+     *
+     * @return array<string,mixed>|null
+     */
+    public function spaceBySourceId(string $sourceId): ?array
+    {
+        $sourceId = trim($sourceId);
+        if ($sourceId === '') {
+            return null;
+        }
+
+        $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_SPACES)
+            ->where('source_instance', '=', 'archive')
+            ->where('source_space_id', '=', $sourceId)
+            ->first();
+
+        return is_array($row) ? $this->normalizeRow($row) : null;
+    }
+
+    /**
      * HR: Sprema izričito mapiranje izvornog korisnika.
      * EN: Stores an explicit source-user mapping.
      *
@@ -311,6 +351,25 @@ final readonly class ConfluenceImportRepository
             ->where('source_user_key', '=', $sourceKey)
             ->first();
         $now = gmdate('Y-m-d H:i:s');
+        $existingTargetId = is_array($existing) && is_numeric($existing['target_user_id'] ?? null)
+            ? (int)$existing['target_user_id']
+            : null;
+        $existingConfirmed = is_array($existing)
+            && (bool)($existing['confirmed'] ?? false)
+            && ($existing['mapping_status'] ?? '') === 'mapped'
+            && $existingTargetId !== null
+            && $existingTargetId > 0;
+        if ($existingConfirmed && $targetUserId !== null && $targetUserId !== $existingTargetId) {
+            throw new ConfluenceImportException(
+                __('Confluence identitet već je potvrđeno povezan s drugim korisnikom. Postojeće mapiranje nije promijenjeno.'),
+            );
+        }
+        if ($existingConfirmed) {
+            // HR: Ponovljeni import drugog područja ne smije poništiti ili preusmjeriti globalno mapiranje računa.
+            // EN: A repeated import of another Workspace must not clear or redirect the global account mapping.
+            $targetUserId = $existingTargetId;
+            $confirmed = true;
+        }
         $values = [
             'source_username' => $this->nullableString($user['username'] ?? null),
             'source_display_name' => $this->nullableString($user['display_name'] ?? null),
@@ -318,7 +377,6 @@ final readonly class ConfluenceImportRepository
             'target_user_id' => $targetUserId,
             'mapping_status' => $targetUserId !== null ? 'mapped' : 'unresolved',
             'confirmed' => $confirmed,
-            'job_id' => $jobId,
             'updated_at' => $now,
         ];
         if (is_array($existing)) {
@@ -330,6 +388,7 @@ final readonly class ConfluenceImportRepository
 
         $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_IDENTITIES)->insert([
             'source_user_key' => $sourceKey,
+            'job_id' => $jobId,
             'created_at' => $now,
             ...$values,
         ]);
@@ -364,11 +423,27 @@ final readonly class ConfluenceImportRepository
             ->where('source_group_name', '=', $sourceName)
             ->first();
         $now = gmdate('Y-m-d H:i:s');
+        $existingTargetId = is_array($existing) && is_numeric($existing['target_group_id'] ?? null)
+            ? (int)$existing['target_group_id']
+            : null;
+        $existingConfirmed = is_array($existing)
+            && (bool)($existing['confirmed'] ?? false)
+            && ($existing['mapping_status'] ?? '') === 'mapped'
+            && $existingTargetId !== null
+            && $existingTargetId > 0;
+        if ($existingConfirmed && $targetGroupId !== null && $targetGroupId !== $existingTargetId) {
+            throw new ConfluenceImportException(
+                __('Confluence grupa već je potvrđeno povezana s drugom grupom. Postojeće mapiranje nije promijenjeno.'),
+            );
+        }
+        if ($existingConfirmed) {
+            $targetGroupId = $existingTargetId;
+            $confirmed = true;
+        }
         $values = [
             'target_group_id' => $targetGroupId,
             'mapping_status' => $targetGroupId !== null ? 'mapped' : 'unresolved',
             'confirmed' => $confirmed,
-            'job_id' => $jobId,
             'updated_at' => $now,
         ];
         if (is_array($existing)) {
@@ -380,6 +455,7 @@ final readonly class ConfluenceImportRepository
 
         $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_GROUPS)->insert([
             'source_group_name' => $sourceName,
+            'job_id' => $jobId,
             'created_at' => $now,
             ...$values,
         ]);
@@ -620,6 +696,7 @@ final readonly class ConfluenceImportRepository
         $sourceId = $this->string($attachment['source_attachment_id'] ?? '');
         $version = $this->integer($attachment['source_version'] ?? 1);
         $existing = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS)
+            ->where('job_id', '=', $jobId)
             ->where('source_attachment_id', '=', $sourceId)
             ->where('source_version', '=', $version)
             ->first();
@@ -659,6 +736,25 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
+     * HR: Vraća već spremljenu verziju privitka kako ponovljeni import ne bi
+     *     duplicirao veliku binarnu datoteku.
+     * EN: Returns an already stored attachment version so a retried import does
+     *     not duplicate a large binary file.
+     *
+     * @return array<string,mixed>|null
+     */
+    public function attachmentBySourceVersion(int $jobId, string $sourceId, int $version): ?array
+    {
+        $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS)
+            ->where('job_id', '=', $jobId)
+            ->where('source_attachment_id', '=', trim($sourceId))
+            ->where('source_version', '=', max(1, $version))
+            ->first();
+
+        return is_array($row) ? $this->normalizeRow($row) : null;
+    }
+
+    /**
      * HR: Dohvaća dostupni privatni privitak po UUID-u.
      * EN: Fetches an available private attachment by UUID.
      *
@@ -694,6 +790,56 @@ final readonly class ConfluenceImportRepository
             ->update([
                 'target_node_id' => $nodeId,
                 'target_document_key' => $documentKey,
+                'updated_at' => gmdate('Y-m-d H:i:s'),
+            ]);
+    }
+
+    /**
+     * HR: Vraća privremeno spremljene privitke jedne ciljne stranice.
+     * EN: Returns staged attachments for one target page.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function storedAttachmentsForPage(string $sourcePageId, int $workspaceId): array
+    {
+        if (trim($sourcePageId) === '' || $workspaceId <= 0) {
+            return [];
+        }
+
+        $rows = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS)
+            ->where('source_page_id', '=', trim($sourcePageId))
+            ->where('target_workspace_id', '=', $workspaceId)
+            ->where('status', '=', 'stored')
+            ->orderBy('id', 'ASC')
+            ->get();
+        $result = [];
+        foreach ($rows as $row) {
+            if (is_array($row)) {
+                $result[] = $this->normalizeRow($row);
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * HR: Nakon sigurnog prijenosa predaje vlasništvo nad datotekom Editor modulu.
+     * EN: Transfers file ownership to the Editor module after safe registration.
+     */
+    public function markAttachmentRegistered(int $attachmentId, int $nodeId, string $documentKey): void
+    {
+        if ($attachmentId <= 0 || $nodeId <= 0 || trim($documentKey) === '') {
+            return;
+        }
+
+        $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS)
+            ->where('id', '=', $attachmentId)
+            ->update([
+                'storage_path' => null,
+                'target_node_id' => $nodeId,
+                'target_document_key' => trim($documentKey),
+                'status' => 'registered',
+                'error_message' => null,
                 'updated_at' => gmdate('Y-m-d H:i:s'),
             ]);
     }

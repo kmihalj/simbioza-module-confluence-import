@@ -46,6 +46,7 @@ final class ConfluenceExportScannerTest extends TestCase
 
         self::assertSame('DEMO', $scan['spaces'][0]['source_key']);
         self::assertSame('Demo Workspace', $scan['spaces'][0]['name']);
+        self::assertSame('100', $scan['spaces'][0]['home_page_id']);
         self::assertSame(1, $scan['statuses']['current']);
         self::assertSame(1, $scan['statuses']['history']);
         self::assertSame('team-demo', $scan['groups'][0]['source_name']);

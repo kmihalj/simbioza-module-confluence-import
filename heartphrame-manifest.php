@@ -10,12 +10,15 @@ use AaiEduHr\HeartPhrameModuleOrm\Database\Database;
 use AaiEduHr\HeartPhrameModuleWorkspace\ModuleWorkspace;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Command\HpSimbiozaConfluenceImportCommand;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Controller\ConfluenceImportController;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Listener\PurgeConfluencePageImport;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Listener\PurgeConfluenceWorkspaceImport;
 use AaiEduHr\SimbiozaModuleConfluenceImport\ModuleSimbiozaConfluenceImport;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportMenuIntegration;
 use AaiEduHr\SimbiozaModuleUser\ModuleSimbiozaUser;
 use HeartPhrame\Bridge\ComposerBridge;
 use HeartPhrame\Command\CommandDefinition;
 use HeartPhrame\Config\ConfigInterface;
+use HeartPhrame\Event\EventListener;
 use HeartPhrame\Module\AbstractModuleManifest;
 use Psr\Container\ContainerInterface;
 
@@ -103,6 +106,13 @@ return new class extends AbstractModuleManifest {
             ],
             [
                 'GET',
+                '/settings/confluence-import/report/{uuid}',
+                ConfluenceImportController::class . '@report',
+                'simbioza-confluence-import.report',
+                $authenticated,
+            ],
+            [
+                'GET',
                 '/settings/confluence-import/csrf',
                 ConfluenceImportController::class . '@csrf',
                 'simbioza-confluence-import.csrf',
@@ -131,9 +141,23 @@ return new class extends AbstractModuleManifest {
             ],
             [
                 'POST',
+                '/settings/confluence-import/cancel',
+                ConfluenceImportController::class . '@cancel',
+                'simbioza-confluence-import.cancel',
+                $authenticated,
+            ],
+            [
+                'POST',
                 '/settings/confluence-import/run',
                 ConfluenceImportController::class . '@run',
                 'simbioza-confluence-import.run',
+                $authenticated,
+            ],
+            [
+                'POST',
+                '/settings/confluence-import/process',
+                ConfluenceImportController::class . '@process',
+                'simbioza-confluence-import.process',
                 $authenticated,
             ],
             [
@@ -184,6 +208,21 @@ return new class extends AbstractModuleManifest {
                 'simbioza-confluence-import:inspect',
                 'Read-only inspection of a Confluence XML ZIP space archive.',
                 [HpSimbiozaConfluenceImportCommand::class, 'inspect'],
+            ),
+        ];
+    }
+
+    /** HR: Uklanja import metapodatke pri trajnom brisanju područja. EN: Removes import metadata when a Workspace is permanently deleted. */
+    public function getEventListeners(): array
+    {
+        return [
+            new EventListener(
+                \AaiEduHr\HeartPhrameModuleWorkspace\Event\WorkspacePermanentlyDeleting::class,
+                PurgeConfluenceWorkspaceImport::class,
+            ),
+            new EventListener(
+                \AaiEduHr\HeartPhrameModuleWorkspace\Event\WorkspacePagesPermanentlyDeleting::class,
+                PurgeConfluencePageImport::class,
             ),
         ];
     }

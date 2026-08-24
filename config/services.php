@@ -3,19 +3,28 @@
 declare(strict_types=1);
 
 use AaiEduHr\HeartPhrameModuleAuth\Service\AuthGroupService;
+use AaiEduHr\HeartPhrameModuleAuth\Service\AuthUserAttributeService;
 use AaiEduHr\HeartPhrameModuleAuth\Service\AuthUserService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorApiActorContext;
+use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorHtmlChartService;
+use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorHtmlRoadmapService;
+use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorDocumentIncludeService;
+use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorImportAttachmentService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorWorkspaceIntegration;
 use AaiEduHr\HeartPhrameModuleMenu\Service\MenuRenderer;
 use AaiEduHr\HeartPhrameModuleOrm\Database\Database;
 use AaiEduHr\HeartPhrameModuleWorkspace\Service\WorkspaceAccessService;
+use AaiEduHr\HeartPhrameModuleWorkspace\Service\WorkspaceContentChangeBatch;
+use AaiEduHr\HeartPhrameModuleWorkspace\Service\WorkspaceMaintenanceService;
 use AaiEduHr\HeartPhrameModuleWorkspace\Service\WorkspaceRepository;
 use AaiEduHr\HeartPhrameModuleWorkspace\Service\WorkspaceWorkflowService;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Backup\ConfluenceImportBackupProvider;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Backup\ConfluenceImportWorkspaceBackupProvider;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Command\HpSimbiozaConfluenceImportCommand;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Controller\ConfluenceImportController;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Listener\PurgeConfluencePageImport;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Listener\PurgeConfluenceWorkspaceImport;
 use AaiEduHr\SimbiozaModuleConfluenceImport\ModuleSimbiozaConfluenceImport;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceArchive;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceExportReader;
@@ -27,6 +36,7 @@ use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportModuleViewRe
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportRepository;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportService;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportUploadService;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluencePrincipalMatcher;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceReferenceResolver;
 use AaiEduHr\SimbiozaModuleUser\Service\PersonalWorkspaceService;
 use HeartPhrame\Config\ConfigInterface;
@@ -38,6 +48,18 @@ use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
 
 $services = [
+    PurgeConfluencePageImport::class =>
+        static fn(ContainerInterface $container): PurgeConfluencePageImport =>
+            new PurgeConfluencePageImport(
+                $container->get(Database::class),
+                $container->get(ConfluenceImportConfig::class),
+            ),
+    PurgeConfluenceWorkspaceImport::class =>
+        static fn(ContainerInterface $container): PurgeConfluenceWorkspaceImport =>
+            new PurgeConfluenceWorkspaceImport(
+                $container->get(Database::class),
+                $container->get(ConfluenceImportConfig::class),
+            ),
     ConfluenceImportConfig::class => static fn(ContainerInterface $container): ConfluenceImportConfig =>
         new ConfluenceImportConfig($container->get(ConfigInterface::class), dirname(__DIR__)),
     ConfluenceImportRepository::class => static fn(ContainerInterface $container): ConfluenceImportRepository =>
@@ -57,7 +79,12 @@ $services = [
             $container->get(ConfluenceImportConfig::class),
             $container->get(ConfluenceExportScanner::class),
         ),
-    ConfluenceHtmlConverter::class => static fn(): ConfluenceHtmlConverter => new ConfluenceHtmlConverter(),
+    ConfluenceHtmlConverter::class => static fn(ContainerInterface $container): ConfluenceHtmlConverter =>
+        new ConfluenceHtmlConverter(
+            $container->get(EditorHtmlChartService::class),
+            $container->get(EditorHtmlRoadmapService::class),
+        ),
+    ConfluencePrincipalMatcher::class => static fn(): ConfluencePrincipalMatcher => new ConfluencePrincipalMatcher(),
     ConfluenceReferenceResolver::class => static fn(ContainerInterface $container): ConfluenceReferenceResolver =>
         new ConfluenceReferenceResolver(
             $container->get(ConfluenceImportRepository::class),
@@ -73,12 +100,19 @@ $services = [
             $container->get(ConfluenceHtmlConverter::class),
             $container->get(ConfluenceReferenceResolver::class),
             $container->get(WorkspaceRepository::class),
+            $container->get(WorkspaceContentChangeBatch::class),
             $container->get(WorkspaceWorkflowService::class),
+            $container->get(WorkspaceMaintenanceService::class),
             $container->get(EditorService::class),
+            $container->get(EditorDocumentIncludeService::class),
             $container->get(EditorWorkspaceIntegration::class),
             $container->get(EditorApiActorContext::class),
+            $container->get(EditorImportAttachmentService::class),
+            $container->get(\AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorImportAttributionService::class),
             $container->get(AuthUserService::class),
+            $container->get(AuthUserAttributeService::class),
             $container->get(AuthGroupService::class),
+            $container->get(ConfluencePrincipalMatcher::class),
             $container->get(PersonalWorkspaceService::class),
             $container->get(UrlGenerator::class),
             $container,

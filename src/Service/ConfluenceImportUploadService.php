@@ -15,6 +15,7 @@ use function file_get_contents;
 use function filesize;
 use function flock;
 use function fopen;
+use function function_exists;
 use function fread;
 use function fseek;
 use function fwrite;
@@ -28,6 +29,7 @@ use function is_string;
 use function max;
 use function mkdir;
 use function rename;
+use function set_time_limit;
 use function strtolower;
 use function str_ends_with;
 use function time;
@@ -192,6 +194,8 @@ final readonly class ConfluenceImportUploadService
      */
     public function finish(string $uuid, int $actorUserId): array
     {
+        $this->extendPreflightExecutionTime();
+
         $job = $this->repository->jobByUuid($uuid, $actorUserId);
         $this->assertNotExpired($job);
         if (($job['status'] ?? '') !== 'uploading') {
@@ -240,6 +244,28 @@ final readonly class ConfluenceImportUploadService
     }
 
     /**
+     * HR: Velikoj završnoj provjeri daje isti konfigurabilni vremenski okvir kao
+     *     potvrđenom importu, umjesto zadanih 30 sekundi web zahtjeva.
+     * EN: Gives a large final preflight the same configurable execution window
+     *     as a confirmed import instead of the web request's default 30 seconds.
+     */
+    private function extendPreflightExecutionTime(): void
+    {
+        if (!function_exists('set_time_limit')) {
+            return;
+        }
+
+        try {
+            set_time_limit($this->config->importExecutionTimeLimit());
+        } catch (\Throwable) {
+            // HR: Nastavljamo s poslužiteljskim limitom; scanner i dalje može
+            //     završiti kada je PHP konfiguriran bez vremenskog ograničenja.
+            // EN: Continue with the server limit; the scanner can still finish
+            //     when PHP is configured without an execution-time limit.
+        }
+    }
+
+    /**
      * HR: Uklanja samo istekle privremene poslove koji još nisu započeli
      *     mijenjati aplikacijski sadržaj.
      * EN: Removes only expired temporary jobs that have not started mutating
@@ -269,6 +295,65 @@ final readonly class ConfluenceImportUploadService
     }
 
     /**
+     * HR: Provjerava može li administrator sigurno odustati prije nego što je
+     * import počeo mijenjati aplikacijski sadržaj. Neuspjela početna provjera
+     * također je privremeni posao ako potvrđene opcije još nisu spremljene.
+     * EN: Checks whether an administrator may safely cancel before the import
+     * starts mutating application content. A failed preflight is also transient
+     * while no confirmed options have been stored.
+     *
+     * @param array<string,mixed> $job
+     */
+    public function canCancel(array $job): bool
+    {
+        $status = is_scalar($job['status'] ?? null) ? trim((string)$job['status']) : '';
+        if (in_array($status, ['uploading', 'scanning', 'ready'], true)) {
+            return true;
+        }
+
+        $optionsStarted = is_scalar($job['options_json'] ?? null)
+            && trim((string)$job['options_json']) !== '';
+
+        return $status === 'failed'
+            && !$optionsStarted
+            && (!is_numeric($job['workspace_id'] ?? null) || (int)$job['workspace_id'] <= 0);
+    }
+
+    /**
+     * HR: Otkazuje vlastiti privremeni posao, briše prenesenu arhivu ili
+     * nedovršenu `.upload` datoteku i tek potom uklanja zapis posla. Posao koji
+     * je počeo izrađivati sadržaj nije dopušteno otkazati ovim putem.
+     * EN: Cancels the actor's transient job, deletes its uploaded archive or
+     * incomplete `.upload` file, and only then removes the job record. A job
+     * that started creating content cannot be cancelled through this path.
+     *
+     * @return array<string,mixed>
+     */
+    public function cancel(string $uuid, int $actorUserId): array
+    {
+        return $this->repository->withLockedJob(
+            $uuid,
+            $actorUserId,
+            function (array $job, Database $database): array {
+                if (!$this->canCancel($job)) {
+                    throw new ConfluenceImportException(
+                        __('Import koji je već počeo mijenjati sadržaj nije moguće otkazati.'),
+                    );
+                }
+
+                $this->deleteManagedTransientFile($job);
+                $database->table(
+                    \AaiEduHr\SimbiozaModuleConfluenceImport\ModuleSimbiozaConfluenceImport::TABLE_JOBS,
+                )
+                    ->where('id', '=', (int)$job['id'])
+                    ->delete();
+
+                return $job;
+            },
+        );
+    }
+
+    /**
      * HR: Briše završenu izvornu arhivu nakon uspješnog importa.
      * EN: Deletes the completed source archive after a successful import.
      *
@@ -279,6 +364,34 @@ final readonly class ConfluenceImportUploadService
         $path = is_scalar($job['archive_path'] ?? null) ? trim((string)$job['archive_path']) : '';
         if ($path !== '' && is_file($path) && str_starts_with($path, $this->config->uploadDirectory())) {
             @unlink($path);
+        }
+    }
+
+    /**
+     * HR: Briše isključivo stvarnu datoteku unutar privatnog upload direktorija.
+     * EN: Deletes only a real file located inside the private upload directory.
+     *
+     * @param array<string,mixed> $job
+     */
+    private function deleteManagedTransientFile(array $job): void
+    {
+        $path = is_scalar($job['archive_path'] ?? null) ? trim((string)$job['archive_path']) : '';
+        if ($path === '' || !is_file($path)) {
+            return;
+        }
+
+        $root = realpath($this->config->uploadDirectory());
+        $real = realpath($path);
+        if (
+            !is_string($root)
+            || !is_string($real)
+            || !str_starts_with($real, rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)
+        ) {
+            throw new ConfluenceImportException(__('Datoteka importa nije unutar privatnog upload direktorija.'));
+        }
+
+        if (!unlink($real)) {
+            throw new ConfluenceImportException(__('Prenesenu Confluence arhivu nije moguće obrisati.'));
         }
     }
 

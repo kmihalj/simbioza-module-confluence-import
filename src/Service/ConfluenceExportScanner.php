@@ -24,7 +24,34 @@ use const ENT_SUBSTITUTE;
 final readonly class ConfluenceExportScanner
 {
     /** @var list<string> */
-    private const SUPPORTED_MACROS = ['code', 'noformat', 'info', 'note', 'tip', 'warning', 'toc'];
+    private const SUPPORTED_MACROS = [
+        'anchor',
+        'attachments',
+        'chart',
+        'children',
+        'content-report-table',
+        'contentbylabel',
+        'code',
+        'create-from-template',
+        'details',
+        'detailssummary',
+        'gallery',
+        'include',
+        'livesearch',
+        'multimedia',
+        'noformat',
+        'info',
+        'note',
+        'pagetree',
+        'panel',
+        'profile',
+        'recently-updated',
+        'recently-updated-dashboard',
+        'status',
+        'tip',
+        'toc',
+        'warning',
+    ];
 
     /** HR: Prima provjereni arhiv i stream XML čitač. EN: Receives the validated archive and streaming XML reader. */
     public function __construct(
@@ -54,6 +81,8 @@ final readonly class ConfluenceExportScanner
         $contentPermissionSets = [];
         $contentPermissions = [];
         $comments = 0;
+        $labels = [];
+        $labellings = [];
 
         foreach ($this->reader->objects($archivePath) as $object) {
             $counts[$object->className] = ($counts[$object->className] ?? 0) + 1;
@@ -108,6 +137,18 @@ final readonly class ConfluenceExportScanner
                 case 'Comment':
                     ++$comments;
                     break;
+                case 'Label':
+                    $labelId = $object->string('id');
+                    if ($labelId !== '') {
+                        $labels[$labelId] = $object->string('name');
+                    }
+                    break;
+                case 'Labelling':
+                    $labellings[] = [
+                        'page_id' => $object->reference('content') ?: $object->string('labelableId'),
+                        'label_id' => $object->reference('label'),
+                    ];
+                    break;
             }
         }
 
@@ -122,6 +163,14 @@ final readonly class ConfluenceExportScanner
         }
 
         $warnings = $this->warnings($pages, $users, $macros);
+        $pageLabels = [];
+        foreach ($labellings as $labelling) {
+            $pageId = $labelling['page_id'];
+            $label = $labels[$labelling['label_id']] ?? '';
+            if ($pageId !== '' && $label !== '') {
+                $pageLabels[$pageId][] = $label;
+            }
+        }
 
         return [
             'archive' => $archive,
@@ -143,6 +192,7 @@ final readonly class ConfluenceExportScanner
             'statuses' => $statuses,
             'macros' => $macros,
             'comments' => $comments,
+            'page_labels' => $pageLabels,
             'warnings' => $warnings,
             'defaults' => [
                 'include_history' => false,
@@ -237,6 +287,8 @@ final readonly class ConfluenceExportScanner
             'source_key' => $object->string('id') ?: $object->string('key'),
             'username' => $object->string('username') ?: $object->string('name'),
             'display_name' => $object->string('displayName') ?: $object->string('fullName'),
+            'first_name' => $object->string('firstName') ?: $object->string('givenName'),
+            'last_name' => $object->string('lastName') ?: $object->string('surname'),
             'email' => strtolower($object->string('emailAddress') ?: $object->string('email')),
             'target_user_id' => null,
         ];

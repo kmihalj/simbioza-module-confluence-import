@@ -149,7 +149,10 @@ return new class implements ReversibleMigrationInterface {
                 $table->longText('error_message')->nullable();
                 $table->timestamps();
                 $table->index('source_attachment_id', 'simbioza_confluence_attachment_source_idx');
-                $table->unique(['source_attachment_id', 'source_version'], 'simbioza_confluence_attachment_source_uq');
+                $table->unique(
+                    ['job_id', 'source_attachment_id', 'source_version'],
+                    'simbioza_confluence_attachment_job_source_uq',
+                );
             });
         }
     }

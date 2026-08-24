@@ -8,6 +8,12 @@ The importer groups Confluence page objects by logical content ID. The latest pu
 
 The source space/page identifiers, version, status and conversion notes remain in module-owned tables. They are visible to importer administrators and do not add Confluence-only fields to ordinary Workspace forms.
 
+A Confluence XML export can encode a CDATA terminator as `]] >` or `]] ]>` and
+can use HTML entities outside XML's built-in entity set. The importer
+normalises each complete `plain-text` body before DOM conversion. Code samples,
+including a literal `<![CDATA[` string, therefore remain code instead of
+turning the rest of the page into escaped Confluence markup.
+
 ## Links
 
 The converter recognises modern `/spaces/SPACE/pages/ID/title`, legacy `/display/SPACE/title`, `viewpage.action?pageId=ID` and attachment URLs.
@@ -21,12 +27,81 @@ The converter recognises modern `/spaces/SPACE/pages/ID/title`, legacy `/display
 
 ## Macros and tasks
 
-Code, noformat, info, note, tip, warning and table-of-contents structures have safe HTML representations. Confluence task lists become read-only task-list markup in the document. Unsupported or application-specific macros keep a visible safe fallback and create an administrator warning rather than silently disappearing.
+Code, noformat, info, note, tip and warning structures have safe HTML representations. Confluence task lists become read-only task-list markup in the document. Unsupported or application-specific macros keep a visible safe fallback and create an administrator warning rather than silently disappearing.
 
 Calendar and Task modules remain the owners of live calendars and tasks. A Confluence macro is not silently converted to a live business object unless its complete data and ACL can be mapped safely; otherwise the static representation remains in the imported page.
 
+### Supported macro conversion
+
+- `details` / Page Properties becomes the page's native structured property
+  set. Both vertical key-value and horizontal heading-value layouts are
+  supported. User references use the confirmed mapped name, and a hidden
+  Confluence table is not duplicated in the document body.
+- `detailssummary` and `contentbylabel` become the native **Page report**.
+  The importer carries the CQL label, columns, first-column heading, ordering,
+  and result limit. When property columns are requested, only pages that
+  actually contain structured properties are included. The report updates
+  dynamically after import and reapplies ACL every time.
+- `gallery` becomes a native gallery of real Editor attachments on the current page.
+- `livesearch` and `pagetreesearch` become native search scoped to the imported
+  Workspace.
+- `recently-updated` becomes an ACL-safe list of recent published changes.
+- `panel` and column layouts become ordinary responsive, themed HTML; no
+  separate runtime feature is introduced for them.
+- `profile` becomes a static rendering of the mapped Auth name. If an
+  administrator created an inactive staged account, the importer uses a safe
+  inferred name instead of the raw login identifier. It does not impersonate
+  a Confluence profile or its authorization.
+- `children` becomes local links to direct children; the Confluence `all=true` option includes descendants.
+- `pagetree` becomes a hierarchical list of local pages from the configured root; `@self` means the current page.
+- `attachments` becomes a read-only list of attachments that were actually imported.
+- `multimedia` becomes a safe HTML audio/video preview when the attachment was imported.
+- `view-file` becomes an ordinary link to the same local ACL-protected
+  attachment when the physical file exists in the archive.
+- `tableenhancer` retains its source table as ordinary responsive HTML because
+  the add-on does not represent a separate business object. Its table, like
+  every ordinary imported table, receives the HTML Editor's standard bordered,
+  striped, hoverable classes and responsive wrapper, so it follows the active
+  theme and wide content scrolls inside the page.
+- `status` and `anchor` become a native badge and HTML anchor.
+- `toc` is omitted from the imported document because Simbioza builds its native table of contents from the page headings.
+- `include` becomes Editor's native dynamic **Include page content** reference. The importer resolves same-space forward references after all pages exist, reconnects already imported cross-space targets immediately, and reconciles older unresolved references when their space is imported later. Content remains dynamic and the target page's ACL is rechecked on every view.
+- `chart` becomes Editor's native editable chart when the macro contains a
+  usable table. The importer maps type, orientation, selected columns, title,
+  axis labels, legend, and the Confluence 3D option. Invalid or incomplete
+  source data keeps its table as a safe static fallback and creates a report
+  notice.
+- `roadmap` becomes Editor's native editable **Timeline**. The importer maps
+  the date range, day/week/month/quarter scale, lanes and colors, activity
+  bars, descriptions, markers, and safe HTTP(S) links. Invalid Roadmap Planner
+  JSON keeps a visible fallback and creates a report notice.
+- `widget` converts only providers with an explicit safe policy. YouTube uses
+  a responsive `youtube-nocookie.com` iframe with restricted capabilities;
+  Figma and Twitter/X become theme-aware external-link cards. Unknown providers
+  keep a visible fallback and create a report notice. Provider scripts are
+  never copied from Confluence.
+- `create-from-template` using Confluence's file-list blueprint is omitted
+  because its Confluence editing action is not applicable to an imported page.
+- `content-report-table` becomes an ordinary editable HTML table containing
+  the matching page links known at import time. It is not a template or a
+  dynamic Workspace component. Source labels remain portable import metadata.
+
+Confluence two- and three-column layouts become responsive Bootstrap rows and
+columns. Code/noformat blocks preserve their optional title and safe language
+class, imported images retain numeric width/height hints, and rich link labels
+remain readable. The native Simbioza table of contents continues to use the imported page headings.
+
+Other macros that create dynamic Confluence content or editing actions remain explicitly marked as unsupported; source data is never silently discarded.
+
 ## Comments and attachments
 
-Comments are imported only when the Comment module exists, the target page exists and the author has a confirmed user mapping. Otherwise their source metadata remains available to the importer administrator.
+Comments are imported only when the Comment module exists, the target page
+exists and the author has a confirmed user mapping. An attachment comment is
+assigned to the page that owns the attachment; a historical comment that
+cannot be associated with one page unambiguously is skipped and counted in the
+final summary. In other cases, its source metadata remains available to the
+importer administrator.
 
-The importer selects the requested attachment version or the highest physical version present in the ZIP. Missing or invalid files are reported without permitting traversal outside the archive.
+The importer selects the requested attachment version or the highest physical version present in the ZIP. It stages the verified binary only until the target document exists, then registers it with the same stable UUID as a native Editor attachment and removes the staging copy. The page body and paperclip therefore reference one ACL-protected asset. Missing or invalid files are reported without permitting traversal outside the archive.
+
+Each completed job retains a report in **Recent Confluence imports**. Unsupported macros are grouped by target page, and every report row links directly to that Simbioza page. A report with no rows explicitly confirms that no manual content review was requested.

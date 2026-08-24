@@ -29,6 +29,12 @@ JSON izlaz omogućuje provjeru identiteta spacea, količine objekata, stanja, gr
 
 Koristite istu sesiju preglednika i odaberite istu lokalnu datoteku. Ako se naziv ili veličina izvora razlikuju, potreban je novi prijenos. Prijenos stariji od `upload_ttl` nije moguće ponovno koristiti i automatski se uklanja pri pokretanju novog prijenosa.
 
+### Prenio sam arhivu, ali ne želim pokrenuti import
+
+Otvorite spremljeno mapiranje ili pronađite posao pod **Nedavni Confluence
+importi** i odaberite **Odustani od importa**. Potvrdom se odmah brišu arhiva i
+podaci pripreme. Ova radnja dostupna je samo prije početka sadržajnog importa.
+
 ### Import nije moguće pokrenuti
 
 Početna provjera najprije mora uspješno završiti. Osobni space dodatno zahtijeva potvrđeno mapiranje vlasnika.
@@ -36,6 +42,20 @@ Početna provjera najprije mora uspješno završiti. Osobni space dodatno zahtij
 ### Korisnik ne vidi ograničenu stranicu
 
 Provjerite izvorne korisnike/grupe i potvrdite mapiranje. To je siguran neuspjeh: neriješeno ograničenje uskraćuje pristup umjesto otvaranja stranice.
+
+### Postojeća grupa nije automatski predložena
+
+Prijedlog zahtijeva točan tehnički ključ ili točan naziv aktivne grupe, bez
+obzira na veličinu slova i suvišne razmake. Sličan naziv, isključena grupa ili
+dvosmislen rezultat namjerno ostaju nemapirani. Provjerite ključ u Auth
+postavkama pa cilj odaberite ručno samo ako predstavlja istu grupu.
+
+### Uvezeni neaktivni korisnik ne može se prijaviti
+
+To je očekivano. Predračun nema lozinku ni provider. U Auth postavkama mu
+administrator treba uključiti stvarni provider i aktivirati ga. Za local-only
+pristup mora postaviti privremenu lozinku; kod kombiniranog vanjskog i local
+pristupa korisnik može nakon vanjske prijave sam postaviti lokalnu lozinku.
 
 ### Poveznica među spaceovima i dalje otvara resolver
 
@@ -47,4 +67,6 @@ U sažetku posla provjerite nedostajući fizički ZIP zapis, neispravan identifi
 
 ### Potvrđeni import prekinuo se na pola
 
-Nemojte ponavljati isti posao jer izrada nije idempotentna. Pregledajte i prema potrebi uklonite djelomično područje, ispravite prijavljeni uzrok i ponovno prenesite izvor. Nakon neuspjeha izvorna arhiva ostaje na poslužitelju radi dijagnostike i mora biti zaštićena ovlastima datotečnog sustava.
+Nemojte ponavljati isti posao jer izrada stranica nije idempotentna. Pregledajte i prema potrebi uklonite djelomično područje, ispravite prijavljeni uzrok i ponovno prenesite izvor. Već sigurno spremljene binarne verzije privitaka ponovno se koriste i ne dupliciraju na disku. Nakon neuspjeha izvorna arhiva ostaje na poslužitelju radi dijagnostike i mora biti zaštićena ovlastima datotečnog sustava.
+
+Provjera velike arhive i potvrđeni import koriste `confluence_import.import_execution_time_limit` (zadano 900 sekundi). Import skupno osvježava backlinkove i indeks pretrage samo jednom po području. Ako PHP ipak završi fatalnom pogreškom, posao se označava neuspjelim, a sigurna poruka prikazuje se u popisu poslova; tehnički detalji ostaju u tehničkom logu.
