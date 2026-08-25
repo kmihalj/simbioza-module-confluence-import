@@ -41,6 +41,8 @@ Svi interni paketi prate `dev-main`; ovaj razvojni modul ne sprema `composer.loc
 - opcionalno uvozi povijest, nacrte i soft-obrisane stranice;
 - prepisuje poveznice unutar spacea i naknadno usklađuje poveznice prema poslije uvezenim spaceovima;
 - svaku uvezenu datoteku registrira kao stvarni privatni Editor privitak stranice i isporučuje je uz aktualnu provjeru ACL-a područja i stranice; izvorni identitet privitka izoliran je po import poslu pa nova kopija ili zamjena nikada ne preuzima UUID drugog dokumenta;
+- nakon registracije uvezenih JPEG, PNG i WebP privitaka priprema njihove
+  predmemorirane web-verzije; originali ostaju nepromijenjeni i dostupni klikom;
 - točno podudarne postojeće korisnike i grupe sigurno predlaže za mapiranje;
 - administrator za nemapirani identitet može izričito izraditi neaktivan Auth
   predračun bez lozinke i providera, koji nema mogućnost prijave;

@@ -11,6 +11,7 @@ use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorApiActorContext;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorDocumentIncludeService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorImportAttachmentService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorImportAttributionService;
+use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorImageVariantService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorWorkspaceIntegration;
 use AaiEduHr\HeartPhrameModuleWorkspace\Event\WorkspaceContentChanged;
@@ -118,6 +119,7 @@ final readonly class ConfluenceImportService
         private EditorApiActorContext $editorActors,
         private EditorImportAttachmentService $importedAttachmentService,
         private EditorImportAttributionService $importAttribution,
+        private EditorImageVariantService $imageVariants,
         private AuthUserService $users,
         private AuthUserAttributeService $userAttributes,
         private AuthGroupService $groups,
@@ -1951,6 +1953,10 @@ final readonly class ConfluenceImportService
                     $this->workspaces->disableNodeTree($workspaceId, $nodeId, $actorUserId);
                     $this->editor->deleteDocument($document->id);
                     ++$deleted;
+                } else {
+                    // HR: Nakon registracije privitaka priprema prikazne kopije slika; original ostaje dostupan na klik.
+                    // EN: After attachment registration, prepares display image copies; the original remains available on click.
+                    $this->imageVariants->prewarmDocument($document->id);
                 }
 
                 unset($pending[$logicalId]);

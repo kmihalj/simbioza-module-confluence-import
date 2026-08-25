@@ -87,5 +87,7 @@ provider supplies real profile names.
 - open the report icon in **Recent Confluence imports** and review every linked page;
 - confirm the paperclip lists Confluence files as real page attachments;
 - confirm attachments download but do not execute inline;
+- confirm large imported images load their web-sized cache while selecting the
+  image still opens the untouched original;
 - import any referenced external space so unresolved cross-space links can reconcile;
 - check the Audit log when the optional Audit module is enabled.

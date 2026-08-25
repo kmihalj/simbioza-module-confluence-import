@@ -41,6 +41,8 @@ All internal packages follow `dev-main`; this development module does not commit
 - optionally imports history, drafts and soft-deleted pages;
 - rewrites same-space links and reconciles cross-space links after later imports;
 - registers every imported file as a real private Editor page attachment and serves it through current Workspace/page ACL; source attachment identity is isolated per import job so a later copy or replacement never reuses another document's UUID;
+- prepares cached web-sized copies of imported JPEG, PNG, and WebP attachments
+  after they are registered; originals remain unchanged and available on click;
 - safely suggests exact existing user and group matches for mapping;
 - lets an administrator explicitly create an inactive Auth staged account
   without a password or provider for an otherwise unmapped identity;

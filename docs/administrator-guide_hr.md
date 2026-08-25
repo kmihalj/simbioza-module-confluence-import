@@ -87,5 +87,7 @@ profilne podatke.
 - otvorite ikonu izvještaja pod **Nedavni Confluence importi** i pregledajte svaku povezanu stranicu;
 - provjerite prikazuje li spajalica Confluence datoteke kao stvarne privitke stranice;
 - potvrdite da se privitci preuzimaju, a ne izvršavaju unutar preglednika;
+- provjerite učitavaju li velike uvezene slike svoju web-verziju, dok klik na
+  sliku i dalje otvara netaknuti original;
 - uvezite vanjski space na koji postoje poveznice kako bi se neriješene poveznice mogle uskladiti;
 - provjerite Audit log kada je opcionalni Audit modul uključen.
