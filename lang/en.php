@@ -163,7 +163,6 @@ return [
     'Uvozi aktualne datoteke svih MIME tipova u privatnu pohranu.' => 'Imports current files of every MIME type into private storage.',
     'Veličina Confluence arhive nije dopuštena.' => 'The Confluence archive size is not permitted.',
     'Vlasnik' => 'Owner',
-    'Vlasnik ciljnog područja nije pronađen.' => 'The target Workspace owner was not found.',
     'Vlasnik osobnog Confluence područja mora biti potvrđeno mapiran.' => 'The owner of a personal Confluence Workspace must have a confirmed mapping.',
     'Vrijeme' => 'Time',
     'Vrsta područja' => 'Workspace type',

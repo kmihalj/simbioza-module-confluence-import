@@ -260,14 +260,16 @@ final readonly class ConfluenceImportService
             $this->saveIdentityMappings($scan, $normalized, $jobId);
             $normalized['group_map'] = $this->saveGroupMappings($scan, $normalized, $jobId);
             $this->repository->setStage($jobId, 'workspace');
-            $workspace = $this->workspace($space, $normalized, $actorUserId);
+            $workspaceManagerUserId = $this->workspaceManagerUserId($space, $actorUserId);
+            $workspace = $this->workspace(
+                $space,
+                $normalized,
+                $actorUserId,
+                $workspaceManagerUserId,
+            );
             $workspaceId = $this->positiveInt($workspace['id'] ?? null, __('Ciljno područje nije moguće kreirati.'));
             $this->repository->mapSpace($this->mappingSpace($space, $normalized), $workspace, $jobId);
-            $workspaceOwnerId = $this->positiveInt(
-                $workspace['owner_user_id'] ?? null,
-                __('Vlasnik ciljnog područja nije pronađen.'),
-            );
-            $this->applyWorkspaceAcl($workspaceId, $workspaceOwnerId, $scan, $normalized);
+            $this->applyWorkspaceAcl($workspaceId, $workspaceManagerUserId, $scan, $normalized);
 
             $this->repository->setStage($jobId, 'preparing_content');
             $dataset = $this->stageDataset($archivePath, $staging);
@@ -288,7 +290,7 @@ final readonly class ConfluenceImportService
                 'archive_path' => $archivePath,
                 'space' => $space,
                 'workspace' => $workspace,
-                'workspace_owner_id' => $workspaceOwnerId,
+                'workspace_manager_user_id' => $workspaceManagerUserId,
                 'options' => $normalized,
                 'dataset' => $dataset,
                 'pages' => $pages,
@@ -470,14 +472,16 @@ final readonly class ConfluenceImportService
             $this->saveIdentityMappings($scan, $normalized, $jobId);
             $normalized['group_map'] = $this->saveGroupMappings($scan, $normalized, $jobId);
             $this->repository->setStage($jobId, 'workspace');
-            $workspace = $this->workspace($space, $normalized, $actorUserId);
+            $workspaceManagerUserId = $this->workspaceManagerUserId($space, $actorUserId);
+            $workspace = $this->workspace(
+                $space,
+                $normalized,
+                $actorUserId,
+                $workspaceManagerUserId,
+            );
             $workspaceId = $this->positiveInt($workspace['id'] ?? null, __('Ciljno područje nije moguće kreirati.'));
             $this->repository->mapSpace($this->mappingSpace($space, $normalized), $workspace, $jobId);
-            $workspaceOwnerId = $this->positiveInt(
-                $workspace['owner_user_id'] ?? null,
-                __('Vlasnik ciljnog područja nije pronađen.'),
-            );
-            $this->applyWorkspaceAcl($workspaceId, $workspaceOwnerId, $scan, $normalized);
+            $this->applyWorkspaceAcl($workspaceId, $workspaceManagerUserId, $scan, $normalized);
 
             $dataset = $this->stageDataset($archivePath, $staging);
             // HR: I sinkroni import treba isti kontekst korisnika kao fazni.
@@ -516,7 +520,7 @@ final readonly class ConfluenceImportService
                 $actorUserId,
                 $normalized,
                 $workspaceId,
-                $workspaceOwnerId,
+                $workspaceManagerUserId,
             ): array {
                 $this->repository->setStage($jobId, 'pages');
                 $pageResult = $this->editorActors->runAs(
@@ -536,7 +540,7 @@ final readonly class ConfluenceImportService
                 $this->repository->setStage($jobId, 'acl');
                 $this->applyNodeAcl(
                     $workspaceId,
-                    $workspaceOwnerId,
+                    $workspaceManagerUserId,
                     $dataset,
                     $pageResult['nodes_by_source'],
                     $normalized,
@@ -644,11 +648,11 @@ final readonly class ConfluenceImportService
         $dataset = is_array($state['dataset'] ?? null) ? $state['dataset'] : [];
         $pageResult = is_array($state['page_result'] ?? null) ? $state['page_result'] : [];
         $workspaceId = (int)($workspace['id'] ?? 0);
-        $workspaceOwnerId = (int)($state['workspace_owner_id'] ?? 0);
+        $workspaceManagerUserId = (int)($state['workspace_manager_user_id'] ?? 0);
 
         $contentResult = $this->workspaceChanges->run(function () use (
             $workspaceId,
-            $workspaceOwnerId,
+            $workspaceManagerUserId,
             $dataset,
             $pageResult,
             $options,
@@ -659,7 +663,7 @@ final readonly class ConfluenceImportService
             $this->repository->setStage($jobId, 'acl');
             $this->applyNodeAcl(
                 $workspaceId,
-                $workspaceOwnerId,
+                $workspaceManagerUserId,
                 $dataset,
                 is_array($pageResult['nodes_by_source'] ?? null) ? $pageResult['nodes_by_source'] : [],
                 $options,
@@ -1030,16 +1034,18 @@ final readonly class ConfluenceImportService
      * @param array<string,mixed> $options
      * @return array<string,mixed>
      */
-    private function workspace(array $space, array $options, int $actorUserId): array
-    {
+    private function workspace(
+        array $space,
+        array $options,
+        int $actorUserId,
+        int $workspaceManagerUserId,
+    ): array {
         if (($space['type'] ?? '') === 'personal') {
-            $sourceOwner = $this->text($space['owner_source_key'] ?? '');
-            $ownerId = $this->repository->mappedUserId($sourceOwner);
-            if ($ownerId === null) {
-                throw new ConfluenceImportException(__('Vlasnik osobnog Confluence područja mora biti potvrđeno mapiran.'));
-            }
-
-            $workspace = $this->personalWorkspaces->ensureForUser($ownerId, $actorUserId, false);
+            $workspace = $this->personalWorkspaces->ensureForUser(
+                $workspaceManagerUserId,
+                $actorUserId,
+                false,
+            );
             if (!is_array($workspace)) {
                 throw new ConfluenceImportException(__('Osobno područje ciljnog korisnika nije moguće pripremiti.'));
             }
@@ -1056,10 +1062,32 @@ final readonly class ConfluenceImportService
                 $this->text($space['source_key'] ?? ''),
             ),
             'visibility' => 'restricted',
-            'owner_user_id' => $actorUserId,
             'tree_visibility' => 'inherit',
             'contents_visibility' => 'hidden',
         ], $actorUserId);
+    }
+
+    /**
+     * HR: Određuje korisnika koji kroz obični ACL upravlja ciljanim područjem.
+     * EN: Resolves the user who manages the target Workspace through regular ACL.
+     *
+     * @param array<string,mixed> $space
+     */
+    private function workspaceManagerUserId(array $space, int $actorUserId): int
+    {
+        if (($space['type'] ?? '') !== 'personal') {
+            return $actorUserId;
+        }
+
+        $sourceOwner = $this->text($space['owner_source_key'] ?? '');
+        $managerUserId = $this->repository->mappedUserId($sourceOwner);
+        if ($managerUserId === null) {
+            throw new ConfluenceImportException(
+                __('Vlasnik osobnog Confluence područja mora biti potvrđeno mapiran.'),
+            );
+        }
+
+        return $managerUserId;
     }
 
     /**
@@ -1286,17 +1314,17 @@ final readonly class ConfluenceImportService
      * @param array<string,mixed> $scan
      * @param array<string,mixed> $options
      */
-    private function applyWorkspaceAcl(int $workspaceId, int $ownerUserId, array $scan, array $options): void
+    private function applyWorkspaceAcl(int $workspaceId, int $managerUserId, array $scan, array $options): void
     {
-        // HR: Vlasnik je sigurni fail-closed subjekt. Njegov red osigurava da
+        // HR: Upravitelj je sigurni fail-closed subjekt. Njegov ACL red osigurava da
         // područje s potpuno neriješenim Confluence identitetima ne postane
         // dostupno drugim korisnicima kroz nasljeđivanje.
-        // EN: The owner is the safe fail-closed subject. Their row ensures a
+        // EN: The manager is the safe fail-closed subject. Their ACL row ensures a
         // space with entirely unresolved Confluence identities never becomes
         // accessible to other users through inheritance.
         $acl = [
             WorkspaceRepository::SUBJECT_USER => [
-                $ownerUserId => $this->completeRights([
+                $managerUserId => $this->completeRights([
                     'can_view' => true,
                     'can_add' => true,
                     'can_edit' => true,
@@ -2363,7 +2391,7 @@ final readonly class ConfluenceImportService
      */
     private function applyNodeAcl(
         int $workspaceId,
-        int $workspaceOwnerId,
+        int $workspaceManagerUserId,
         array $dataset,
         array $nodesBySource,
         array $options,
@@ -2450,7 +2478,7 @@ final readonly class ConfluenceImportService
                 ]),
             ];
         }
-        $ownerKey = WorkspaceRepository::SUBJECT_USER . ':' . $workspaceOwnerId;
+        $managerKey = WorkspaceRepository::SUBJECT_USER . ':' . $workspaceManagerUserId;
 
         foreach ($setsByPage as $pageId => $sets) {
             $nodeId = $nodesBySource[$pageId] ?? 0;
@@ -2463,7 +2491,7 @@ final readonly class ConfluenceImportService
             $hasViewRestriction = array_key_exists('view', $sets);
             $hasEditRestriction = array_key_exists('edit', $sets);
             $candidateKeys = $hasViewRestriction
-                ? array_unique([...array_keys($viewSubjects), ...array_keys($editSubjects), $ownerKey])
+                ? array_unique([...array_keys($viewSubjects), ...array_keys($editSubjects), $managerKey])
                 : array_keys($workspaceSubjects);
             $acl = [];
             foreach ($candidateKeys as $subjectKey) {
@@ -2472,7 +2500,7 @@ final readonly class ConfluenceImportService
                     continue;
                 }
                 $rights = $subject['rights'];
-                if ($hasEditRestriction && !isset($editSubjects[$subjectKey]) && $subjectKey !== $ownerKey) {
+                if ($hasEditRestriction && !isset($editSubjects[$subjectKey]) && $subjectKey !== $managerKey) {
                     $rights['can_edit'] = false;
                     $rights['can_publish'] = false;
                     $rights['can_delete'] = false;
@@ -2484,7 +2512,7 @@ final readonly class ConfluenceImportService
             if ($acl === []) {
                 $acl = [
                     WorkspaceRepository::SUBJECT_USER => [
-                        $workspaceOwnerId => $this->completeRights([
+                        $workspaceManagerUserId => $this->completeRights([
                             'can_view' => true,
                             'can_add' => true,
                             'can_edit' => true,

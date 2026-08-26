@@ -163,7 +163,6 @@ return [
     'Uvozi aktualne datoteke svih MIME tipova u privatnu pohranu.' => 'Uvozi aktualne datoteke svih MIME tipova u privatnu pohranu.',
     'Veličina Confluence arhive nije dopuštena.' => 'Veličina Confluence arhive nije dopuštena.',
     'Vlasnik' => 'Vlasnik',
-    'Vlasnik ciljnog područja nije pronađen.' => 'Vlasnik ciljnog područja nije pronađen.',
     'Vlasnik osobnog Confluence područja mora biti potvrđeno mapiran.' => 'Vlasnik osobnog Confluence područja mora biti potvrđeno mapiran.',
     'Vrijeme' => 'Vrijeme',
     'Vrsta područja' => 'Vrsta područja',
