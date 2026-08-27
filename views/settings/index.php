@@ -84,7 +84,11 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                 <div class="confluence-import-body">
                     <div class="mb-3">
                         <label class="form-label" for="confluence-import-file"><?= $this->escape(__('Confluence XML ZIP arhiva')) ?></label>
-                        <input class="form-control" id="confluence-import-file" type="file" accept=".zip,application/zip">
+                        <div class="input-group">
+                            <input class="visually-hidden" id="confluence-import-file" type="file" accept=".zip,application/zip">
+                            <label class="btn btn-outline-primary" for="confluence-import-file"><?= $this->escape(__('Odaberi datoteku')) ?></label>
+                            <span class="form-control text-body-secondary" id="confluence-import-file-name"><?= $this->escape(__('Nije odabrana nijedna datoteka.')) ?></span>
+                        </div>
                         <div class="form-text"><?= $this->escape(__('Podržan je backup jednog Confluence područja. Velika datoteka šalje se u manjim dijelovima koji se mogu nastaviti nakon prekida.')) ?></div>
                     </div>
                     <div class="progress confluence-import-progress mb-2" role="progressbar" aria-label="<?= $this->escape(__('Napredak prijenosa')) ?>">
@@ -110,7 +114,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
 
                         <?php foreach ($warnings as $warning) : ?>
                             <?php if (is_scalar($warning)) :
-                                ?><div class="alert alert-warning py-2"><?= $this->escape((string)$warning) ?></div><?php
+                                ?><div class="alert alert-warning py-2"><?= $this->escape(__((string)$warning)) ?></div><?php
                             endif; ?>
                         <?php endforeach; ?>
 
@@ -388,8 +392,14 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
     };
 
     const uploadButton = query('#confluence-import-upload');
+    const fileInput = query('#confluence-import-file');
+    const fileName = query('#confluence-import-file-name');
+    fileInput?.addEventListener('change', () => {
+        const selectedFile = fileInput.files?.[0];
+        if (fileName) fileName.textContent = selectedFile?.name || <?= json_encode(__('Nije odabrana nijedna datoteka.'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    });
     uploadButton?.addEventListener('click', async () => {
-        const file = query('#confluence-import-file')?.files?.[0];
+        const file = fileInput?.files?.[0];
         const status = query('#confluence-import-upload-status');
         const progress = query('#confluence-import-upload-progress');
         uploadButton.disabled = true;

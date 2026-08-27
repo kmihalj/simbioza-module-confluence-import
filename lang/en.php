@@ -92,6 +92,8 @@ return [
     'Nije mapirano — pristup ostaje blokiran' => 'Not mapped — access remains denied',
     'Obrisane stranice' => 'Deleted pages',
     'Odaberite Confluence XML ZIP arhivu.' => 'Select a Confluence XML ZIP archive.',
+    'Odaberi datoteku' => 'Choose file',
+    'Nije odabrana nijedna datoteka.' => 'No file selected.',
     'Opcionalno ih sprema kao soft-obrisani sadržaj koji administrator može vratiti.' => 'Optionally stores them as soft-deleted content that an administrator can restore.',
     'Opcionalno uvozi i ranije objavljene verzije.' => 'Optionally imports previously published versions.',
     'Opcionalno uvozi zadnji Confluence nacrt bez objave.' => 'Optionally imports the latest Confluence draft without publishing it.',

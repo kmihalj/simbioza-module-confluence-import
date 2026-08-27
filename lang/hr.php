@@ -92,6 +92,8 @@ return [
     'Nije mapirano — pristup ostaje blokiran' => 'Nije mapirano — pristup ostaje blokiran',
     'Obrisane stranice' => 'Obrisane stranice',
     'Odaberite Confluence XML ZIP arhivu.' => 'Odaberite Confluence XML ZIP arhivu.',
+    'Odaberi datoteku' => 'Odaberi datoteku',
+    'Nije odabrana nijedna datoteka.' => 'Nije odabrana nijedna datoteka.',
     'Opcionalno ih sprema kao soft-obrisani sadržaj koji administrator može vratiti.' => 'Opcionalno ih sprema kao soft-obrisani sadržaj koji administrator može vratiti.',
     'Opcionalno uvozi i ranije objavljene verzije.' => 'Opcionalno uvozi i ranije objavljene verzije.',
     'Opcionalno uvozi zadnji Confluence nacrt bez objave.' => 'Opcionalno uvozi zadnji Confluence nacrt bez objave.',
