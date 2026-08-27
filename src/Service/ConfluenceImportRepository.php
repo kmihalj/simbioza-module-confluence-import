@@ -8,6 +8,7 @@ use AaiEduHr\HeartPhrameModuleOrm\Database\Database;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Exception\ConfluenceImportException;
 use AaiEduHr\SimbiozaModuleConfluenceImport\ModuleSimbiozaConfluenceImport;
 
+use function array_chunk;
 use function bin2hex;
 use function gmdate;
 use function is_array;
@@ -612,24 +613,56 @@ final readonly class ConfluenceImportRepository
      */
     public function recordLink(array $link, int $jobId): string
     {
-        $now = gmdate('Y-m-d H:i:s');
-        $uuid = $this->uuid();
-        $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_LINKS)->insert([
-            'uuid' => $uuid,
-            'job_id' => $jobId,
-            'source_page_id' => $this->string($link['source_page_id'] ?? ''),
-            'source_space_key' => $this->string($link['source_space_key'] ?? ''),
-            'destination_space_key' => $this->nullableString($link['destination_space_key'] ?? null),
-            'destination_page_id' => $this->nullableString($link['destination_page_id'] ?? null),
-            'destination_page_title' => $this->nullableString($link['destination_page_title'] ?? null),
-            'original_target' => $this->nullableString($link['original_target'] ?? null),
-            'resolved_target' => $this->nullableString($link['resolved_target'] ?? null),
-            'status' => $this->string($link['status'] ?? 'unresolved'),
-            'created_at' => $now,
-            'updated_at' => $now,
-        ]);
+        $uuid = $this->newLinkUuid();
+        $link['uuid'] = $uuid;
+        $this->recordLinks([$link], $jobId);
 
         return $uuid;
+    }
+
+    /** HR: Generira identitet poveznice prije skupnog spremanja. EN: Generates a link identity before bulk persistence. */
+    public function newLinkUuid(): string
+    {
+        return $this->uuid();
+    }
+
+    /**
+     * HR: Sprema više poveznica u ograničenim skupinama kako stranice s mnogo
+     *     poveznica ne bi pokretale jedan SQL upit za svaku poveznicu.
+     * EN: Stores multiple links in bounded batches so link-heavy pages do not
+     *     execute one SQL statement per link.
+     *
+     * @param list<array<string,mixed>> $links
+     */
+    public function recordLinks(array $links, int $jobId): void
+    {
+        if ($links === []) {
+            return;
+        }
+
+        $now = gmdate('Y-m-d H:i:s');
+        $rows = [];
+        foreach ($links as $link) {
+            $rows[] = [
+                'uuid' => $this->string($link['uuid'] ?? $this->newLinkUuid()),
+                'job_id' => $jobId,
+                'source_page_id' => $this->string($link['source_page_id'] ?? ''),
+                'source_space_key' => $this->string($link['source_space_key'] ?? ''),
+                'destination_space_key' => $this->nullableString($link['destination_space_key'] ?? null),
+                'destination_page_id' => $this->nullableString($link['destination_page_id'] ?? null),
+                'destination_page_title' => $this->nullableString($link['destination_page_title'] ?? null),
+                'original_target' => $this->nullableString($link['original_target'] ?? null),
+                'resolved_target' => $this->nullableString($link['resolved_target'] ?? null),
+                'status' => $this->string($link['status'] ?? 'unresolved'),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        foreach (array_chunk($rows, 50) as $batch) {
+            $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_LINKS)
+                ->upsert($batch, 'uuid', []);
+        }
     }
 
     /**

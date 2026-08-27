@@ -44,12 +44,13 @@ final readonly class ConfluenceReferenceResolver
         array $localTargetsById = [],
         array $localTargetsByTitle = [],
     ): string {
+        $links = [];
         $html = preg_replace_callback(
             '~__SIMBIOZA_CONFLUENCE_LINK__([^"\'<>\s]+)~',
             function (array $match) use (
+                &$links,
                 $sourcePageId,
                 $sourceSpaceKey,
-                $jobId,
                 $localTargetsById,
                 $localTargetsByTitle,
             ): string {
@@ -78,7 +79,9 @@ final readonly class ConfluenceReferenceResolver
                     $target = is_array($mapping) ? $this->workspaceNodePath($mapping) : '#';
                 }
                 $target = $target !== '#' ? $this->withFragment($target, $fragment) : '#';
-                $linkUuid = $this->repository->recordLink([
+                $linkUuid = $this->repository->newLinkUuid();
+                $links[] = [
+                    'uuid' => $linkUuid,
                     'source_page_id' => $sourcePageId,
                     'source_space_key' => $sourceSpaceKey,
                     'destination_space_key' => $destinationSpace,
@@ -88,12 +91,13 @@ final readonly class ConfluenceReferenceResolver
                         ?: $match[0],
                     'resolved_target' => $target !== '#' ? $target : '',
                     'status' => $target !== '#' ? 'resolved' : 'unresolved',
-                ], $jobId);
+                ];
 
                 return $target !== '#' ? $target : $this->unresolvedPath($linkUuid);
             },
             $html,
         ) ?? $html;
+        $this->repository->recordLinks($links, $jobId);
 
         return preg_replace_callback(
             '~__SIMBIOZA_CONFLUENCE_ATTACHMENT__([^"\'<>\s]+)~',
