@@ -1053,14 +1053,20 @@ final readonly class ConfluenceImportService
             return $workspace;
         }
 
+        $language = $this->text($options['language'] ?? $this->config->defaultLanguage());
+        $name = $this->text($options['workspace_name'] ?? '');
+        $description = sprintf(
+            __('Uvezeno iz Confluence područja %1$s (%2$s).'),
+            $this->text($space['name'] ?? ''),
+            $this->text($space['source_key'] ?? ''),
+        );
+
         return $this->workspaces->saveWorkspace([
-            'name' => $options['workspace_name'],
+            'name' => $name,
+            'name_translations' => [$language => $name],
             'slug' => $options['workspace_slug'],
-            'description' => sprintf(
-                __('Uvezeno iz Confluence područja %1$s (%2$s).'),
-                $this->text($space['name'] ?? ''),
-                $this->text($space['source_key'] ?? ''),
-            ),
+            'description' => $description,
+            'description_translations' => [$language => $description],
             'visibility' => 'restricted',
             'tree_visibility' => 'inherit',
             'contents_visibility' => 'hidden',
@@ -1858,6 +1864,9 @@ final readonly class ConfluenceImportService
                 $node = $this->workspaces->saveNode($workspaceId, [
                     'id' => $node['id'] ?? null,
                     'title' => $this->text($target['title'] ?? ''),
+                    'title_translations' => [
+                        $language => $this->text($target['title'] ?? ''),
+                    ],
                     'slug' => $this->text($target['slug'] ?? ''),
                     'node_type' => 'document',
                     'document_key' => $document->id,

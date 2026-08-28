@@ -82,6 +82,12 @@ provider supplies real profile names.
 
 ## After import
 
+The content language selected during preflight determines which language
+variant receives the imported Workspace name and description and the imported
+page titles. Slugs remain shared by all languages. Re-import and existing-content
+matching therefore never depend on a translated title; the UI shows the active
+language translation or falls back to the primary language when needed.
+
 - inspect the page tree and homepage;
 - verify restricted pages with a non-administrator account;
 - open the report icon in **Recent Confluence imports** and review every linked page;

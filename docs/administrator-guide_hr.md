@@ -82,6 +82,12 @@ profilne podatke.
 
 ## Nakon importa
 
+Jezik sadržaja odabran u preflightu određuje u koju se jezičnu varijantu
+spremaju naziv i opis područja te naslovi uvezenih stranica. Slugovi ostaju
+zajednički svim jezicima. Zato se ponovni import i povezivanje postojećeg
+sadržaja ne oslanjaju na prevedeni naslov, a u sučelju se prikazuje prijevod
+aktivnog jezika ili vrijednost primarnog jezika kada prijevod nedostaje.
+
 - pregledajte stablo stranica i naslovnicu područja;
 - ovlasti ograničenih stranica provjerite računom koji nije administrator;
 - otvorite ikonu izvještaja pod **Nedavni Confluence importi** i pregledajte svaku povezanu stranicu;
