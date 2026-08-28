@@ -2138,14 +2138,12 @@ final readonly class ConfluenceImportService
         $sourcePageId = $this->text($page['logical_source_id'] ?? $page['source_id'] ?? '');
         $url = $this->text($target['path'] ?? '');
         $key = $sourcePageId !== '' ? $sourcePageId : $url;
-        if (!isset($reviewPages[$key])) {
-            $reviewPages[$key] = [
-                'source_page_id' => $sourcePageId,
-                'title' => $this->text($target['title'] ?? $page['title'] ?? ''),
-                'url' => $url,
-                'issues' => [],
-            ];
-        }
+        $reviewPages[$key] ??= [
+            'source_page_id' => $sourcePageId,
+            'title' => $this->text($target['title'] ?? $page['title'] ?? ''),
+            'url' => $url,
+            'issues' => [],
+        ];
 
         $known = [];
         foreach (is_array($reviewPages[$key]['issues'] ?? null) ? $reviewPages[$key]['issues'] : [] as $issue) {
