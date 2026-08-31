@@ -110,6 +110,10 @@
         }
     ],
     "config": {
+        "github-protocols": [
+            "https"
+        ],
+        "use-github-api": false,
         "sort-packages": true,
         "cache-dir": "build/composer",
         "allow-plugins": {
