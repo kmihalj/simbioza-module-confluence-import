@@ -7,7 +7,7 @@ use AaiEduHr\HeartPhrameModuleAuth\ModuleAuth;
 use AaiEduHr\HeartPhrameModuleEditorHtml\ModuleEditorHtml;
 use AaiEduHr\HeartPhrameModuleMenu\ModuleMenu;
 use AaiEduHr\HeartPhrameModuleOrm\Database\Database;
-use AaiEduHr\HeartPhrameModuleWorkspace\ModuleWorkspace;
+use AaiEduHr\SimbiozaModuleWorkspace\ModuleWorkspace;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Command\HpSimbiozaConfluenceImportCommand;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Controller\ConfluenceImportController;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Listener\PurgeConfluencePageImport;
@@ -28,7 +28,7 @@ return new class extends AbstractModuleManifest {
         'aaieduhr/heartphrame-module-menu',
         'aaieduhr/heartphrame-module-auth',
         'aaieduhr/heartphrame-module-editor-html',
-        'aaieduhr/heartphrame-module-workspace',
+        'aaieduhr/simbioza-module-workspace',
         'aaieduhr/simbioza-module-user',
     ];
 
@@ -217,11 +217,11 @@ return new class extends AbstractModuleManifest {
     {
         return [
             new EventListener(
-                \AaiEduHr\HeartPhrameModuleWorkspace\Event\WorkspacePermanentlyDeleting::class,
+                \AaiEduHr\SimbiozaModuleWorkspace\Event\WorkspacePermanentlyDeleting::class,
                 PurgeConfluenceWorkspaceImport::class,
             ),
             new EventListener(
-                \AaiEduHr\HeartPhrameModuleWorkspace\Event\WorkspacePagesPermanentlyDeleting::class,
+                \AaiEduHr\SimbiozaModuleWorkspace\Event\WorkspacePagesPermanentlyDeleting::class,
                 PurgeConfluencePageImport::class,
             ),
         ];

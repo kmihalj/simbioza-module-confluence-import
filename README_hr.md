@@ -13,7 +13,7 @@ Obavezne i učitane prije ovog modula:
 - `aaieduhr/heartphrame-module-menu`
 - `aaieduhr/heartphrame-module-auth`
 - `aaieduhr/heartphrame-module-editor-html`
-- `aaieduhr/heartphrame-module-workspace`
+- `aaieduhr/simbioza-module-workspace`
 - `aaieduhr/simbioza-module-user`
 
 Opcionalne integracije:
@@ -24,7 +24,7 @@ Opcionalne integracije:
 - Comment uvozi komentare čiji su autori i stranice mapirani.
 - Workspace Search automatski obnavlja izvedeni indeks nakon importa.
 
-Svi interni paketi prate `dev-main`; ovaj razvojni modul ne sprema `composer.lock`.
+Interni paketi koriste kompatibilna izdanja `^0.1.0`; ovaj modul ne sprema `composer.lock`.
 
 ## Što importer radi
 
@@ -92,7 +92,7 @@ HTML Editor, pa aktivna tema upravlja zaglavljem, redcima, obrubima i bojama.
 ## Brzi početak
 
 ```bash
-composer require aaieduhr/simbioza-module-confluence-import:dev-main
+composer require aaieduhr/simbioza-module-confluence-import:^0.1.0
 vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```

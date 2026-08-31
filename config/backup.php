@@ -9,7 +9,7 @@ return ['providers' => [
         'service' => 'heartphrame.backup.provider.simbioza-confluence-import',
         'requires' => [
             'aaieduhr/heartphrame-module-auth',
-            'aaieduhr/heartphrame-module-workspace',
+            'aaieduhr/simbioza-module-workspace',
         ],
     ],
     [
@@ -21,7 +21,7 @@ return ['providers' => [
         'requires' => [
             'aaieduhr/heartphrame-module-backup',
             'aaieduhr/heartphrame-module-editor-html',
-            'aaieduhr/heartphrame-module-workspace',
+            'aaieduhr/simbioza-module-workspace',
         ],
     ],
 ]];

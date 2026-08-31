@@ -15,7 +15,7 @@ use AaiEduHr\HeartPhrameModuleBackup\Value\BackupScope;
 use AaiEduHr\HeartPhrameModuleEditorHtml\ModuleEditorHtml;
 use AaiEduHr\HeartPhrameModuleOrm\Database\Database;
 use AaiEduHr\HeartPhrameModuleOrm\Database\Schema\Blueprint;
-use AaiEduHr\HeartPhrameModuleWorkspace\ModuleWorkspace;
+use AaiEduHr\SimbiozaModuleWorkspace\ModuleWorkspace;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Backup\ConfluenceImportWorkspaceBackupProvider;
 use AaiEduHr\SimbiozaModuleConfluenceImport\ModuleSimbiozaConfluenceImport;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportConfig;

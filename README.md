@@ -13,7 +13,7 @@ Required and loaded before this module:
 - `aaieduhr/heartphrame-module-menu`
 - `aaieduhr/heartphrame-module-auth`
 - `aaieduhr/heartphrame-module-editor-html`
-- `aaieduhr/heartphrame-module-workspace`
+- `aaieduhr/simbioza-module-workspace`
 - `aaieduhr/simbioza-module-user`
 
 Optional integrations:
@@ -24,7 +24,7 @@ Optional integrations:
 - Comment imports comments whose authors and pages are mapped.
 - Workspace Search rebuilds its derived index automatically after import.
 
-All internal packages follow `dev-main`; this development module does not commit a `composer.lock`.
+Internal packages use compatible `^0.1.0` releases; this module does not commit a `composer.lock`.
 
 ## What the importer does
 
@@ -92,7 +92,7 @@ Editor, so the active theme controls its header, rows, borders, and colors.
 ## Quick start
 
 ```bash
-composer require aaieduhr/simbioza-module-confluence-import:dev-main
+composer require aaieduhr/simbioza-module-confluence-import:^0.1.0
 vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace AaiEduHr\SimbiozaModuleConfluenceImport\Listener;
 
 use AaiEduHr\HeartPhrameModuleOrm\Database\Database;
-use AaiEduHr\HeartPhrameModuleWorkspace\Event\WorkspacePermanentlyDeleting;
+use AaiEduHr\SimbiozaModuleWorkspace\Event\WorkspacePermanentlyDeleting;
 use AaiEduHr\SimbiozaModuleConfluenceImport\ModuleSimbiozaConfluenceImport;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportConfig;
 use RuntimeException;

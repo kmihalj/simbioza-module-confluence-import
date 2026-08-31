@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace AaiEduHr\SimbiozaModuleConfluenceImport\Controller;
 
-use AaiEduHr\HeartPhrameModuleWorkspace\Service\WorkspaceAccessService;
-use AaiEduHr\HeartPhrameModuleWorkspace\Service\WorkspaceRepository;
+use AaiEduHr\SimbiozaModuleWorkspace\Service\WorkspaceAccessService;
+use AaiEduHr\SimbiozaModuleWorkspace\Service\WorkspaceRepository;
 use AaiEduHr\HeartPhrameModuleMenu\Service\MenuRenderer;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Exception\ConfluenceImportException;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportConfig;

@@ -19,7 +19,7 @@ use AaiEduHr\HeartPhrameModuleBackup\Value\BackupScope;
 use AaiEduHr\HeartPhrameModuleBackup\Value\BackupValue;
 use AaiEduHr\HeartPhrameModuleEditorHtml\ModuleEditorHtml;
 use AaiEduHr\HeartPhrameModuleOrm\Database\Database;
-use AaiEduHr\HeartPhrameModuleWorkspace\ModuleWorkspace;
+use AaiEduHr\SimbiozaModuleWorkspace\ModuleWorkspace;
 use AaiEduHr\SimbiozaModuleConfluenceImport\ModuleSimbiozaConfluenceImport;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportConfig;
 use Throwable;

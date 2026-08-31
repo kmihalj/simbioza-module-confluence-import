@@ -117,7 +117,7 @@ final class ConfluenceImportBackupProvider extends DatabaseTableBackupProvider
         $nodeId = is_numeric($record['target_node_id'] ?? null) ? (int)$record['target_node_id'] : 0;
         $node = $nodeId > 0
             ? $this->database->table(
-                \AaiEduHr\HeartPhrameModuleWorkspace\ModuleWorkspace::TABLE_WORKSPACE_NODES,
+                \AaiEduHr\SimbiozaModuleWorkspace\ModuleWorkspace::TABLE_WORKSPACE_NODES,
             )->where('id', '=', $nodeId)->first()
             : null;
         $record['target_document_key'] = is_array($node) && is_scalar($node['document_key'] ?? null)

@@ -6,7 +6,7 @@ namespace AaiEduHr\SimbiozaModuleConfluenceImport\Tests;
 
 use AaiEduHr\HeartPhrameModuleBackup\Service\BackupFilesystem;
 use AaiEduHr\HeartPhrameModuleOrm\Database\Database;
-use AaiEduHr\HeartPhrameModuleWorkspace\Event\WorkspacePagesPermanentlyDeleting;
+use AaiEduHr\SimbiozaModuleWorkspace\Event\WorkspacePagesPermanentlyDeleting;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Listener\PurgeConfluencePageImport;
 use AaiEduHr\SimbiozaModuleConfluenceImport\ModuleSimbiozaConfluenceImport;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportConfig;

@@ -15,7 +15,7 @@ U `app.modules.enabled` ovaj modul mora biti iza ORM-a, Menija, Autha, HTML Edit
 ## Instalacija
 
 ```bash
-composer require aaieduhr/simbioza-module-confluence-import:dev-main
+composer require aaieduhr/simbioza-module-confluence-import:^0.1.0
 vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```
