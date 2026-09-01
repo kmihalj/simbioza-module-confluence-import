@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AaiEduHr\SimbiozaModuleConfluenceImport\Service;
 
+use AaiEduHr\SimbiozaModuleConfluenceImport\Support\Utf8Url;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorHtmlChartService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorHtmlRoadmapService;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Value\ConvertedConfluenceBody;
@@ -158,7 +159,7 @@ final readonly class ConfluenceHtmlConverter
                     $attachments[] = $reference;
                     $replacement->setAttribute('src', self::ATTACHMENT_PREFIX . $this->token($reference));
                 } elseif ($this->isSafeRemoteUrl($source)) {
-                    $filename = basename((string)parse_url($source, PHP_URL_PATH));
+                    $filename = basename(Utf8Url::component($source, PHP_URL_PATH) ?? '');
                     $replacement->setAttribute('src', $source);
                 } else {
                     continue;
@@ -978,7 +979,7 @@ final readonly class ConfluenceHtmlConverter
             ENT_QUOTES | ENT_HTML5 | ENT_SUBSTITUTE,
             'UTF-8',
         );
-        $parts = parse_url($url);
+        $parts = Utf8Url::parts($url);
         if (!is_array($parts) || !in_array(strtolower((string)($parts['scheme'] ?? '')), ['http', 'https'], true)) {
             return null;
         }
@@ -2024,7 +2025,7 @@ final readonly class ConfluenceHtmlConverter
      */
     private function plainPageReference(string $href, string $sourceSpaceKey, string $sourcePageId): ?array
     {
-        $path = parse_url($href, PHP_URL_PATH);
+        $path = Utf8Url::component($href, PHP_URL_PATH);
         if (!is_string($path) || $path === '') {
             return null;
         }
@@ -2040,7 +2041,7 @@ final readonly class ConfluenceHtmlConverter
             $destinationSpace = rawurldecode($match[1]);
             $destinationTitle = $this->decodedUrlTitle($match[2]);
         } elseif (preg_match('~/pages/viewpage\.action$~iu', $path) === 1) {
-            $query = parse_url($href, PHP_URL_QUERY);
+            $query = Utf8Url::component($href, PHP_URL_QUERY);
             $parameters = [];
             parse_str(is_string($query) ? $query : '', $parameters);
             $destinationId = is_scalar($parameters['pageId'] ?? null)
@@ -2054,7 +2055,7 @@ final readonly class ConfluenceHtmlConverter
             return null;
         }
 
-        $fragment = parse_url($href, PHP_URL_FRAGMENT);
+        $fragment = Utf8Url::component($href, PHP_URL_FRAGMENT);
 
         return [
             'source_page_id' => $sourcePageId,
@@ -2075,7 +2076,7 @@ final readonly class ConfluenceHtmlConverter
      */
     private function plainAttachmentReference(string $href): ?array
     {
-        $path = parse_url($href, PHP_URL_PATH);
+        $path = Utf8Url::component($href, PHP_URL_PATH);
         if (
             !is_string($path) || preg_match(
                 '~/download/(?:attachments|thumbnails)/([0-9]+)/([^/?#]+)$~iu',
@@ -2101,7 +2102,7 @@ final readonly class ConfluenceHtmlConverter
     /** HR: Dopušta samo udaljene HTTP(S) slike. EN: Allows only remote HTTP(S) images. */
     private function isSafeRemoteUrl(string $url): bool
     {
-        $scheme = strtolower((string)parse_url($url, PHP_URL_SCHEME));
+        $scheme = strtolower(Utf8Url::component($url, PHP_URL_SCHEME) ?? '');
         return $scheme === 'http' || $scheme === 'https';
     }
 

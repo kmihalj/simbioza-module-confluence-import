@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AaiEduHr\SimbiozaModuleConfluenceImport\Service;
 
+use AaiEduHr\SimbiozaModuleConfluenceImport\Support\Utf8Url;
 use AaiEduHr\HeartPhrameModuleAuth\Service\AuthGroupService;
 use AaiEduHr\HeartPhrameModuleAuth\Service\AuthUserAttributeService;
 use AaiEduHr\HeartPhrameModuleAuth\Service\AuthUserService;
@@ -2665,7 +2666,7 @@ final readonly class ConfluenceImportService
             }
             $target = $this->nodePath($spaceSlug, $nodeSlug);
             $original = $this->text($link['original_target'] ?? '');
-            $fragment = parse_url($original, PHP_URL_FRAGMENT);
+            $fragment = Utf8Url::component($original, PHP_URL_FRAGMENT);
             if (is_string($fragment) && trim($fragment) !== '') {
                 $safeFragment = $this->safeFragment($fragment);
                 $target .= $safeFragment !== '' ? '#' . $safeFragment : '';

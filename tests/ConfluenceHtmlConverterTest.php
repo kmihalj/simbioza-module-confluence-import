@@ -40,6 +40,30 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
+    /** HR: Čuva sva valjana Unicode slova i emoji u URL-ovima. EN: Preserves all valid Unicode letters and emoji in URLs. */
+    public function testPreservesUnicodeInPlainUrlsAndReferenceTokens(): void
+    {
+        $body = <<<'XML'
+<p><a href="https://wiki.example/spaces/HR/pages/42/Uređivanje-ČĆĐŠŽ-日本語-😀#odjeljak-đ-日本語-😀">Moderna</a></p>
+<p><a href="https://wiki.example/display/HR/Čćđšž+日本語+😀">Legacy</a></p>
+<p><img src="/download/attachments/10/izvještaj-Đ-日本語-😀.pdf" /></p>
+<p><ac:image><ri:url ri:value="https://cdn.example/čćđšž/slika-日本語-😀.png" /></ac:image></p>
+XML;
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'HR', '10');
+
+        self::assertTrue(mb_check_encoding($result->html, 'UTF-8'));
+        self::assertSame('Uređivanje-ČĆĐŠŽ-日本語-😀', $result->links[0]['destination_page_title']);
+        self::assertSame('odjeljak-đ-日本語-😀', $result->links[0]['fragment']);
+        self::assertSame('Čćđšž 日本語 😀', $result->links[1]['destination_page_title']);
+        self::assertSame('izvještaj-Đ-日本語-😀.pdf', $result->attachments[0]['filename']);
+        self::assertStringContainsString('alt="slika-日本語-😀.png"', $result->html);
+        self::assertStringContainsString(
+            'https://cdn.example/%C4%8D%C4%87%C4%91%C5%A1%C5%BE/slika-%E6%97%A5%E6%9C%AC%E8%AA%9E-%F0%9F%98%80.png',
+            $result->html,
+        );
+    }
+
     /** HR: Normalizira nestandardni CDATA završetak i HTML entitete iz stvarnih Atlassian XML izvoza. EN: Normalizes the non-standard CDATA terminator and HTML entities found in real Atlassian XML exports. */
     public function testNormalizesAtlassianExportStorageQuirks(): void
     {
