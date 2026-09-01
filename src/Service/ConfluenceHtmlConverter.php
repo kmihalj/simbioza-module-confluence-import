@@ -25,6 +25,7 @@ use function array_values;
 use function base64_encode;
 use function basename;
 use function ceil;
+use function filter_var;
 use function count;
 use function html_entity_decode;
 use function htmlspecialchars;
@@ -52,6 +53,8 @@ use function trim;
 use function uasort;
 use function usort;
 use function max;
+use function min;
+use function round;
 
 use const ENT_QUOTES;
 use const ENT_HTML5;
@@ -60,6 +63,9 @@ use const ENT_XML1;
 use const JSON_THROW_ON_ERROR;
 use const JSON_UNESCAPED_SLASHES;
 use const JSON_UNESCAPED_UNICODE;
+use const FILTER_VALIDATE_URL;
+use const PHP_URL_HOST;
+use const PHP_URL_SCHEME;
 
 /**
  * HR: Pretvara Confluence storage-format u siguran, razumljiv HTML uz očuvanje neriješenih referenci.
@@ -166,8 +172,17 @@ final readonly class ConfluenceHtmlConverter
                 }
             }
 
-            $replacement->setAttribute('alt', $filename);
-            $replacement->setAttribute('class', 'img-fluid');
+            $alternative = $this->attribute($image, self::AC_NAMESPACE, 'alt');
+            if ($alternative === '') {
+                $alternative = $this->attribute($image, self::AC_NAMESPACE, 'title');
+            }
+            $replacement->setAttribute('alt', $alternative !== '' ? $alternative : $filename);
+            $classes = ['img-fluid'];
+            if (strtolower($this->attribute($image, self::AC_NAMESPACE, 'align')) === 'center') {
+                $classes[] = 'd-block';
+                $classes[] = 'mx-auto';
+            }
+            $replacement->setAttribute('class', implode(' ', $classes));
             foreach (['width', 'height'] as $dimension) {
                 $value = $this->attribute($image, self::AC_NAMESPACE, $dimension);
                 if (preg_match('/^[1-9][0-9]*$/', $value) === 1) {
@@ -214,7 +229,7 @@ final readonly class ConfluenceHtmlConverter
             $label = $this->linkLabel($xpath, $link);
             $anchor = $this->attribute($link, self::AC_NAMESPACE, 'anchor');
             $replacement = $document->createElement('a');
-            $replacement->appendChild($document->createTextNode($label));
+            $this->appendLinkContent($document, $xpath, $replacement, $link, $label);
 
             if ($page instanceof DOMElement) {
                 $reference = [
@@ -487,6 +502,78 @@ final readonly class ConfluenceHtmlConverter
             return $panel;
         }
 
+        if ($name === 'expand') {
+            // HR: Editor nema opći sklopivi blok. Zato se izvorni naslov čuva
+            //     iznad tijela, a izvorni ul/ol određuje vrstu liste.
+            // EN: The Editor has no general collapsible block. The source title
+            //     is therefore kept above the body, while the source ul/ol
+            //     continues to determine the list type.
+            $section = $document->createElement('section');
+            $section->setAttribute('class', 'confluence-import-expand mb-3');
+            $title = $document->createElement('p');
+            $title->setAttribute('class', 'fw-semibold mb-2');
+            $titleText = $this->macroParameter($xpath, $macro, 'title');
+            $title->appendChild($document->createTextNode(
+                $titleText !== '' ? $titleText : __('Prikaži sadržaj'),
+            ));
+            $section->appendChild($title);
+            $body = $document->createElement('div');
+            $body->setAttribute('class', 'confluence-import-expand-body');
+            $this->appendRichBody($document, $body, $rich, $plain);
+            $section->appendChild($body);
+            return $section;
+        }
+
+        if ($name === 'column') {
+            // HR: Column makro postaje prilagodljiv Bootstrap stupac s karticom.
+            //     Izvorna postotna širina zaokružuje se na mrežu od 12 stupaca.
+            // EN: A column macro becomes a responsive Bootstrap column with a
+            //     card. Its source percentage is rounded to the 12-column grid.
+            $column = $document->createElement('div');
+            $siblingCount = $macro->parentNode instanceof DOMElement
+                ? count($this->elements($xpath->query(
+                    './ac:structured-macro[@ac:name="column"]'
+                    . ' | ./div[contains(concat(" ", normalize-space(@class), " "), " confluence-import-column ")]',
+                    $macro->parentNode,
+                )))
+                : 1;
+            $column->setAttribute(
+                'class',
+                'col-12 col-lg-' . $this->macroColumnWidth(
+                    $this->macroParameter($xpath, $macro, 'width'),
+                    $siblingCount,
+                )
+                . ' confluence-import-column',
+            );
+            $card = $document->createElement('section');
+            $card->setAttribute('class', 'card h-100');
+            $body = $document->createElement('div');
+            $body->setAttribute('class', 'card-body');
+            $this->appendRichBody($document, $body, $rich, $plain);
+            $card->appendChild($body);
+            $column->appendChild($card);
+            return $column;
+        }
+
+        if ($name === 'section') {
+            // HR: Section je semantički raspored, a ne podatkovna tablica. Zato
+            //     omata uvezene Column kartice u prilagodljiv red.
+            // EN: A section is a layout rather than a data table, so it wraps
+            //     imported Column cards in a responsive row.
+            $row = $document->createElement('div');
+            $row->setAttribute('class', 'row g-3 confluence-import-section mb-3');
+            $this->appendRichBody($document, $row, $rich, $plain);
+            $this->removeEmptyLayoutChildren($row);
+            return $row;
+        }
+
+        if ($name === 'html') {
+            $embed = $this->iframeEmbedReplacement($document, $plain);
+            if ($embed instanceof DOMNode) {
+                return $embed;
+            }
+        }
+
         if ($name === 'details') {
             foreach ($this->pageProperties($xpath, $macro) as $property) {
                 $properties[] = $property;
@@ -743,6 +830,156 @@ final readonly class ConfluenceHtmlConverter
         $box->appendChild($title);
         $this->appendRichBody($document, $box, $rich, $plain);
         return $box;
+    }
+
+    /**
+     * HR: Pretvara siguran HTTPS iframe iz HTML makroa u kanonski Editor blok.
+     *     Skripte se nikada ne kopiraju u sadržaj; poznati H5P resizer pamti se
+     *     deklarativnom oznakom koju Editor učitava iz pouzdanog URL-a.
+     * EN: Converts a safe HTTPS iframe from an HTML macro into the canonical
+     *     Editor block. Scripts are never copied into content; the known H5P
+     *     resizer is represented by a declarative marker loaded by the Editor.
+     */
+    private function iframeEmbedReplacement(DOMDocument $document, string $plain): ?DOMElement
+    {
+        if (trim($plain) === '') {
+            return null;
+        }
+
+        $source = new DOMDocument('1.0', 'UTF-8');
+        $previous = libxml_use_internal_errors(true);
+        try {
+            $loaded = $source->loadHTML(
+                '<?xml encoding="UTF-8"><div id="confluence-html-macro-root">' . $plain . '</div>',
+                LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD | LIBXML_NONET,
+            );
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
+        if (!$loaded) {
+            return null;
+        }
+
+        $sourceIframes = $source->getElementsByTagName('iframe');
+        if ($sourceIframes->length !== 1) {
+            return null;
+        }
+        $sourceIframe = $sourceIframes->item(0);
+        if (!$sourceIframe instanceof DOMElement) {
+            return null;
+        }
+        $src = trim($sourceIframe->getAttribute('src'));
+        if (!$this->isSafeIframeSource($src)) {
+            return null;
+        }
+
+        $trustedH5pResizer = false;
+        foreach ($this->elements($source->getElementsByTagName('script')) as $script) {
+            $scriptSource = trim($script->getAttribute('src'));
+            if (
+                $scriptSource !== 'https://h5p.org/sites/all/modules/h5p/library/js/h5p-resizer.js'
+                || strtolower((string)parse_url($src, PHP_URL_HOST)) !== 'h5p.org'
+            ) {
+                // HR: Iframe uz nepoznati JavaScript ostaje u izvještaju za
+                //     ručnu provjeru umjesto da se skripta neprimjetno odbaci.
+                // EN: An iframe accompanied by unknown JavaScript remains in
+                //     the manual-review report instead of silently losing the script.
+                return null;
+            }
+            $trustedH5pResizer = true;
+        }
+
+        $height = $this->iframeDimension($sourceIframe->getAttribute('height'), 450);
+        $title = trim($sourceIframe->getAttribute('title'));
+        if ($title === '') {
+            $title = strtolower((string)parse_url($src, PHP_URL_HOST)) === 'h5p.org'
+                ? 'H5P'
+                : __('Ugrađeni sadržaj');
+        }
+
+        $figure = $document->createElement('figure');
+        $figure->setAttribute('class', 'editor-html-iframe-embed w-100 mb-3');
+        $figure->setAttribute('data-editor-html-iframe', '1');
+        if ($trustedH5pResizer) {
+            $figure->setAttribute('data-editor-html-h5p-resizer', '1');
+        }
+
+        $iframe = $document->createElement('iframe');
+        $iframe->setAttribute('src', $src);
+        $iframe->setAttribute('title', $title);
+        $iframe->setAttribute('width', '100%');
+        $iframe->setAttribute('height', (string)$height);
+        $iframe->setAttribute('frameborder', '0');
+        $iframe->setAttribute('loading', 'lazy');
+        $iframe->setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+        $iframe->setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
+        if ($sourceIframe->hasAttribute('allowfullscreen')) {
+            $iframe->setAttribute('allowfullscreen', 'allowfullscreen');
+        }
+        $allow = trim($sourceIframe->getAttribute('allow'));
+        if (
+            $allow !== '' && preg_match(
+                '/^(?:(?:accelerometer|autoplay|clipboard-write|encrypted-media|fullscreen|gyroscope|picture-in-picture|web-share)(?:;\s*|$))+$/',
+                $allow,
+            ) === 1
+        ) {
+            $iframe->setAttribute('allow', $allow);
+        }
+        $figure->appendChild($iframe);
+
+        return $figure;
+    }
+
+    /** HR: Dopušta samo potpune HTTPS izvore iframea. EN: Allows only absolute HTTPS iframe sources. */
+    private function isSafeIframeSource(string $source): bool
+    {
+        return filter_var($source, FILTER_VALIDATE_URL) !== false
+        && strtolower((string)parse_url($source, PHP_URL_SCHEME)) === 'https'
+        && trim((string)parse_url($source, PHP_URL_HOST)) !== '';
+    }
+
+    /** HR: Ograničava visinu iframea na uporabljiv raspon. EN: Bounds iframe height to a usable range. */
+    private function iframeDimension(string $value, int $fallback): int
+    {
+        return preg_match('/^[1-9][0-9]{1,3}$/', trim($value)) === 1
+            ? max(50, min(4000, (int)$value))
+            : $fallback;
+    }
+
+    /** HR: Pretvara postotnu širinu Column makroa u Bootstrap mrežu. EN: Maps a Column percentage to the Bootstrap grid. */
+    private function macroColumnWidth(string $width, int $siblingCount = 1): int
+    {
+        if (preg_match('/^(100|[1-9][0-9]?)%$/', trim($width), $match) !== 1) {
+            return max(1, min(12, (int)round(12 / max(1, $siblingCount))));
+        }
+
+        return max(1, min(12, (int)round(((int)$match[1]) * 12 / 100)));
+    }
+
+    /**
+     * HR: Uklanja prazne Confluence pokazivače između Column makroa jer bi inače
+     *     postali dodatne stavke Bootstrap retka i narušili raspored kartica.
+     * EN: Removes empty Confluence cursor paragraphs between Column macros because
+     *     they would otherwise become extra Bootstrap row items and break the card layout.
+     */
+    private function removeEmptyLayoutChildren(DOMElement $row): void
+    {
+        foreach (array_values(iterator_to_array($row->childNodes)) as $child) {
+            if ($child instanceof DOMElement && strtolower($child->tagName) === 'p') {
+                $text = trim(str_replace("\u{00A0}", '', $child->textContent));
+                $hasMeaningfulElement = false;
+                foreach ($child->childNodes as $nested) {
+                    if ($nested instanceof DOMElement && strtolower($nested->tagName) !== 'br') {
+                        $hasMeaningfulElement = true;
+                        break;
+                    }
+                }
+                if ($text === '' && !$hasMeaningfulElement) {
+                    $row->removeChild($child);
+                }
+            }
+        }
     }
 
     /**
@@ -1944,6 +2181,43 @@ final readonly class ConfluenceHtmlConverter
         }
 
         return trim($link->textContent) ?: __('Poveznica');
+    }
+
+    /**
+     * HR: Čuva formatirani ac:link-body, uključujući slike koje su već pretvorene
+     *     u prijenosne reference. Tekstualni fallback koristi se samo kada nema
+     *     stvarnog vidljivog sadržaja.
+     * EN: Preserves a formatted ac:link-body, including images already converted
+     *     to portable references. The text fallback is used only when no actual
+     *     visible content exists.
+     */
+    private function appendLinkContent(
+        DOMDocument $document,
+        DOMXPath $xpath,
+        DOMElement $target,
+        DOMElement $link,
+        string $fallback,
+    ): void {
+        $body = $this->firstElement($xpath->query('./ac:link-body', $link));
+        $hasVisibleContent = false;
+        if ($body instanceof DOMElement) {
+            foreach (iterator_to_array($body->childNodes) as $child) {
+                if (!$child instanceof DOMNode) {
+                    continue;
+                }
+                if ($child instanceof DOMElement || trim($child->textContent) !== '') {
+                    $hasVisibleContent = true;
+                }
+                $target->appendChild($document->importNode($child, true));
+            }
+        }
+
+        if (!$hasVisibleContent) {
+            while ($target->firstChild instanceof DOMNode) {
+                $target->removeChild($target->firstChild);
+            }
+            $target->appendChild($document->createTextNode($fallback));
+        }
     }
 
     /** HR: Čita imenovani atribut uz namespace i legacy fallback. EN: Reads a named attribute with namespace and legacy fallback. */

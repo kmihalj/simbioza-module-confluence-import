@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 return [
+    'Prikaži sadržaj' => 'Show content',
+    'Ugrađeni sadržaj' => 'Embedded content',
     '1. Prenesi i provjeri Confluence arhivu' => '1. Upload and verify the Confluence archive',
     '2. Pregledaj mapiranja i pokreni import' => '2. Review mappings and start the import',
     'Aktualne: %1$d; povijesne: %2$d; nacrti: %3$d; obrisane: %4$d' => 'Current: %1$d; historical: %2$d; drafts: %3$d; deleted: %4$d',

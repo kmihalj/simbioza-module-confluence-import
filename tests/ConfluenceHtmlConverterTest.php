@@ -193,6 +193,149 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
+    /** HR: Slika unutar Confluence poveznice ostaje vidljiva i klikabilna. EN: An image inside a Confluence link remains visible and clickable. */
+    public function testPreservesLinkedAttachmentImage(): void
+    {
+        $body = <<<'XML'
+<ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">SUSTAV ZA WEBINARE</ac:parameter><ac:rich-text-body>
+<p><ac:link><ri:page ri:content-title="Sustav za webinare" /><ac:link-body><ac:image ac:align="center" ac:title="Sustav za webinare" ac:thumbnail="true" ac:width="200"><ri:attachment ri:filename="05_PDO_webinar.png" /></ac:image></ac:link-body></ac:link></p>
+</ac:rich-text-body></ac:structured-macro>
+XML;
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'CEU', '133010769');
+
+        self::assertMatchesRegularExpression(
+            '/<a href="__SIMBIOZA_CONFLUENCE_LINK__[^\"]+"><img[^>]+src="__SIMBIOZA_CONFLUENCE_ATTACHMENT__[^\"]+"/',
+            $result->html,
+        );
+        self::assertStringContainsString('alt="Sustav za webinare"', $result->html);
+        self::assertStringContainsString('class="img-fluid d-block mx-auto"', $result->html);
+        self::assertStringContainsString('width="200"', $result->html);
+        self::assertSame('05_PDO_webinar.png', $result->attachments[0]['filename']);
+        self::assertSame('133010769', $result->attachments[0]['source_page_id']);
+        self::assertSame([], $result->unsupportedMacros);
+    }
+
+    /** HR: Expand čuva naslov iznad izvorne vrste liste. EN: Expand keeps its title above the original list type. */
+    public function testConvertsExpandMacroWithItsTitle(): void
+    {
+        $body = <<<'XML'
+<ac:structured-macro ac:name="expand"><ac:parameter ac:name="title">Aktivnosti Srca na projektu</ac:parameter><ac:rich-text-body><p>Multiplier event</p><ul><li>Barcelona</li></ul></ac:rich-text-body></ac:structured-macro>
+XML;
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'CEU', '10');
+
+        self::assertStringContainsString('<section class="confluence-import-expand mb-3">', $result->html);
+        self::assertStringContainsString('<p class="fw-semibold mb-2">Aktivnosti Srca na projektu</p>', $result->html);
+        self::assertStringContainsString('<p>Multiplier event</p>', $result->html);
+        self::assertStringContainsString('<ul><li>Barcelona</li></ul>', $result->html);
+        self::assertStringNotContainsString('<ol>', $result->html);
+        self::assertSame([], $result->unsupportedMacros);
+    }
+
+    /** HR: Stari Section/Column makroi postaju responsivne kartice koje čuvaju omjere. EN: Legacy Section/Column macros become responsive cards that retain their proportions. */
+    public function testConvertsLegacySectionAndColumnsToResponsiveCards(): void
+    {
+        $body = <<<'XML'
+<ac:structured-macro ac:name="section"><ac:parameter ac:name="border">true</ac:parameter><ac:rich-text-body>
+<ac:structured-macro ac:name="column"><ac:parameter ac:name="width">60%</ac:parameter><ac:rich-text-body><p><strong>Lijevo</strong></p></ac:rich-text-body></ac:structured-macro>
+<ac:structured-macro ac:name="column"><ac:parameter ac:name="width">40%</ac:parameter><ac:rich-text-body><p>Desno</p></ac:rich-text-body></ac:structured-macro>
+</ac:rich-text-body></ac:structured-macro>
+XML;
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'CEU', '10');
+
+        self::assertStringContainsString('row g-3 confluence-import-section mb-3', $result->html);
+        self::assertStringContainsString('col-12 col-lg-7 confluence-import-column', $result->html);
+        self::assertStringContainsString('col-12 col-lg-5 confluence-import-column', $result->html);
+        self::assertSame(2, substr_count($result->html, '<section class="card h-100">'));
+        self::assertSame([], $result->unsupportedMacros);
+    }
+
+    /** HR: Section bez širina ravnomjerno raspoređuje kartice i uklanja prazne pokazivače. EN: A section without widths distributes cards evenly and removes empty cursor paragraphs. */
+    public function testDistributesColumnsWithoutWidthsAndRemovesEmptyCursorParagraphs(): void
+    {
+        $body = <<<'XML'
+<ac:structured-macro ac:name="section"><ac:rich-text-body>
+<ac:structured-macro ac:name="column"><ac:rich-text-body><p>Prvi</p></ac:rich-text-body></ac:structured-macro><p><br /></p>
+<ac:structured-macro ac:name="column"><ac:rich-text-body><p>Drugi</p></ac:rich-text-body></ac:structured-macro>
+</ac:rich-text-body></ac:structured-macro>
+XML;
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'CEU', '10');
+
+        self::assertSame(2, substr_count($result->html, 'col-12 col-lg-6 confluence-import-column'));
+        self::assertStringNotContainsString('<p><br></p>', $result->html);
+        self::assertSame([], $result->unsupportedMacros);
+    }
+
+    /** HR: HTML makro čuva siguran H5P iframe, ali ne i proizvoljnu skriptu. EN: An HTML macro keeps a safe H5P iframe but never arbitrary script markup. */
+    public function testConvertsHtmlMacroToCanonicalSafeIframeEmbed(): void
+    {
+        $body = <<<'XML'
+<ac:structured-macro ac:name="html"><ac:plain-text-body><![CDATA[<iframe src="https://h5p.org/h5p/embed/509150" width="1090" height="81" frameborder="0" allowfullscreen="allowfullscreen"></iframe><script src="https://h5p.org/sites/all/modules/h5p/library/js/h5p-resizer.js" charset="UTF-8"></script>]]></ac:plain-text-body></ac:structured-macro>
+XML;
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'CEU', '10');
+
+        self::assertStringContainsString('data-editor-html-iframe="1"', $result->html);
+        self::assertStringContainsString('data-editor-html-h5p-resizer="1"', $result->html);
+        self::assertStringContainsString('src="https://h5p.org/h5p/embed/509150"', $result->html);
+        self::assertStringContainsString('width="100%"', $result->html);
+        self::assertStringContainsString('height="81"', $result->html);
+        self::assertStringContainsString('allowfullscreen="allowfullscreen"', $result->html);
+        self::assertStringNotContainsString('<script', $result->html);
+        self::assertSame([], $result->unsupportedMacros);
+    }
+
+    /** HR: Facebook iframe ne treba skriptu i čuva potrebne mogućnosti uz responzivnu širinu. EN: A Facebook iframe needs no script and retains required features with responsive width. */
+    public function testConvertsFacebookIframeWithoutJavascript(): void
+    {
+        $body = <<<'XML'
+<ac:structured-macro ac:name="html"><ac:plain-text-body><![CDATA[<iframe src="https://www.facebook.com/plugins/post.php?href=https%3A%2F%2Fwww.facebook.com%2Fexample%2Fposts%2F123&amp;show_text=true&amp;width=500" width="500" height="736" style="border:none;overflow:hidden" scrolling="no" frameborder="0" allowfullscreen="true" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"></iframe>]]></ac:plain-text-body></ac:structured-macro>
+XML;
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'CEU', '10');
+
+        self::assertStringContainsString('src="https://www.facebook.com/plugins/post.php?', $result->html);
+        self::assertStringContainsString('width="100%"', $result->html);
+        self::assertStringContainsString('height="736"', $result->html);
+        self::assertStringContainsString('allowfullscreen="allowfullscreen"', $result->html);
+        self::assertStringContainsString('autoplay; clipboard-write; encrypted-media;', $result->html);
+        self::assertStringNotContainsString('scrolling=', $result->html);
+        self::assertStringNotContainsString('style=', $result->html);
+        self::assertSame([], $result->unsupportedMacros);
+    }
+
+    /** HR: Nepoznati JavaScript ostaje vidljiv u izvještaju umjesto tihog odbacivanja. EN: Unknown JavaScript remains visible in the report instead of being silently discarded. */
+    public function testReportsHtmlMacroWithUnknownJavascript(): void
+    {
+        $body = <<<'XML'
+<ac:structured-macro ac:name="html"><ac:plain-text-body><![CDATA[<iframe src="https://widgets.example/embed/42"></iframe><script src="https://widgets.example/required.js"></script>]]></ac:plain-text-body></ac:structured-macro>
+XML;
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'CEU', '10');
+
+        self::assertSame(['html'], $result->unsupportedMacros);
+        self::assertStringContainsString('Confluence makro: html', $result->html);
+        self::assertStringNotContainsString('data-editor-html-iframe="1"', $result->html);
+        self::assertStringNotContainsString('<script', $result->html);
+    }
+
+    /** HR: Više iframeova u jednom HTML makrou ne gubi se djelomičnim uvozom. EN: Multiple iframes in one HTML macro are not silently reduced to a partial import. */
+    public function testReportsHtmlMacroWithMultipleIframes(): void
+    {
+        $body = <<<'XML'
+<ac:structured-macro ac:name="html"><ac:plain-text-body><![CDATA[<iframe src="https://widgets.example/embed/1"></iframe><iframe src="https://widgets.example/embed/2"></iframe>]]></ac:plain-text-body></ac:structured-macro>
+XML;
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'CEU', '10');
+
+        self::assertSame(['html'], $result->unsupportedMacros);
+        self::assertStringContainsString('Confluence makro: html', $result->html);
+        self::assertStringNotContainsString('data-editor-html-iframe="1"', $result->html);
+    }
+
     /** HR: Confluence file-list makroi postaju običan statički HTML. EN: Confluence file-list macros become ordinary static HTML. */
     public function testConvertsFileListMacrosToOrdinaryStaticHtml(): void
     {

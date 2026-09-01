@@ -46,8 +46,15 @@ Moduli Calendar i Task ostaju vlasnici živih kalendara i zadataka. Confluence m
 - `livesearch` i `pagetreesearch` postaju nativna pretraga ograničena na
   uvezeno područje.
 - `recently-updated` postaje ACL-siguran popis nedavnih objavljenih promjena.
-- `panel` i rasporedi stupaca postaju običan responzivni, tematski HTML; za njih
-  se ne uvodi posebna runtime funkcionalnost.
+- `panel` postaje tematska kartica. Stari `section` i `column` makroi postaju
+  responzivni red kartica: postotne širine preslikavaju se na Bootstrap mrežu,
+  a na uskom zaslonu svaki stupac zauzima cijelu širinu.
+- `expand` postaje statički blok s izvornim naslovom iznad tijela. Vrsta liste
+  se ne mijenja: `ul` ostaje lista s grafičkim oznakama, a `ol` numerirana lista.
+- `html` s jednim sigurnim HTTPS iframeom postaje kanonski Editor embed širine
+  100%. Čuva visinu, `allowfullscreen` i ograničene `allow` mogućnosti. Službeni
+  H5P resizer prepoznaje se i kontrolirano učitava u pregledu i izvozu. Druga
+  skripta ne izvršava se i cijeli makro ulazi u izvještaj za ručnu provjeru.
 - `profile` postaje statički prikaz mapiranog Auth imena. Ako je administrator
   izradio neaktivan predračun, importer koristi sigurno izvedeno ime umjesto
   sirove login oznake. Prikaz ne oponaša Confluence profil ni njegovu autorizaciju.

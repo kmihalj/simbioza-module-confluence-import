@@ -46,8 +46,16 @@ Calendar and Task modules remain the owners of live calendars and tasks. A Confl
 - `livesearch` and `pagetreesearch` become native search scoped to the imported
   Workspace.
 - `recently-updated` becomes an ACL-safe list of recent published changes.
-- `panel` and column layouts become ordinary responsive, themed HTML; no
-  separate runtime feature is introduced for them.
+- `panel` becomes a themed card. Legacy `section` and `column` macros become a
+  responsive row of cards: percentage widths map to the Bootstrap grid, and
+  every column occupies the full width on a narrow screen.
+- `expand` becomes a static block with its source title above the body. The
+  list type is not changed: `ul` remains bulleted and `ol` remains numbered.
+- `html` containing one safe HTTPS iframe becomes a canonical 100%-wide Editor
+  embed. It retains height, `allowfullscreen`, and restricted `allow`
+  capabilities. The official H5P resizer is recognized and loaded in a
+  controlled way in views and exports. Any other script is not executed and
+  the entire macro enters the manual-review report.
 - `profile` becomes a static rendering of the mapped Auth name. If an
   administrator created an inactive staged account, the importer uses a safe
   inferred name instead of the raw login identifier. It does not impersonate
