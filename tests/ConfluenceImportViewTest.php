@@ -25,4 +25,25 @@ final class ConfluenceImportViewTest extends TestCase
         self::assertSame('Choose file', $english['Odaberi datoteku']);
         self::assertSame('No file selected.', $english['Nije odabrana nijedna datoteka.']);
     }
+
+    /** HR: Import kartice moraju koristiti stvarne površine aktivne teme. EN: Import cards must use the active theme's real surfaces. */
+    public function testImportCardsUseDefinedThemeSurfaceVariables(): void
+    {
+        $styles = file_get_contents(dirname(__DIR__) . '/resources/assets/confluence-import.css');
+
+        self::assertIsString($styles);
+        self::assertStringContainsString(
+            '--confluence-import-surface-bg: var(--hph-surface-bg, var(--bs-body-bg, #fff));',
+            $styles,
+        );
+        self::assertStringContainsString(
+            'background: var(--confluence-import-subtle-bg);',
+            $styles,
+        );
+        self::assertStringContainsString(
+            'color: var(--confluence-import-surface-text);',
+            $styles,
+        );
+        self::assertStringNotContainsString('--hph-muted-bg', $styles);
+    }
 }

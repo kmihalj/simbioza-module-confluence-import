@@ -1,15 +1,22 @@
 .confluence-import-shell {
-    color: var(--hph-surface-text, var(--bs-body-color, #212529));
+    --confluence-import-surface-bg: var(--hph-surface-bg, var(--bs-body-bg, #fff));
+    --confluence-import-surface-text: var(--hph-surface-text, var(--bs-body-color, #212529));
+    --confluence-import-subtle-bg: color-mix(
+        in srgb,
+        var(--confluence-import-surface-bg) 92%,
+        var(--confluence-import-surface-text)
+    );
+    color: var(--confluence-import-surface-text);
     min-width: 0;
 }
 
 .confluence-import-shell .confluence-import-panel,
 .confluence-import-shell .confluence-import-mapping {
-    background: var(--hph-surface-bg, var(--bs-body-bg, #fff));
+    background: var(--confluence-import-surface-bg);
     border: 1px solid var(--hph-border, var(--bs-border-color, #dee2e6));
     border-radius: var(--bs-border-radius-lg);
     box-shadow: var(--bs-box-shadow-sm);
-    color: var(--hph-surface-text, var(--bs-body-color, #212529));
+    color: var(--confluence-import-surface-text);
     overflow: hidden;
 }
 
@@ -18,9 +25,9 @@
     background: color-mix(
         in srgb,
         var(--bs-primary, #0d6efd) 10%,
-        var(--hph-surface-bg, var(--bs-body-bg, #fff))
+        var(--confluence-import-surface-bg)
     );
-    color: var(--hph-surface-text, var(--bs-body-color, #212529));
+    color: var(--confluence-import-surface-text);
     cursor: pointer;
     display: flex;
     gap: .5rem;
@@ -63,7 +70,7 @@
 }
 
 .confluence-import-shell .confluence-import-table-wrap thead {
-    background: var(--hph-muted-bg, var(--bs-tertiary-bg, #f8f9fa));
+    background: var(--confluence-import-subtle-bg);
     position: sticky;
     top: 0;
     z-index: 1;
@@ -77,10 +84,16 @@
 }
 
 .confluence-import-shell .confluence-import-option {
-    background: var(--hph-muted-bg, var(--bs-tertiary-bg, #f8f9fa));
+    background: var(--confluence-import-subtle-bg);
     border: 1px solid var(--hph-border, var(--bs-border-color, #dee2e6));
     border-radius: var(--bs-border-radius);
+    color: var(--confluence-import-surface-text);
     padding: .8rem;
+}
+
+.confluence-import-shell .confluence-import-option .form-check-label,
+.confluence-import-shell .confluence-import-option strong {
+    color: inherit;
 }
 
 /*
