@@ -52,4 +52,14 @@ final class ConfluencePageSluggerTest extends TestCase
         self::assertSame(str_repeat('a', 128), $slugger->shorten(str_repeat('a', 150)));
         self::assertSame('page-42', $slugger->unique('', 'page-42', $used));
     }
+
+    /** HR: Čista instalacija može izraditi slug servis iz modulske konfiguracije. EN: A clean installation can build the slug service from module configuration. */
+    public function testModuleConfigurationRegistersSlugger(): void
+    {
+        $services = require dirname(__DIR__) . '/config/services.php';
+
+        self::assertIsArray($services);
+        self::assertArrayHasKey(ConfluencePageSlugger::class, $services);
+        self::assertInstanceOf(ConfluencePageSlugger::class, $services[ConfluencePageSlugger::class]());
+    }
 }

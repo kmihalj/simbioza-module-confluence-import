@@ -37,6 +37,7 @@ use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportModuleViewRe
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportRepository;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportService;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportUploadService;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluencePageSlugger;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluencePrincipalMatcher;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceReferenceResolver;
 use AaiEduHr\SimbiozaModuleUser\Service\PersonalWorkspaceService;
@@ -86,6 +87,7 @@ $services = [
             $container->get(EditorHtmlRoadmapService::class),
         ),
     ConfluencePrincipalMatcher::class => static fn(): ConfluencePrincipalMatcher => new ConfluencePrincipalMatcher(),
+    ConfluencePageSlugger::class => static fn(): ConfluencePageSlugger => new ConfluencePageSlugger(),
     ConfluenceReferenceResolver::class => static fn(ContainerInterface $container): ConfluenceReferenceResolver =>
         new ConfluenceReferenceResolver(
             $container->get(ConfluenceImportRepository::class),
@@ -100,6 +102,7 @@ $services = [
             $container->get(ConfluenceImportConfig::class),
             $container->get(ConfluenceHtmlConverter::class),
             $container->get(ConfluenceReferenceResolver::class),
+            $container->get(ConfluencePageSlugger::class),
             $container->get(WorkspaceRepository::class),
             $container->get(WorkspaceContentChangeBatch::class),
             $container->get(WorkspaceWorkflowService::class),
