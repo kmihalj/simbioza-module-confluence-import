@@ -110,6 +110,7 @@ final readonly class ConfluenceImportService
         private ConfluenceImportConfig $config,
         private ConfluenceHtmlConverter $converter,
         private ConfluenceReferenceResolver $references,
+        private ConfluencePageSlugger $pageSlugger,
         private WorkspaceRepository $workspaces,
         private WorkspaceContentChangeBatch $workspaceChanges,
         private WorkspaceWorkflowService $workflow,
@@ -1569,14 +1570,11 @@ final readonly class ConfluenceImportService
         foreach ($pages as $logicalId => $versions) {
             $current = $this->currentPage($versions);
             $title = $this->text($current['title'] ?? '');
-            $base = $this->editor->slugFromTitle($title);
-            $base = $base !== '' ? $base : 'page-' . $logicalId;
-            $slug = $base;
-            $suffix = 2;
-            while (isset($used[$slug])) {
-                $slug = $base . '-' . $suffix++;
-            }
-            $used[$slug] = true;
+            $slug = $this->pageSlugger->unique(
+                $this->editor->slugFromTitle($title),
+                'page-' . $logicalId,
+                $used,
+            );
             $result[$logicalId] = [
                 'slug' => $slug,
                 'title' => $title,
