@@ -27,9 +27,9 @@ Pretvornik prepoznaje moderne `/spaces/SPACE/pages/ID/title`, stare `/display/SP
 
 ## Makroi i zadaci
 
-Code, noformat, info, note, tip i warning strukture imaju sigurne HTML prikaze. Confluence task liste postaju read-only oznake liste zadataka u dokumentu. Nepodržani ili aplikacijski specifični makroi dobivaju vidljivi sigurni zamjenski prikaz i administratorsko upozorenje umjesto tihog nestanka.
+Code, noformat, info, note, tip i warning strukture imaju sigurne HTML prikaze. Confluence task liste postaju nativni interaktivni Task popisi. Uvezeno dovršeno/nedovršeno stanje početno je stanje dok ga korisnik Simbioze ne promijeni; čuvaju se bogati sadržaj, HTTP(S) poveznice, izvorno ugniježđenje i stabilna izvorna sidra. Nepodržani ili aplikacijski specifični makroi dobivaju vidljivi sigurni zamjenski prikaz i administratorsko upozorenje umjesto tihog nestanka.
 
-Moduli Calendar i Task ostaju vlasnici živih kalendara i zadataka. Confluence makro ne pretvara se neprimjetno u živi poslovni objekt ako se njegovi potpuni podaci i ACL ne mogu sigurno mapirati; u tom slučaju u uvezenoj stranici ostaje statički prikaz.
+Moduli Calendar i Task ostaju vlasnici živih kalendara i zadataka. Uvezeni zadaci koriste uobičajeni ACL, CSRF zaštitu, spremanje stanja i audit trag Task modula. Drugi Confluence makro ne pretvara se neprimjetno u živi poslovni objekt ako se njegovi potpuni podaci i ACL ne mogu sigurno mapirati; u tom slučaju u uvezenoj stranici ostaje statički prikaz.
 
 ### Pretvorba podržanih makroa
 
@@ -43,8 +43,9 @@ Moduli Calendar i Task ostaju vlasnici živih kalendara i zadataka. Confluence m
   stranice koje doista imaju strukturirana svojstva. Izvještaj se nakon importa
   dinamički ažurira i svaki put ponovno primjenjuje ACL.
 - `gallery` postaje nativna galerija stvarnih Editor privitaka aktualne stranice.
-- `livesearch` i `pagetreesearch` postaju nativna pretraga ograničena na
-  uvezeno područje.
+- `livesearch` i `pagetreesearch` ne umeću se u sadržaj. Oni u Confluenceu
+  filtriraju susjedno stablo ili izvještaj, a Simbioza već ima pretragu koju
+  korisnik može ograničiti na područje.
 - `recently-updated` postaje ACL-siguran popis nedavnih objavljenih promjena.
 - `panel` postaje tematska kartica. Stari `section` i `column` makroi postaju
   responzivni red kartica: postotne širine preslikavaju se na Bootstrap mrežu,
@@ -55,6 +56,8 @@ Moduli Calendar i Task ostaju vlasnici živih kalendara i zadataka. Confluence m
   100%. Čuva visinu, `allowfullscreen` i ograničene `allow` mogućnosti. Službeni
   H5P resizer prepoznaje se i kontrolirano učitava u pregledu i izvozu. Druga
   skripta ne izvršava se i cijeli makro ulazi u izvještaj za ručnu provjeru.
+  HTML makro koji sadrži samo sigurnu HTTP(S) poveznicu s gumbom postaje običan
+  tematski Simbioza gumb; izvorni stilovi i JavaScript događaji ne prenose se.
 - `profile` postaje statički prikaz mapiranog Auth imena. Ako je administrator
   izradio neaktivan predračun, importer koristi sigurno izvedeno ime umjesto
   sirove login oznake. Prikaz ne oponaša Confluence profil ni njegovu autorizaciju.
@@ -86,16 +89,39 @@ Moduli Calendar i Task ostaju vlasnici živih kalendara i zadataka. Confluence m
   mogućnostima, a Figma i Twitter/X postaju tematske kartice s vanjskom
   poveznicom. Nepoznati provider zadržava vidljivi zamjenski prikaz i stvara
   napomenu u izvještaju. Skripte providera nikada se ne kopiraju iz Confluencea.
-- `create-from-template` s Confluence file-list blueprintom izostavlja se jer
-  njegova Confluence uređivačka akcija nije primjenjiva na uvezenu stranicu.
+- `create-from-template` izostavlja se jer njegova Confluence uređivačka akcija
+  (uključujući file-list i meeting-notes predloške) nije primjenjiva na uvezenu
+  stranicu.
 - `content-report-table` postaje obična uređiva HTML tablica s odgovarajućim
   poveznicama poznatim u trenutku importa. To nije predložak ni dinamička
   Workspace komponenta. Izvorne oznake ostaju prenosivi metapodaci importa.
+- `tasks-report-macro` postaje nativna tablica izvještaja zadataka. Prvi stupac
+  predstavlja isti interaktivni zadatak koji je spremljen na uvezenoj izvornoj
+  stranici, a ne kopiranu kućicu; promjena ažurira izvorni zadatak i njegov audit
+  trag. Izvještaj pri svakom prikazu ponovno primjenjuje ACL izvorne stranice i
+  filtar dovršenosti, a čuva uvezeni rok, mapiranog izvršitelja i lokalnu
+  poveznicu na izvor. Confluenceov `pageSize` upravljao je samo izvornom
+  paginacijom pa se čuvaju svi odgovarajući retci. Ponovni uvoz potreban je kada
+  se promijene definicije zadataka ili filtri izvještaja, ali ne zbog označavanja
+  ili ponovnog otvaranja zadatka u Simbiozi.
+
+Ako je objavljena stranica u izvornom stablu dijete nacrta ili obrisanog
+posrednika koji nije odabran za uvoz, posrednik se preskače, a stranica ostaje
+pod najbližim odabranim pretkom. Time se takva djeca ne izdvajaju pogrešno u
+korijen područja.
 
 Confluence rasporedi s dva ili tri stupca postaju responzivni Bootstrap retci i
-stupci. Code/noformat blokovi čuvaju opcionalni naslov i sigurnu oznaku jezika,
+stupci pune raspoložive širine. Prazni izvorni stupci uklanjaju se prije izračuna
+omjera, dok više stvarnih stupaca zadržava raspored i na uskom se zaslonu slaže
+okomito. Code/noformat blokovi čuvaju opcionalni naslov i sigurnu oznaku jezika,
 uvezenim slikama ostaju numeričke naznake širine/visine, a složene oznake
 poveznica ostaju čitljive. Nativna tablica sadržaja Simbioze i dalje koristi naslove uvezene stranice.
+
+Spremljeni sadržaj koristi standardne Bootstrap klase i kanonske
+`editor-html-*` / `data-editor-html-*` oznake samo kada su potrebne za živu
+funkcionalnost Editora. Importer ne ostavlja `confluence-import-*` klase kao
+paralelni format dokumenta; podatak o podrijetlu čuva se u zasebnim tablicama
+modula i izvještaju importa.
 
 Ostali makroi koji stvaraju dinamički Confluence sadržaj ili uređivačke akcije ostaju jasno označeni kao nepodržani; izvorni podaci ne gube se tiho.
 

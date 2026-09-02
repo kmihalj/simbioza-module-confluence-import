@@ -88,6 +88,17 @@ paneli, rasporedi i dodatno poboljšane tablice ostaju običan responzivan HTML
 umjesto posebnih Confluence makro komponenti. Svaka uvezena tablica normalizira
 se na isti obrubljeni, prugasti, responzivni HTML s hover stanjem kakav izrađuje
 HTML Editor, pa aktivna tema upravlja zaglavljem, redcima, obrubima i bojama.
+Rasporedi koriste cijelu dostupnu širinu; prazni izvorni stupci se uklanjaju, a
+više stvarnih stupaca zadržava omjer i na uskom se zaslonu slaže okomito. Sigurni
+HTML iframeovi i gumbi pretvaraju se u kontrolirane Editor/Simbioza elemente bez
+prijenosa proizvoljnog JavaScripta.
+Confluence popisi zadataka postaju nativni interaktivni Task popisi uz očuvano
+početno stanje, bogati sadržaj, ugniježđenost i izvorna sidra.
+Uvezeni HTML koristi iste standardne Bootstrap i Editor oznake kao sadržaj
+izrađen u Simbiozi; `confluence-import-*` klase ne spremaju se u dokument.
+`tasks-report-macro` postaje filtrirana tablica čiji prvi stupac upravlja
+stvarnim zadatkom na uvezenoj izvornoj stranici, a poveznica na izvor ostaje
+lokalna i ACL-zaštićena.
 
 ## Brzi početak
 

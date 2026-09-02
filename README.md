@@ -88,6 +88,18 @@ layouts, and enhanced tables remain ordinary responsive HTML rather than
 dedicated Confluence-macro components. Every imported table is normalized to
 the same bordered, striped, hoverable, responsive markup produced by the HTML
 Editor, so the active theme controls its header, rows, borders, and colors.
+Layouts use all available width: empty source columns are removed, while
+multiple meaningful columns retain their proportions and stack on narrow
+screens. Safe HTML iframes and button links become controlled Editor/Simbioza
+elements without carrying arbitrary JavaScript into the application.
+Confluence task lists become native interactive Task lists while retaining
+their initial completion state, rich text, nesting, and stable source anchors.
+Imported HTML uses the same standard Bootstrap and Editor markers as content
+created in Simbioza; `confluence-import-*` classes are not stored in documents.
+`tasks-report-macro` becomes a filtered task table whose first column controls
+the actual task on its imported source page and whose source links remain
+local. Children of excluded draft/deleted intermediaries remain under
+their nearest imported ancestor instead of being promoted to the root.
 
 ## Quick start
 

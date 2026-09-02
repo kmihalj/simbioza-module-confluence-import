@@ -27,9 +27,9 @@ The converter recognises modern `/spaces/SPACE/pages/ID/title`, legacy `/display
 
 ## Macros and tasks
 
-Code, noformat, info, note, tip and warning structures have safe HTML representations. Confluence task lists become read-only task-list markup in the document. Unsupported or application-specific macros keep a visible safe fallback and create an administrator warning rather than silently disappearing.
+Code, noformat, info, note, tip and warning structures have safe HTML representations. Confluence task lists become native interactive Task lists. Their imported completion value is the initial state until a Simbioza user changes it; rich content, HTTP(S) links, source nesting, and stable source anchors are retained. Unsupported or application-specific macros keep a visible safe fallback and create an administrator warning rather than silently disappearing.
 
-Calendar and Task modules remain the owners of live calendars and tasks. A Confluence macro is not silently converted to a live business object unless its complete data and ACL can be mapped safely; otherwise the static representation remains in the imported page.
+Calendar and Task modules remain the owners of live calendars and tasks. Imported tasks use the Task module's normal ACL, CSRF protection, state storage, and audit trail. A different Confluence macro is not silently converted to a live business object unless its complete data and ACL can be mapped safely; otherwise the static representation remains in the imported page.
 
 ### Supported macro conversion
 
@@ -43,8 +43,9 @@ Calendar and Task modules remain the owners of live calendars and tasks. A Confl
   actually contain structured properties are included. The report updates
   dynamically after import and reapplies ACL every time.
 - `gallery` becomes a native gallery of real Editor attachments on the current page.
-- `livesearch` and `pagetreesearch` become native search scoped to the imported
-  Workspace.
+- `livesearch` and `pagetreesearch` are not embedded in content. In Confluence
+  they filter an adjacent tree or report, while Simbioza already provides a
+  search that users can scope to a Workspace.
 - `recently-updated` becomes an ACL-safe list of recent published changes.
 - `panel` becomes a themed card. Legacy `section` and `column` macros become a
   responsive row of cards: percentage widths map to the Bootstrap grid, and
@@ -56,6 +57,8 @@ Calendar and Task modules remain the owners of live calendars and tasks. A Confl
   capabilities. The official H5P resizer is recognized and loaded in a
   controlled way in views and exports. Any other script is not executed and
   the entire macro enters the manual-review report.
+  An HTML macro containing only a safe HTTP(S) button link becomes an ordinary
+  theme-aware Simbioza button; source styles and JavaScript handlers are discarded.
 - `profile` becomes a static rendering of the mapped Auth name. If an
   administrator created an inactive staged account, the importer uses a safe
   inferred name instead of the raw login identifier. It does not impersonate
@@ -88,16 +91,38 @@ Calendar and Task modules remain the owners of live calendars and tasks. A Confl
   Figma and Twitter/X become theme-aware external-link cards. Unknown providers
   keep a visible fallback and create a report notice. Provider scripts are
   never copied from Confluence.
-- `create-from-template` using Confluence's file-list blueprint is omitted
-  because its Confluence editing action is not applicable to an imported page.
+- `create-from-template` is omitted because its Confluence editing action
+  (including file-list and meeting-notes blueprints) is not applicable to an
+  imported page.
 - `content-report-table` becomes an ordinary editable HTML table containing
   the matching page links known at import time. It is not a template or a
   dynamic Workspace component. Source labels remain portable import metadata.
+- `tasks-report-macro` becomes a native task report table. Its first column is
+  the same interactive task stored on the imported source page, not a copied
+  checkbox; changing it updates the source task and its audit trail. The report
+  reapplies source-page ACL and completion-status filters on every view, while
+  retaining the imported due date, mapped assignee, and local source link.
+  Confluence's `pageSize` controlled only source pagination, so every matched
+  row is retained. Reimport is needed when source definitions or report filters
+  change, not merely when a task is checked or reopened in Simbioza.
+
+If a published source page is a child of a draft or deleted intermediary that
+was not selected for import, that intermediary is skipped and the page remains
+under its nearest selected ancestor. Such children are therefore not promoted
+incorrectly to the Workspace root.
 
 Confluence two- and three-column layouts become responsive Bootstrap rows and
-columns. Code/noformat blocks preserve their optional title and safe language
+full-width columns. Empty source columns are removed before proportions are
+calculated, while multiple meaningful columns retain their layout and stack on
+narrow screens. Code/noformat blocks preserve their optional title and safe language
 class, imported images retain numeric width/height hints, and rich link labels
 remain readable. The native Simbioza table of contents continues to use the imported page headings.
+
+Stored content uses standard Bootstrap classes and canonical
+`editor-html-*` / `data-editor-html-*` markers only where live Editor behavior
+requires them. The importer does not retain `confluence-import-*` classes as a
+parallel document format; provenance stays in the module-owned tables and the
+import report.
 
 Other macros that create dynamic Confluence content or editing actions remain explicitly marked as unsupported; source data is never silently discarded.
 

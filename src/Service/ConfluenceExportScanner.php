@@ -43,6 +43,7 @@ final readonly class ConfluenceExportScanner
         'info',
         'note',
         'pagetree',
+        'pagetreesearch',
         'panel',
         'profile',
         'recently-updated',

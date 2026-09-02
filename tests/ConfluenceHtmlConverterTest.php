@@ -14,6 +14,20 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(ConfluenceHtmlConverter::class)]
 final class ConfluenceHtmlConverterTest extends TestCase
 {
+    /** HR: Naslov informativnog makroa ostaje vidljiv i kada je tijelo prazno. EN: An information macro title remains visible when its body is empty. */
+    public function testPreservesTipTitleWhenRichBodyIsEmpty(): void
+    {
+        $body = <<<'XML'
+<ac:structured-macro ac:name="tip"><ac:parameter ac:name="title">Dokumentacija sustava Dabar</ac:parameter><ac:rich-text-body><p><br /></p></ac:rich-text-body></ac:structured-macro>
+XML;
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'DABAR', '6817280');
+
+        self::assertStringContainsString('alert alert-success', $result->html);
+        self::assertStringContainsString('Dokumentacija sustava Dabar', $result->html);
+        self::assertSame([], $result->unsupportedMacros);
+    }
+
     /** HR: Pretvara interne URL-ove, privitke, task-listu i podržani makro, a vanjski URL ostavlja netaknut. EN: Converts internal URLs, attachments, a task list, and a supported macro while preserving an external URL. */
     public function testConvertsStorageFormatAndKeepsPortableReferences(): void
     {
@@ -30,13 +44,122 @@ XML;
         self::assertStringContainsString('__SIMBIOZA_CONFLUENCE_LINK__', $result->html);
         self::assertStringContainsString('__SIMBIOZA_CONFLUENCE_ATTACHMENT__', $result->html);
         self::assertStringContainsString('https://outside.example/path', $result->html);
-        self::assertStringContainsString('confluence-task-list', $result->html);
-        self::assertMatchesRegularExpression('/<input[^>]+checked(?:="checked")?[^>]*>/', $result->html);
+        self::assertStringContainsString('data-editor-html-task-list="1"', $result->html);
+        self::assertStringContainsString('data-task-initial-completed="1"', $result->html);
+        self::assertStringNotContainsString('<input', $result->html);
         self::assertSame(1, substr_count($result->html, 'Done'));
-        self::assertStringContainsString('<pre class="confluence-import-code"><code>echo "ok";</code></pre>', $result->html);
+        self::assertStringContainsString('<pre><code>echo "ok";</code></pre>', $result->html);
         self::assertSame('42', $result->links[0]['destination_page_id']);
         self::assertSame('part-1', $result->links[0]['fragment']);
         self::assertSame('manual.pdf', $result->attachments[0]['filename']);
+        self::assertSame([], $result->unsupportedMacros);
+    }
+
+    /** HR: Čuva status, bogati sadržaj i ugniježđenost Confluence zadataka bez udvostručavanja teksta. EN: Preserves status, rich content, and nesting of Confluence tasks without duplicating text. */
+    public function testPreservesNestedConfluenceTaskLists(): void
+    {
+        $body = <<<'XML'
+<ac:task-list><ac:task><ac:task-id>21</ac:task-id><ac:task-uuid>parent-uuid</ac:task-uuid>
+<ac:task-status>complete</ac:task-status><ac:task-body>Prilog <strong>DABAR-1122</strong>
+<ac:task-list><ac:task><ac:task-id>22</ac:task-id><ac:task-status>incomplete</ac:task-status>
+<ac:task-body>Provjeriti <a href="https://outside.example/task">poveznicu</a></ac:task-body></ac:task></ac:task-list>
+</ac:task-body></ac:task></ac:task-list>
+XML;
+
+        $converter = new ConfluenceHtmlConverter();
+        $result = $converter->convert($body, 'DABAR', '10');
+        $summaries = $converter->taskSummaries($body);
+
+        self::assertSame(1, substr_count($result->html, 'Prilog'));
+        self::assertSame(1, substr_count($result->html, 'Provjeriti'));
+        self::assertStringContainsString('data-task-initial-completed="1"', $result->html);
+        self::assertStringContainsString('data-task-initial-completed="0"', $result->html);
+        self::assertStringContainsString('data-task-depth="1"', $result->html);
+        self::assertStringContainsString('Prilog <strong>DABAR-1122</strong>', $result->html);
+        self::assertStringContainsString(
+            'Provjeriti <a href="https://outside.example/task">poveznicu</a>',
+            $result->html,
+        );
+        self::assertStringContainsString('id="confluence-task-parent-uuid"', $result->html);
+        self::assertCount(2, $summaries);
+        self::assertSame('Prilog DABAR-1122', $summaries[0]['text']);
+        self::assertTrue($summaries[0]['complete']);
+        self::assertSame('Provjeriti poveznicu', $summaries[1]['text']);
+        self::assertFalse($summaries[1]['complete']);
+    }
+
+    /** HR: Tekst predloška nije objavljeni zadatak i ne smije ući u stranicu ni izvještaj. EN: Template placeholder text is not a published task and must not enter the page or report. */
+    public function testOmitsConfluenceTemplatePlaceholderTasks(): void
+    {
+        $body = <<<'XML'
+<p><ac:placeholder>Set goals, objectives or some context for this meeting.</ac:placeholder></p>
+<ac:task-list>
+<ac:task><ac:task-id>1</ac:task-id><ac:task-status>incomplete</ac:task-status><ac:task-body><ac:placeholder ac:type="mention">Type your task here. Use "@" to assign a user.</ac:placeholder></ac:task-body></ac:task>
+<ac:task><ac:task-id>2</ac:task-id><ac:task-status>incomplete</ac:task-status><ac:task-body>Stvarni zadatak</ac:task-body></ac:task>
+</ac:task-list>
+XML;
+
+        $converter = new ConfluenceHtmlConverter();
+        $result = $converter->convert($body, 'DABAR', '10');
+        $summaries = $converter->taskSummaries($body);
+
+        self::assertStringNotContainsString('Set goals', $result->html);
+        self::assertStringNotContainsString('Type your task here', $result->html);
+        self::assertStringContainsString('Stvarni zadatak', $result->html);
+        self::assertCount(1, $summaries);
+        self::assertSame('Stvarni zadatak', $summaries[0]['text']);
+    }
+
+    /** HR: tasks-report-macro postaje filtrirana tablica zadataka s lokalnim poveznicama. EN: tasks-report-macro becomes a filtered task table with local links. */
+    public function testConvertsTaskReportMacroToStaticLocalTable(): void
+    {
+        $body = <<<'XML'
+<ac:structured-macro ac:name="tasks-report-macro">
+<ac:parameter ac:name="pageSize">1</ac:parameter><ac:parameter ac:name="status">incomplete</ac:parameter>
+<ac:parameter ac:name="labels">meeting-notes</ac:parameter></ac:structured-macro>
+XML;
+        $context = new ConfluenceMacroContext('10', [
+            '11' => [
+                'title' => 'Bilješke sastanka',
+                'path' => '/workspace/dabar/biljeske-sastanka',
+                'parent_id' => '',
+                'sort_order' => 1,
+                'workspace_slug' => 'dabar',
+                'node_slug' => 'biljeske-sastanka',
+                'labels' => ['meeting-notes'],
+                'tasks' => [
+                    ['id' => 'task-1', 'native_uuid' => 'e3d1be37-04fd-4f69-ad6e-39fa9f085223', 'text' => 'Otvoreni zadatak', 'complete' => false, 'due_date' => '2026-09-10', 'assignee' => 'user-1'],
+                    ['id' => 'task-4', 'native_uuid' => 'a03d850b-2d60-491c-a659-ed4a3fbc646c', 'text' => 'Drugi otvoreni zadatak', 'complete' => false, 'due_date' => '', 'assignee' => ''],
+                    ['id' => 'task-2', 'native_uuid' => '875b30c0-4767-4e51-b5d9-5a7c76de7c70', 'text' => 'Dovršeni zadatak', 'complete' => true, 'due_date' => '', 'assignee' => ''],
+                ],
+            ],
+            '12' => [
+                'title' => 'Bez oznake',
+                'path' => '/workspace/dabar/bez-oznake',
+                'parent_id' => '',
+                'sort_order' => 2,
+                'workspace_slug' => 'dabar',
+                'node_slug' => 'bez-oznake',
+                'labels' => [],
+                'tasks' => [
+                    ['id' => 'task-3', 'native_uuid' => '7067149f-9adf-479f-b40b-62f1ab53f555', 'text' => 'Pogrešna oznaka', 'complete' => false, 'due_date' => '', 'assignee' => ''],
+                ],
+            ],
+        ], [], ['user-1' => 'Dario Pinturić']);
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'DABAR', '10', $context);
+
+        self::assertStringContainsString('class="table-responsive"', $result->html);
+        self::assertStringContainsString('data-editor-html-task-report="1"', $result->html);
+        self::assertStringContainsString('data-task-source-workspace="dabar"', $result->html);
+        self::assertStringContainsString('data-task-report-uuid="e3d1be37-04fd-4f69-ad6e-39fa9f085223"', $result->html);
+        self::assertStringContainsString('Otvoreni zadatak', $result->html);
+        self::assertStringContainsString('2026-09-10', $result->html);
+        self::assertStringContainsString('Dario Pinturić', $result->html);
+        self::assertStringContainsString('Drugi otvoreni zadatak', $result->html);
+        self::assertStringContainsString('/workspace/dabar/biljeske-sastanka#confluence-task-task-1', $result->html);
+        self::assertStringNotContainsString('Dovršeni zadatak', $result->html);
+        self::assertStringNotContainsString('Pogrešna oznaka', $result->html);
         self::assertSame([], $result->unsupportedMacros);
     }
 
@@ -106,9 +229,9 @@ XML;
 
         $result = (new ConfluenceHtmlConverter())->convert($body, 'DEMO', '10', $context);
 
-        self::assertStringContainsString('confluence-import-children', $result->html);
+        self::assertStringContainsString('<ul><li><a href="/workspace/demo/child">Child</a>', $result->html);
         self::assertStringContainsString('/workspace/demo/grandchild', $result->html);
-        self::assertStringContainsString('confluence-import-attachment-list', $result->html);
+        self::assertStringContainsString('<a href="/confluence-import/attachments/demo" download="demo.mp4">demo.mp4</a>', $result->html);
         self::assertStringContainsString('<video', $result->html);
         self::assertStringContainsString('text-bg-success', $result->html);
         self::assertStringContainsString('id="section-1"', $result->html);
@@ -178,11 +301,11 @@ XML;
 
         $result = (new ConfluenceHtmlConverter())->convert($body, 'DEMO', '10');
 
-        self::assertStringContainsString('confluence-import-layout', $result->html);
+        self::assertStringContainsString('<div class="w-100"><div class="row g-3">', $result->html);
         self::assertStringContainsString('col-12 col-lg-4', $result->html);
         self::assertStringContainsString('col-12 col-lg-8', $result->html);
         self::assertMatchesRegularExpression('/<img[^>]+width="320"[^>]+height="180"/', $result->html);
-        self::assertStringNotContainsString('confluence-import-toc', $result->html);
+        self::assertStringNotContainsString('Table of Contents', $result->html);
         self::assertStringNotContainsString('Table of Contents', $result->html);
         self::assertStringContainsString('<h2>Introduction</h2>', $result->html);
         self::assertStringContainsString('<h3>Details</h3>', $result->html);
@@ -225,7 +348,7 @@ XML;
 
         $result = (new ConfluenceHtmlConverter())->convert($body, 'CEU', '10');
 
-        self::assertStringContainsString('<section class="confluence-import-expand mb-3">', $result->html);
+        self::assertStringContainsString('<section class="mb-3">', $result->html);
         self::assertStringContainsString('<p class="fw-semibold mb-2">Aktivnosti Srca na projektu</p>', $result->html);
         self::assertStringContainsString('<p>Multiplier event</p>', $result->html);
         self::assertStringContainsString('<ul><li>Barcelona</li></ul>', $result->html);
@@ -245,9 +368,9 @@ XML;
 
         $result = (new ConfluenceHtmlConverter())->convert($body, 'CEU', '10');
 
-        self::assertStringContainsString('row g-3 confluence-import-section mb-3', $result->html);
-        self::assertStringContainsString('col-12 col-lg-7 confluence-import-column', $result->html);
-        self::assertStringContainsString('col-12 col-lg-5 confluence-import-column', $result->html);
+        self::assertStringContainsString('row g-3 mb-3', $result->html);
+        self::assertStringContainsString('col-12 col-lg-7', $result->html);
+        self::assertStringContainsString('col-12 col-lg-5', $result->html);
         self::assertSame(2, substr_count($result->html, '<section class="card h-100">'));
         self::assertSame([], $result->unsupportedMacros);
     }
@@ -264,7 +387,7 @@ XML;
 
         $result = (new ConfluenceHtmlConverter())->convert($body, 'CEU', '10');
 
-        self::assertSame(2, substr_count($result->html, 'col-12 col-lg-6 confluence-import-column'));
+        self::assertSame(2, substr_count($result->html, 'col-12 col-lg-6'));
         self::assertStringNotContainsString('<p><br></p>', $result->html);
         self::assertSame([], $result->unsupportedMacros);
     }
@@ -307,6 +430,58 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
+    /** HR: Siguran HTML gumb postaje funkcionalna poveznica bez izvornog stila ili JS-a. EN: A safe HTML button becomes a functional link without source styling or JavaScript. */
+    public function testConvertsSafeHtmlButtonLink(): void
+    {
+        $body = <<<'XML'
+<ac:structured-macro ac:name="html"><ac:plain-text-body><![CDATA[<a href="https://www.srce.unizg.hr/ceu/tjedan-ceu-2024"><button class="aui-button" style="width: 320px" onclick="alert(1)">Povratak na web stranicu</button></a>]]></ac:plain-text-body></ac:structured-macro>
+XML;
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'CEU', '194311723');
+
+        self::assertStringContainsString(
+            '<a class="btn btn-primary mb-3" href="https://www.srce.unizg.hr/ceu/tjedan-ceu-2024">Povratak na web stranicu</a>',
+            $result->html,
+        );
+        self::assertStringNotContainsString('onclick=', $result->html);
+        self::assertStringNotContainsString('style=', $result->html);
+        self::assertStringNotContainsString('<button', $result->html);
+        self::assertSame([], $result->unsupportedMacros);
+    }
+
+    /** HR: Nesigurna shema HTML gumba ostaje označena za ručni pregled. EN: An unsafe HTML button scheme remains marked for manual review. */
+    public function testRejectsUnsafeHtmlButtonLink(): void
+    {
+        $body = <<<'XML'
+<ac:structured-macro ac:name="html"><ac:plain-text-body><![CDATA[<a href="javascript:alert(1)"><button>Otvori</button></a>]]></ac:plain-text-body></ac:structured-macro>
+XML;
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'CEU', '194311723');
+
+        self::assertStringContainsString('Confluence makro: html', $result->html);
+        self::assertSame(['html'], $result->unsupportedMacros);
+    }
+
+    /** HR: Prazan izvorni stupac ne smanjuje širinu stvarnoga sadržaja. EN: An empty source column does not narrow the real content. */
+    public function testRemovesEmptyLayoutCellsAndUsesAvailableWidth(): void
+    {
+        $body = <<<'XML'
+<ac:layout><ac:layout-section ac:type="two_equal">
+<ac:layout-cell><p>Galerija i sadržaj</p><table><tbody><tr><td>Podatak</td></tr></tbody></table></ac:layout-cell>
+<ac:layout-cell><p><br /></p></ac:layout-cell>
+</ac:layout-section></ac:layout>
+XML;
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'CEU', '163283311');
+
+        self::assertStringContainsString('class="w-100"', $result->html);
+        self::assertSame(1, substr_count($result->html, 'col-12 col-lg-12'), $result->html);
+        self::assertStringNotContainsString('col-12 col-lg-6', $result->html);
+        self::assertStringNotContainsString('<p><br></p>', $result->html);
+        self::assertStringNotContainsString('confluence-import-', $result->html);
+        self::assertSame([], $result->unsupportedMacros);
+    }
+
     /** HR: Nepoznati JavaScript ostaje vidljiv u izvještaju umjesto tihog odbacivanja. EN: Unknown JavaScript remains visible in the report instead of being silently discarded. */
     public function testReportsHtmlMacroWithUnknownJavascript(): void
     {
@@ -344,6 +519,10 @@ XML;
 <ac:parameter ac:name="blueprintModuleCompleteKey">com.atlassian.confluence.plugins.confluence-create-content-plugin:file-list-blueprint</ac:parameter>
 <ac:parameter ac:name="createButtonLabel">Create a file list</ac:parameter>
 </ac:structured-macro>
+<ac:structured-macro ac:name="create-from-template">
+<ac:parameter ac:name="blueprintModuleCompleteKey">com.atlassian.confluence.plugins.confluence-business-blueprints:meeting-notes-blueprint</ac:parameter>
+<ac:parameter ac:name="createButtonLabel">Create meeting note</ac:parameter>
+</ac:structured-macro>
 <ac:structured-macro ac:name="content-report-table">
 <ac:parameter ac:name="labels">file-list</ac:parameter>
 <ac:parameter ac:name="blankTitle">File lists</ac:parameter>
@@ -378,6 +557,7 @@ XML;
         $result = (new ConfluenceHtmlConverter())->convert($body, 'DEMO', '10', $context);
 
         self::assertStringNotContainsString('Create a file list', $result->html);
+        self::assertStringNotContainsString('Create meeting note', $result->html);
         self::assertStringNotContainsString('data-workspace-', $result->html);
         self::assertStringContainsString(
             '<table class="table table-bordered table-striped table-hover">',
@@ -388,6 +568,44 @@ XML;
         self::assertStringContainsString('Shared files', $result->html);
         self::assertStringNotContainsString('Ordinary page', $result->html);
         self::assertSame([], $result->unsupportedMacros);
+    }
+
+    /** HR: Blueprint izvještaj čuva autora i prikazuje zadnje izmijenjene stranice prve. EN: A blueprint report preserves the creator and lists most recently modified pages first. */
+    public function testContentReportIncludesCreatorAndSortsNewestFirst(): void
+    {
+        $body = <<<'XML'
+<ac:structured-macro ac:name="content-report-table"><ac:parameter ac:name="labels">meeting-notes</ac:parameter></ac:structured-macro>
+XML;
+        $context = new ConfluenceMacroContext('10', [
+            '11' => [
+                'title' => 'Starija bilješka',
+                'path' => '/workspace/dabar/starija',
+                'parent_id' => '',
+                'sort_order' => 1,
+                'labels' => ['meeting-notes'],
+                'creator' => 'Stari autor',
+                'updated_at' => '2026-01-01 09:00:00',
+            ],
+            '12' => [
+                'title' => 'Novija bilješka',
+                'path' => '/workspace/dabar/novija',
+                'parent_id' => '',
+                'sort_order' => 2,
+                'labels' => ['meeting-notes'],
+                'creator' => 'Novi autor',
+                'updated_at' => '2026-04-02 10:00:00',
+            ],
+        ], []);
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'DABAR', '10', $context);
+
+        self::assertStringContainsString('Autor', $result->html);
+        self::assertStringContainsString('Novi autor', $result->html);
+        self::assertStringContainsString('Stari autor', $result->html);
+        self::assertLessThan(
+            strpos($result->html, 'Starija bilješka'),
+            strpos($result->html, 'Novija bilješka'),
+        );
     }
 
     /** HR: SOKI makroi postaju nativni dinamički blokovi, a Page Properties strukturirani podaci. EN: SOKI macros become native dynamic blocks and Page Properties become structured data. */
@@ -414,10 +632,10 @@ XML;
         );
         $result = (new ConfluenceHtmlConverter())->convert($body, 'SOKI', '143180505', $context);
 
-        self::assertSame(4, substr_count($result->html, 'data-editor-html-workspace-block="1"'));
+        self::assertSame(3, substr_count($result->html, 'data-editor-html-workspace-block="1"'));
         self::assertStringContainsString('data-workspace-block-kind="attachment-gallery"', $result->html);
         self::assertStringContainsString('data-workspace-block-kind="page-report"', $result->html);
-        self::assertStringContainsString('data-workspace-block-kind="workspace-search"', $result->html);
+        self::assertStringNotContainsString('data-workspace-block-kind="workspace-search"', $result->html);
         self::assertStringContainsString('data-workspace-block-kind="recent-changes"', $result->html);
         self::assertStringContainsString('Poslovi 2026.', $result->html);
         self::assertStringContainsString('Test User', $result->html);
@@ -504,7 +722,7 @@ XML;
             $result->html,
         );
         self::assertSame(1, substr_count($result->html, 'class="table-responsive"'));
-        self::assertStringContainsString('data-workspace-block-kind="workspace-search"', $result->html);
+        self::assertStringNotContainsString('data-workspace-block-kind="workspace-search"', $result->html);
         self::assertSame([], $result->unsupportedMacros);
     }
 

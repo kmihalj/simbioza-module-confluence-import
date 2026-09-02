@@ -31,6 +31,7 @@ use Psr\Log\LoggerInterface;
 use function array_filter;
 use function array_key_exists;
 use function array_keys;
+use function array_pad;
 use function array_reverse;
 use function array_unique;
 use function array_values;
@@ -111,6 +112,7 @@ final readonly class ConfluenceImportService
         private ConfluenceHtmlConverter $converter,
         private ConfluenceReferenceResolver $references,
         private ConfluencePageSlugger $pageSlugger,
+        private ConfluencePageHierarchy $pageHierarchy,
         private WorkspaceRepository $workspaces,
         private WorkspaceContentChangeBatch $workspaceChanges,
         private WorkspaceWorkflowService $workflow,
@@ -281,7 +283,7 @@ final readonly class ConfluenceImportService
             //     phased state so profile macros can show real names.
             $dataset['users'] = $this->rows($scan['users'] ?? []);
             $pages = $this->selectedPageGroups($dataset['pages'], $normalized);
-            $targets = $this->plannedTargets($pages, $workspace);
+            $targets = $this->plannedTargets($pages, $workspace, $dataset['pages']);
             $phase = $normalized['include_attachments'] ? 'attachments' : 'pages';
             $state = [
                 'version' => 1,
@@ -490,7 +492,7 @@ final readonly class ConfluenceImportService
             // EN: A synchronous import needs the same user context as a phased import.
             $dataset['users'] = $this->rows($scan['users'] ?? []);
             $pages = $this->selectedPageGroups($dataset['pages'], $normalized);
-            $targets = $this->plannedTargets($pages, $workspace);
+            $targets = $this->plannedTargets($pages, $workspace, $dataset['pages']);
             $this->repository->setStage($jobId, 'attachments');
             $attachmentResult = $normalized['include_attachments']
                 ? $this->importAttachments(
@@ -1560,13 +1562,15 @@ final readonly class ConfluenceImportService
      *
      * @param array<string,list<array<string,mixed>>> $pages
      * @param array<string,mixed> $workspace
+     * @param list<array<string,mixed>> $allPages
      * @return array<string,array<string,mixed>>
      */
-    private function plannedTargets(array $pages, array $workspace): array
+    private function plannedTargets(array $pages, array $workspace, array $allPages): array
     {
         $used = [];
         $result = [];
         $workspaceSlug = $this->text($workspace['slug'] ?? '');
+        $normalizedParents = $this->pageHierarchy->normalizedParents($pages, $allPages);
         foreach ($pages as $logicalId => $versions) {
             $current = $this->currentPage($versions);
             $title = $this->text($current['title'] ?? '');
@@ -1578,7 +1582,7 @@ final readonly class ConfluenceImportService
             $result[$logicalId] = [
                 'slug' => $slug,
                 'title' => $title,
-                'parent_id' => $this->text($current['parent_id'] ?? ''),
+                'parent_id' => $normalizedParents[(string)$logicalId] ?? '',
                 'sort_order' => (int)($current['position'] ?? 100),
                 'status' => $this->text($current['status'] ?? 'current'),
                 'path' => $this->nodePath($workspaceSlug, $slug),
@@ -1775,13 +1779,23 @@ final readonly class ConfluenceImportService
                     }
                 }
             }
+            $bodyPath = $this->text($dataset['body_directory'] ?? '') . DIRECTORY_SEPARATOR
+                . $this->safeSourceId($this->text($current['source_id'] ?? '')) . '.html';
+            $sourceBody = is_file($bodyPath) ? file_get_contents($bodyPath) : '';
+            $creatorSourceKey = $this->text($current['creator_source_key'] ?? '');
             $macroPages[(string)$logicalId] = [
                 'title' => $this->text($target['title'] ?? ''),
                 'path' => $this->text($target['path'] ?? '#'),
                 'parent_id' => $this->text($target['parent_id'] ?? ''),
                 'sort_order' => (int)($target['sort_order'] ?? 100),
+                'workspace_slug' => $this->text($workspace['slug'] ?? ''),
+                'node_slug' => $this->text($target['slug'] ?? ''),
                 'labels' => array_values(array_unique($sourceLabels)),
+                'creator' => $macroUsers[$creatorSourceKey] ?? $creatorSourceKey,
                 'updated_at' => $this->text($current['updated_at'] ?? ''),
+                'tasks' => is_string($sourceBody) && str_contains($sourceBody, '<ac:task')
+                    ? $this->converter->taskSummaries($sourceBody, (string)$logicalId)
+                    : [],
             ];
         }
 
@@ -1979,11 +1993,13 @@ final readonly class ConfluenceImportService
                 }
 
                 $current = $this->currentPage($versions);
-                $this->importAttribution->attributeDocument(
+                $this->invokeImportAttribution('attributeDocument', [
                     $document->id,
                     $this->sourceCreatorUserId($versions, $actorUserId),
                     $this->sourceVersionAuthorUserId($current, $actorUserId),
-                );
+                    $this->text($current['created_at'] ?? ''),
+                    $this->text($current['updated_at'] ?? ''),
+                ]);
 
                 if (($target['status'] ?? '') === 'deleted') {
                     $this->workspaces->disableNodeTree($workspaceId, $nodeId, $actorUserId);
@@ -2309,12 +2325,30 @@ final readonly class ConfluenceImportService
         int $fallbackUserId,
         bool $published,
     ): void {
-        $this->importAttribution->attributeVersion(
+        $this->invokeImportAttribution('attributeVersion', [
             $documentKey,
             $language,
             $versionNumber,
             $this->sourceVersionAuthorUserId($page, $fallbackUserId),
             $published,
+            $this->text($page['updated_at'] ?? $page['created_at'] ?? ''),
+        ]);
+    }
+
+    /**
+     * HR: Novi Editor prima i izvorne vremenske oznake, ali importer ostaje
+     *     siguran tijekom zajedničkog Composer ažuriranja sa starijim izdanjem.
+     * EN: New Editor releases accept source timestamps, while the importer
+     *     remains safe during a joint Composer update from an older release.
+     *
+     * @param list<mixed> $arguments
+     */
+    private function invokeImportAttribution(string $method, array $arguments): void
+    {
+        $reflection = new \ReflectionMethod($this->importAttribution, $method);
+        $reflection->invokeArgs(
+            $this->importAttribution,
+            array_slice($arguments, 0, $reflection->getNumberOfParameters()),
         );
     }
 
@@ -2464,26 +2498,6 @@ final readonly class ConfluenceImportService
             }
         }
 
-        $workspaceSubjects = [];
-        foreach ($this->workspaces->workspaceAclRows($workspaceId) as $row) {
-            $type = $this->text($row['subject_type'] ?? '');
-            $id = is_numeric($row['subject_id'] ?? null) ? (int)$row['subject_id'] : 0;
-            if ($type === '' || $id <= 0) {
-                continue;
-            }
-            $workspaceSubjects[$type . ':' . $id] = [
-                'type' => $type,
-                'id' => $id,
-                'rights' => $this->completeRights([
-                    'can_view' => (bool)($row['can_view'] ?? false),
-                    'can_add' => (bool)($row['can_add'] ?? false),
-                    'can_edit' => (bool)($row['can_edit'] ?? false),
-                    'can_publish' => (bool)($row['can_publish'] ?? false),
-                    'can_delete' => (bool)($row['can_delete'] ?? false),
-                    'can_manage' => (bool)($row['can_manage'] ?? false),
-                ]),
-            ];
-        }
         $managerKey = WorkspaceRepository::SUBJECT_USER . ':' . $workspaceManagerUserId;
 
         foreach ($setsByPage as $pageId => $sets) {
@@ -2496,39 +2510,58 @@ final readonly class ConfluenceImportService
             $editSubjects = is_array($sets['edit'] ?? null) ? $sets['edit'] : [];
             $hasViewRestriction = array_key_exists('view', $sets);
             $hasEditRestriction = array_key_exists('edit', $sets);
-            $candidateKeys = $hasViewRestriction
-                ? array_unique([...array_keys($viewSubjects), ...array_keys($editSubjects), $managerKey])
-                : array_keys($workspaceSubjects);
-            $acl = [];
+            $candidateKeys = array_unique([
+                ...array_keys($viewSubjects),
+                ...array_keys($editSubjects),
+                $managerKey,
+            ]);
+            // HR: Ugrađeni public red je zadano pravilo cijele stranice. Kod
+            //     View ograničenja uskraćuje sve, a izričite iznimke ispod
+            //     ponovno uključuju samo mapirane korisnike i grupe. Kod samog
+            //     Edit ograničenja svima ostavlja pregled, ali uskraćuje izmjene.
+            // EN: The built-in public row is the page-wide default. A View
+            //     restriction denies everyone before explicit mapped user/group
+            //     exceptions are applied. An Edit-only restriction keeps viewing
+            //     while denying modifications by default.
+            $acl = [
+                WorkspaceRepository::SUBJECT_PUBLIC => [
+                    WorkspaceRepository::BUILT_IN_SUBJECT_ID => $this->completeRights([
+                        'can_view' => !$hasViewRestriction,
+                        'can_add' => false,
+                        'can_edit' => false,
+                        'can_publish' => false,
+                        'can_delete' => false,
+                        'can_manage' => false,
+                    ]),
+                ],
+            ];
             foreach ($candidateKeys as $subjectKey) {
-                $subject = $workspaceSubjects[$subjectKey] ?? null;
-                if (!is_array($subject)) {
+                [$type, $rawId] = array_pad(explode(':', $subjectKey, 2), 2, '');
+                $id = is_numeric($rawId) ? (int)$rawId : 0;
+                if (
+                    !in_array($type, [WorkspaceRepository::SUBJECT_USER, WorkspaceRepository::SUBJECT_GROUP], true)
+                    || $id <= 0
+                ) {
                     continue;
                 }
-                $rights = $subject['rights'];
+                $rights = $this->completeRights([
+                    'can_view' => true,
+                    'can_add' => true,
+                    'can_edit' => true,
+                    'can_publish' => true,
+                    'can_delete' => true,
+                    'can_manage' => true,
+                ]);
                 if ($hasEditRestriction && !isset($editSubjects[$subjectKey]) && $subjectKey !== $managerKey) {
+                    $rights['can_add'] = false;
                     $rights['can_edit'] = false;
                     $rights['can_publish'] = false;
                     $rights['can_delete'] = false;
                     $rights['can_manage'] = false;
                 }
-                $acl[(string)$subject['type']][(int)$subject['id']] = $this->completeRights($rights);
+                $acl[$type][$id] = $this->completeRights($rights);
             }
 
-            if ($acl === []) {
-                $acl = [
-                    WorkspaceRepository::SUBJECT_USER => [
-                        $workspaceManagerUserId => $this->completeRights([
-                            'can_view' => true,
-                            'can_add' => true,
-                            'can_edit' => true,
-                            'can_publish' => true,
-                            'can_delete' => true,
-                            'can_manage' => true,
-                        ]),
-                    ],
-                ];
-            }
             $this->workspaces->replaceNodeAcl($workspaceId, $nodeId, $acl);
         }
     }

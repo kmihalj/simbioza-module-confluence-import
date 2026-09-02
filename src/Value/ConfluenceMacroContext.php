@@ -16,7 +16,7 @@ final readonly class ConfluenceMacroContext
      * HR: Sprema trenutačnu logičku stranicu, planirane ciljeve cijelog područja i privitke stranice.
      * EN: Stores the current logical page, all planned Workspace targets, and current-page attachments.
      *
-     * @param array<string,array{title:string,path:string,parent_id:string,sort_order:int,labels?:list<string>,updated_at?:string}> $pages
+     * @param array<string,array{title:string,path:string,parent_id:string,sort_order:int,workspace_slug?:string,node_slug?:string,labels?:list<string>,creator?:string,updated_at?:string,tasks?:list<array{id:string,native_uuid:string,text:string,complete:bool,due_date:string,assignee:string}>}> $pages
      * @param array<string,string> $attachments
      * @param array<string,string> $users
      */

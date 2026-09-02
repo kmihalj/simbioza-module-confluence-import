@@ -38,6 +38,7 @@ use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportRepository;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportService;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportUploadService;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluencePageSlugger;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluencePageHierarchy;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluencePrincipalMatcher;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceReferenceResolver;
 use AaiEduHr\SimbiozaModuleUser\Service\PersonalWorkspaceService;
@@ -88,6 +89,7 @@ $services = [
         ),
     ConfluencePrincipalMatcher::class => static fn(): ConfluencePrincipalMatcher => new ConfluencePrincipalMatcher(),
     ConfluencePageSlugger::class => static fn(): ConfluencePageSlugger => new ConfluencePageSlugger(),
+    ConfluencePageHierarchy::class => static fn(): ConfluencePageHierarchy => new ConfluencePageHierarchy(),
     ConfluenceReferenceResolver::class => static fn(ContainerInterface $container): ConfluenceReferenceResolver =>
         new ConfluenceReferenceResolver(
             $container->get(ConfluenceImportRepository::class),
@@ -103,6 +105,7 @@ $services = [
             $container->get(ConfluenceHtmlConverter::class),
             $container->get(ConfluenceReferenceResolver::class),
             $container->get(ConfluencePageSlugger::class),
+            $container->get(ConfluencePageHierarchy::class),
             $container->get(WorkspaceRepository::class),
             $container->get(WorkspaceContentChangeBatch::class),
             $container->get(WorkspaceWorkflowService::class),

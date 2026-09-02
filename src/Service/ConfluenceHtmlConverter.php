@@ -27,6 +27,9 @@ use function basename;
 use function ceil;
 use function filter_var;
 use function count;
+use function dechex;
+use function hash;
+use function hexdec;
 use function html_entity_decode;
 use function htmlspecialchars;
 use function in_array;
@@ -141,6 +144,8 @@ final readonly class ConfluenceHtmlConverter
         $includes = [];
         $properties = [];
 
+        $this->removeConfluencePlaceholders($xpath);
+
         foreach ($this->elements($xpath->query('//ac:image')) as $image) {
             $attachment = $this->firstElement($xpath->query('.//ri:attachment', $image));
             $replacement = $document->createElement('img');
@@ -218,7 +223,6 @@ final readonly class ConfluenceHtmlConverter
                     ? ($macroContext->users[$identity] ?? $identity)
                     : $identity;
                 $replacement = $document->createElement('span');
-                $replacement->setAttribute('class', 'confluence-import-user');
                 $replacement->appendChild($document->createTextNode(
                     $label !== '' ? $label : __('Korisnik'),
                 ));
@@ -296,24 +300,11 @@ final readonly class ConfluenceHtmlConverter
             $image->setAttribute('class', trim($image->getAttribute('class') . ' img-fluid'));
         }
 
-        foreach ($this->elements($xpath->query('//ac:task-list')) as $taskList) {
-            $replacement = $document->createElement('ul');
-            $replacement->setAttribute('class', 'list-unstyled confluence-task-list');
-            foreach ($this->elements($xpath->query('.//ac:task', $taskList)) as $task) {
-                $status = strtolower(trim($this->nodeText($xpath, './/ac:task-status', $task)));
-                $body = $this->nodeText($xpath, './/ac:task-body', $task);
-                $item = $document->createElement('li');
-                $checkbox = $document->createElement('input');
-                $checkbox->setAttribute('type', 'checkbox');
-                $checkbox->setAttribute('disabled', 'disabled');
-                if ($status === 'complete') {
-                    $checkbox->setAttribute('checked', 'checked');
-                }
-                $item->appendChild($checkbox);
-                $item->appendChild($document->createTextNode(' ' . $body));
-                $replacement->appendChild($item);
-            }
-            $taskList->parentNode?->replaceChild($replacement, $taskList);
+        foreach ($this->elements($xpath->query('//ac:task-list[not(ancestor::ac:task-list)]')) as $index => $taskList) {
+            $taskList->parentNode?->replaceChild(
+                $this->taskListReplacement($document, $xpath, $taskList, $sourcePageId, $index),
+                $taskList,
+            );
         }
 
         // HR: Unutarnji makroi moraju biti pretvoreni prije roditeljskih panela i rasporeda,
@@ -377,6 +368,74 @@ final readonly class ConfluenceHtmlConverter
             array_values($includes),
             $properties,
         );
+    }
+
+    /**
+     * HR: Izdvaja zadatke aktualne stranice za nativni Confluence izvještaj zadataka.
+     * EN: Extracts current-page tasks for a native Confluence task report.
+     *
+     * @return list<array{id:string,native_uuid:string,text:string,complete:bool,due_date:string,assignee:string}>
+     */
+    public function taskSummaries(string $storageFormat, string $sourcePageId = ''): array
+    {
+        if (trim($storageFormat) === '') {
+            return [];
+        }
+
+        $document = new DOMDocument('1.0', 'UTF-8');
+        $wrapped = '<?xml version="1.0" encoding="UTF-8"?><div xmlns:ac="' . self::AC_NAMESPACE
+            . '" xmlns:ri="' . self::RI_NAMESPACE . '">'
+            . $this->normalizeStorageFormat($storageFormat) . '</div>';
+        $previous = libxml_use_internal_errors(true);
+        try {
+            $loaded = $document->loadXML(
+                $wrapped,
+                LIBXML_NONET | LIBXML_COMPACT | LIBXML_BIGLINES | LIBXML_NOERROR | LIBXML_NOWARNING,
+            );
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
+        if (!$loaded || !$document->documentElement instanceof DOMElement) {
+            return [];
+        }
+
+        $xpath = new DOMXPath($document);
+        $xpath->registerNamespace('ac', self::AC_NAMESPACE);
+        $xpath->registerNamespace('ri', self::RI_NAMESPACE);
+        $this->removeConfluencePlaceholders($xpath);
+        $tasks = [];
+        foreach ($this->elements($xpath->query('//ac:task')) as $index => $task) {
+            $body = $this->firstElement($xpath->query('./ac:task-body', $task));
+            if (!$body instanceof DOMElement) {
+                continue;
+            }
+            $identifier = $this->nodeText($xpath, './ac:task-uuid', $task);
+            if ($identifier === '') {
+                $identifier = $this->nodeText($xpath, './ac:task-id', $task);
+            }
+            $user = $this->firstElement($xpath->query('.//ri:user', $body));
+            $dueDate = $this->firstElement($xpath->query('.//time[@datetime]', $body));
+            $text = preg_replace('/\s+/u', ' ', trim($this->taskBodyText($body))) ?? '';
+            if ($text === '') {
+                continue;
+            }
+            $tasks[] = [
+                'id' => $identifier,
+                'native_uuid' => $this->portableTaskUuid(
+                    $sourcePageId,
+                    $identifier,
+                    $text,
+                    $index,
+                ),
+                'text' => $text,
+                'complete' => strtolower($this->nodeText($xpath, './ac:task-status', $task)) === 'complete',
+                'due_date' => $dueDate instanceof DOMElement ? trim($dueDate->getAttribute('datetime')) : '',
+                'assignee' => $user instanceof DOMElement ? $this->confluenceUserIdentity($user) : '',
+            ];
+        }
+
+        return $tasks;
     }
 
     /**
@@ -465,7 +524,6 @@ final readonly class ConfluenceHtmlConverter
 
         if (in_array($name, ['code', 'noformat'], true)) {
             $pre = $document->createElement('pre');
-            $pre->setAttribute('class', 'confluence-import-code');
             $code = $document->createElement('code');
             $language = strtolower($this->macroParameter($xpath, $macro, 'language'));
             if ($language !== '' && preg_match('/^[a-z0-9_+.-]+$/', $language) === 1) {
@@ -477,7 +535,7 @@ final readonly class ConfluenceHtmlConverter
             $titleText = $this->macroParameter($xpath, $macro, 'title');
             if ($titleText !== '') {
                 $figure = $document->createElement('figure');
-                $figure->setAttribute('class', 'confluence-import-code-block');
+                $figure->setAttribute('class', 'figure w-100');
                 $caption = $document->createElement('figcaption');
                 $caption->setAttribute('class', 'fw-semibold mb-2');
                 $caption->appendChild($document->createTextNode($titleText));
@@ -498,6 +556,13 @@ final readonly class ConfluenceHtmlConverter
             };
             $panel = $document->createElement('div');
             $panel->setAttribute('class', 'alert ' . $class);
+            $titleText = $this->macroParameter($xpath, $macro, 'title');
+            if ($titleText !== '') {
+                $title = $document->createElement('p');
+                $title->setAttribute('class', 'fw-semibold mb-0');
+                $title->appendChild($document->createTextNode($titleText));
+                $panel->appendChild($title);
+            }
             $this->appendRichBody($document, $panel, $rich, $plain);
             return $panel;
         }
@@ -509,7 +574,7 @@ final readonly class ConfluenceHtmlConverter
             //     is therefore kept above the body, while the source ul/ol
             //     continues to determine the list type.
             $section = $document->createElement('section');
-            $section->setAttribute('class', 'confluence-import-expand mb-3');
+            $section->setAttribute('class', 'mb-3');
             $title = $document->createElement('p');
             $title->setAttribute('class', 'fw-semibold mb-2');
             $titleText = $this->macroParameter($xpath, $macro, 'title');
@@ -518,7 +583,6 @@ final readonly class ConfluenceHtmlConverter
             ));
             $section->appendChild($title);
             $body = $document->createElement('div');
-            $body->setAttribute('class', 'confluence-import-expand-body');
             $this->appendRichBody($document, $body, $rich, $plain);
             $section->appendChild($body);
             return $section;
@@ -533,7 +597,8 @@ final readonly class ConfluenceHtmlConverter
             $siblingCount = $macro->parentNode instanceof DOMElement
                 ? count($this->elements($xpath->query(
                     './ac:structured-macro[@ac:name="column"]'
-                    . ' | ./div[contains(concat(" ", normalize-space(@class), " "), " confluence-import-column ")]',
+                    . ' | ./div[contains(concat(" ", normalize-space(@class), " "), " col-12 ")'
+                    . ' and ./section[contains(concat(" ", normalize-space(@class), " "), " card ")]]',
                     $macro->parentNode,
                 )))
                 : 1;
@@ -542,8 +607,7 @@ final readonly class ConfluenceHtmlConverter
                 'col-12 col-lg-' . $this->macroColumnWidth(
                     $this->macroParameter($xpath, $macro, 'width'),
                     $siblingCount,
-                )
-                . ' confluence-import-column',
+                ),
             );
             $card = $document->createElement('section');
             $card->setAttribute('class', 'card h-100');
@@ -561,7 +625,7 @@ final readonly class ConfluenceHtmlConverter
             // EN: A section is a layout rather than a data table, so it wraps
             //     imported Column cards in a responsive row.
             $row = $document->createElement('div');
-            $row->setAttribute('class', 'row g-3 confluence-import-section mb-3');
+            $row->setAttribute('class', 'row g-3 mb-3');
             $this->appendRichBody($document, $row, $rich, $plain);
             $this->removeEmptyLayoutChildren($row);
             return $row;
@@ -571,6 +635,11 @@ final readonly class ConfluenceHtmlConverter
             $embed = $this->iframeEmbedReplacement($document, $plain);
             if ($embed instanceof DOMNode) {
                 return $embed;
+            }
+
+            $buttonLink = $this->htmlButtonLinkReplacement($document, $plain);
+            if ($buttonLink instanceof DOMNode) {
+                return $buttonLink;
             }
         }
 
@@ -583,7 +652,7 @@ final readonly class ConfluenceHtmlConverter
             }
 
             $wrapper = $document->createElement('div');
-            $wrapper->setAttribute('class', 'table-responsive confluence-import-page-properties');
+            $wrapper->setAttribute('class', 'table-responsive');
             $this->appendRichBody($document, $wrapper, $rich, $plain);
             return $wrapper;
         }
@@ -614,10 +683,13 @@ final readonly class ConfluenceHtmlConverter
         }
 
         if (in_array($name, ['livesearch', 'pagetreesearch'], true)) {
-            return $this->workspaceBlockNode($document, 'workspace-search', [
-                'title' => $this->macroParameter($xpath, $macro, 'additional'),
-                'limit' => 20,
-            ], __('Pretraga područja'));
+            // HR: Ovi Confluence makroi samo filtriraju susjedno stablo ili
+            //     izvještaj. Simbioza već ima pretragu područja pa u sadržaj
+            //     ne umećemo drugu, semantički širu formu.
+            // EN: These Confluence macros only filter an adjacent tree or
+            //     report. Simbioza already provides Workspace search, so a
+            //     second, semantically broader form is not embedded in content.
+            return $document->createDocumentFragment();
         }
 
         if (in_array($name, ['recently-updated', 'recently-updated-dashboard'], true)) {
@@ -629,7 +701,7 @@ final readonly class ConfluenceHtmlConverter
 
         if ($name === 'panel') {
             $card = $document->createElement('section');
-            $card->setAttribute('class', 'card confluence-import-panel mb-3');
+            $card->setAttribute('class', 'card mb-3');
             $titleText = $this->macroParameter($xpath, $macro, 'title');
             if ($titleText !== '') {
                 $header = $document->createElement('div');
@@ -650,7 +722,7 @@ final readonly class ConfluenceHtmlConverter
                 ? ($context->users[$user] ?? '')
                 : '';
             $profile = $document->createElement('div');
-            $profile->setAttribute('class', 'card card-body py-2 confluence-import-profile');
+            $profile->setAttribute('class', 'card card-body py-2');
             $profile->appendChild($document->createTextNode(
                 $displayName !== '' ? $displayName : ($user !== '' ? $user : __('Korisnik')),
             ));
@@ -666,18 +738,19 @@ final readonly class ConfluenceHtmlConverter
         }
 
         if ($name === 'create-from-template') {
-            $blueprint = strtolower($this->macroParameter($xpath, $macro, 'blueprintModuleCompleteKey'));
-            if (str_contains($blueprint, 'file-list-blueprint')) {
-                // HR: Confluenceov gumb pokreće njegov uređivački tijek i nema
-                //     značenje u običnom uvezenom HTML dokumentu.
-                // EN: The Confluence button starts its editor workflow and has
-                //     no meaning in an ordinary imported HTML document.
-                return $document->createDocumentFragment();
-            }
+            // HR: Confluenceov gumb pokreće njegov uređivački tijek i nema
+            //     značenje u običnom uvezenom HTML dokumentu.
+            // EN: The Confluence button starts its editor workflow and has
+            //     no meaning in an ordinary imported HTML document.
+            return $document->createDocumentFragment();
         }
 
         if ($name === 'content-report-table') {
             return $this->staticContentReport($document, $xpath, $macro, $context);
+        }
+
+        if ($name === 'tasks-report-macro') {
+            return $this->staticTaskReport($document, $xpath, $macro, $context);
         }
 
         if ($name === 'tableenhancer' && $rich instanceof DOMElement) {
@@ -702,7 +775,7 @@ final readonly class ConfluenceHtmlConverter
                 }
             }
 
-            return $this->pageList($document, $context, $rootId, $all, $name);
+            return $this->pageList($document, $context, $rootId, $all);
         }
 
         if ($name === 'attachments' && $context instanceof ConfluenceMacroContext) {
@@ -751,7 +824,6 @@ final readonly class ConfluenceHtmlConverter
 
         if ($name === 'anchor') {
             $anchor = $document->createElement('span');
-            $anchor->setAttribute('class', 'confluence-import-anchor');
             $anchor->setAttribute('id', $this->safeFragment($this->macroParameter($xpath, $macro, '')));
             return $anchor;
         }
@@ -766,7 +838,7 @@ final readonly class ConfluenceHtmlConverter
             // EN: An invalid table remains readable and enters the report for manual review.
             $unsupported[] = $name;
             $figure = $document->createElement('figure');
-            $figure->setAttribute('class', 'confluence-import-chart-table');
+            $figure->setAttribute('class', 'figure w-100');
             $titleText = $this->macroParameter($xpath, $macro, 'title');
             if ($titleText !== '') {
                 $caption = $document->createElement('figcaption');
@@ -821,7 +893,7 @@ final readonly class ConfluenceHtmlConverter
 
         $unsupported[] = $name !== '' ? $name : 'unknown';
         $box = $document->createElement('div');
-        $box->setAttribute('class', 'alert alert-secondary confluence-import-macro');
+        $box->setAttribute('class', 'alert alert-secondary');
         $title = $document->createElement('strong');
         $title->appendChild($document->createTextNode(sprintf(
             __('Confluence makro: %s'),
@@ -929,6 +1001,75 @@ final readonly class ConfluenceHtmlConverter
         $figure->appendChild($iframe);
 
         return $figure;
+    }
+
+    /**
+     * HR: Pretvara jedini sigurni HTML obrazac poveznice s gumbom u običnu
+     *     Bootstrap poveznicu. Izvorne klase, stilovi i događaji ne prenose se.
+     * EN: Converts the one safe HTML button-link pattern into a plain Bootstrap
+     *     link. Source classes, styles, and event handlers are never copied.
+     */
+    private function htmlButtonLinkReplacement(DOMDocument $document, string $plain): ?DOMElement
+    {
+        if (trim($plain) === '') {
+            return null;
+        }
+
+        $source = new DOMDocument('1.0', 'UTF-8');
+        $previous = libxml_use_internal_errors(true);
+        try {
+            $loaded = $source->loadHTML(
+                '<?xml encoding="UTF-8"><div id="confluence-html-macro-root">' . $plain . '</div>',
+                LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD | LIBXML_NONET,
+            );
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
+        if (!$loaded) {
+            return null;
+        }
+
+        $root = $source->getElementById('confluence-html-macro-root');
+        if (!$root instanceof DOMElement) {
+            return null;
+        }
+        $significant = [];
+        foreach ($root->childNodes as $child) {
+            if ($child instanceof DOMElement || trim($child->textContent) !== '') {
+                $significant[] = $child;
+            }
+        }
+        if (count($significant) !== 1 || !$significant[0] instanceof DOMElement) {
+            return null;
+        }
+
+        $sourceLink = $significant[0];
+        if (strtolower($sourceLink->tagName) !== 'a') {
+            return null;
+        }
+        $elements = [];
+        foreach ($sourceLink->getElementsByTagName('*') as $element) {
+            if ($element instanceof DOMElement) {
+                $elements[] = $element;
+            }
+        }
+        if (count($elements) !== 1 || strtolower($elements[0]->tagName) !== 'button') {
+            return null;
+        }
+
+        $href = trim($sourceLink->getAttribute('href'));
+        $label = trim(preg_replace('/\s+/u', ' ', $elements[0]->textContent) ?? '');
+        if (!$this->isSafeRemoteUrl($href) || $label === '') {
+            return null;
+        }
+
+        $link = $document->createElement('a');
+        $link->setAttribute('class', 'btn btn-primary mb-3');
+        $link->setAttribute('href', $href);
+        $link->appendChild($document->createTextNode($label));
+
+        return $link;
     }
 
     /** HR: Dopušta samo potpune HTTPS izvore iframea. EN: Allows only absolute HTTPS iframe sources. */
@@ -1065,7 +1206,7 @@ final readonly class ConfluenceHtmlConverter
             $value = $this->macroParameter($xpath, $status, 'title') ?: $value;
         } elseif (
             $this->firstElement($xpath->query(
-                './/*[contains(concat(" ", normalize-space(@class), " "), " confluence-import-status ")]',
+                './/*[contains(concat(" ", normalize-space(@class), " "), " badge ")]',
                 $valueCell,
             )) instanceof DOMElement
         ) {
@@ -1749,12 +1890,15 @@ final readonly class ConfluenceHtmlConverter
         DOMElement $layout,
     ): DOMElement {
         $container = $document->createElement('div');
-        $container->setAttribute('class', 'confluence-import-layout');
+        $container->setAttribute('class', 'w-100');
         foreach ($this->elements($xpath->query('./ac:layout-section', $layout)) as $section) {
             $row = $document->createElement('div');
-            $row->setAttribute('class', 'row g-3 confluence-import-layout-section');
+            $row->setAttribute('class', 'row g-3');
             $type = $this->attribute($section, self::AC_NAMESPACE, 'type');
-            $cells = $this->elements($xpath->query('./ac:layout-cell', $section));
+            $cells = array_values(array_filter(
+                $this->elements($xpath->query('./ac:layout-cell', $section)),
+                $this->hasMeaningfulLayoutContent(...),
+            ));
             foreach ($cells as $index => $cell) {
                 $column = $document->createElement('div');
                 $column->setAttribute(
@@ -1774,19 +1918,51 @@ final readonly class ConfluenceHtmlConverter
         return $container;
     }
 
+    /**
+     * HR: Prazni Confluence stupci često su samo pokazivač `<p><br></p>`.
+     *     Ne smiju rezervirati trećinu ili polovicu širine Simbioza sadržaja.
+     * EN: Empty Confluence columns are often only a `<p><br></p>` cursor.
+     *     They must not reserve a third or half of the Simbioza content width.
+     */
+    private function hasMeaningfulLayoutContent(DOMNode $node): bool
+    {
+        foreach ($node->childNodes as $child) {
+            if (!$child instanceof DOMElement) {
+                if (trim(str_replace("\u{00A0}", '', $child->textContent)) !== '') {
+                    return true;
+                }
+                continue;
+            }
+
+            $tag = strtolower($child->tagName);
+            if (in_array($tag, ['img', 'iframe', 'video', 'audio', 'table', 'ul', 'ol', 'hr'], true)) {
+                return true;
+            }
+            if ($tag !== 'br' && $this->hasMeaningfulLayoutContent($child)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /** HR: Određuje širinu ćelije izvornog Confluence rasporeda. EN: Determines a source Confluence layout cell width. */
     private function layoutColumnClass(string $type, int $index, int $cellCount): string
     {
+        if ($cellCount <= 1) {
+            return 'col-12 col-lg-12';
+        }
+
         $width = match ($type) {
             'two_left_sidebar' => $index === 0 ? '4' : '8',
             'two_right_sidebar' => $index === 0 ? '8' : '4',
             'three_with_sidebars' => $index === 1 ? '6' : '3',
             'three_equal' => '4',
             'two_equal' => '6',
-            default => $cellCount >= 3 ? '4' : ($cellCount === 2 ? '6' : '12'),
+            default => $cellCount >= 3 ? '4' : '6',
         };
 
-        return 'col-12 col-lg-' . $width . ' confluence-import-layout-cell';
+        return 'col-12 col-lg-' . $width;
     }
 
     /** HR: Čita naslov stranice iz parametra children/pagetree/include makroa. EN: Reads a page title from a children/pagetree/include macro parameter. */
@@ -1825,10 +2001,8 @@ final readonly class ConfluenceHtmlConverter
         ConfluenceMacroContext $context,
         string $parentId,
         bool $recursive,
-        string $macroName,
     ): DOMElement {
         $list = $document->createElement('ul');
-        $list->setAttribute('class', 'confluence-import-page-list confluence-import-' . $macroName);
         foreach ($this->childPages($context, $parentId) as $id => $page) {
             $item = $document->createElement('li');
             $link = $document->createElement('a');
@@ -1836,7 +2010,7 @@ final readonly class ConfluenceHtmlConverter
             $link->appendChild($document->createTextNode($page['title']));
             $item->appendChild($link);
             if ($recursive) {
-                $children = $this->pageList($document, $context, (string)$id, true, $macroName);
+                $children = $this->pageList($document, $context, (string)$id, true);
                 if ($children->childElementCount > 0) {
                     $item->appendChild($children);
                 }
@@ -1880,8 +2054,17 @@ final readonly class ConfluenceHtmlConverter
             }
         }
 
-        uasort($pages, static fn(array $left, array $right): int =>
-            strnatcasecmp($left['title'] ?? '', $right['title'] ?? ''));
+        // HR: Confluenceov blueprint izvještaj sastanaka zadano prikazuje
+        //     najnovije izmijenjene stranice prve. Kod istog vremena naslov
+        //     daje stabilan redoslijed.
+        // EN: Confluence's meeting-notes blueprint report defaults to most
+        //     recently modified pages first. The title stabilizes equal dates.
+        uasort($pages, static function (array $left, array $right): int {
+            $byUpdated = strcmp($right['updated_at'] ?? '', $left['updated_at'] ?? '');
+            return $byUpdated !== 0
+                ? $byUpdated
+                : strnatcasecmp($left['title'] ?? '', $right['title'] ?? '');
+        });
         if ($pages === []) {
             $emptyTitle = $this->macroParameter($xpath, $macro, 'blankTitle');
             $emptyDescription = $this->macroParameter($xpath, $macro, 'blankDescription');
@@ -1897,13 +2080,13 @@ final readonly class ConfluenceHtmlConverter
         }
 
         $wrapper = $document->createElement('div');
-        $wrapper->setAttribute('class', 'table-responsive confluence-import-content-report');
+        $wrapper->setAttribute('class', 'table-responsive');
         $table = $document->createElement('table');
         $table->setAttribute('class', 'table table-bordered table-striped table-hover');
         $head = $document->createElement('thead');
         $head->setAttribute('class', 'table-light');
         $headingRow = $document->createElement('tr');
-        foreach ([__('Naslov'), __('Izmijenjeno')] as $heading) {
+        foreach ([__('Naslov'), __('Autor'), __('Izmijenjeno')] as $heading) {
             $cell = $document->createElement('th');
             $cell->setAttribute('scope', 'col');
             $cell->appendChild($document->createTextNode($heading));
@@ -1920,6 +2103,9 @@ final readonly class ConfluenceHtmlConverter
             $link->appendChild($document->createTextNode($page['title'] ?? ''));
             $titleCell->appendChild($link);
             $row->appendChild($titleCell);
+            $creatorCell = $document->createElement('td');
+            $creatorCell->appendChild($document->createTextNode($page['creator'] ?? ''));
+            $row->appendChild($creatorCell);
             $updatedCell = $document->createElement('td');
             $updatedCell->appendChild($document->createTextNode($page['updated_at'] ?? ''));
             $row->appendChild($updatedCell);
@@ -1929,6 +2115,287 @@ final readonly class ConfluenceHtmlConverter
         $wrapper->appendChild($table);
 
         return $wrapper;
+    }
+
+    /**
+     * HR: Materijalizira Confluence tasks-report-macro kao prenosivi izvještaj
+     *     koji Task modul povezuje s izvornim zadacima uvezenih stranica.
+     * EN: Materializes Confluence tasks-report-macro as a portable report that
+     *     the Task module links to source tasks on imported pages.
+     */
+    private function staticTaskReport(
+        DOMDocument $document,
+        DOMXPath $xpath,
+        DOMElement $macro,
+        ?ConfluenceMacroContext $context,
+    ): DOMNode {
+        $labels = array_values(array_filter(
+            preg_split('/[\s,]+/', strtolower($this->macroParameter($xpath, $macro, 'labels'))) ?: [],
+            static fn(string $label): bool => trim($label) !== '',
+        ));
+        $requestedStatus = strtolower($this->macroParameter($xpath, $macro, 'status'));
+        $tasks = [];
+
+        if ($context instanceof ConfluenceMacroContext) {
+            foreach ($context->pages as $page) {
+                $pageLabels = array_map(
+                    static fn(string $label): string => strtolower(trim($label)),
+                    $page['labels'] ?? [],
+                );
+                if (
+                    $labels !== [] && array_filter(
+                        $labels,
+                        static fn(string $label): bool => in_array($label, $pageLabels, true),
+                    ) === []
+                ) {
+                    continue;
+                }
+
+                foreach ($page['tasks'] ?? [] as $task) {
+                    $complete = (bool)($task['complete'] ?? false);
+                    if (
+                        ($requestedStatus === 'complete' && !$complete)
+                        || ($requestedStatus === 'incomplete' && $complete)
+                    ) {
+                        continue;
+                    }
+                    $tasks[] = ['page' => $page, 'task' => $task];
+                }
+            }
+        }
+
+        if ($tasks === []) {
+            $empty = $document->createElement('p');
+            $empty->setAttribute('class', 'text-body-secondary');
+            $empty->appendChild($document->createTextNode(__('Nema zadataka za prikaz.')));
+            return $empty;
+        }
+
+        $wrapper = $document->createElement('div');
+        $wrapper->setAttribute('class', 'table-responsive');
+        $wrapper->setAttribute('data-editor-html-task-report', '1');
+        if (in_array($requestedStatus, ['complete', 'incomplete'], true)) {
+            $wrapper->setAttribute('data-task-report-status', $requestedStatus);
+        }
+        $table = $document->createElement('table');
+        $table->setAttribute('class', 'table table-bordered table-striped table-hover');
+        $head = $document->createElement('thead');
+        $head->setAttribute('class', 'table-light');
+        $headingRow = $document->createElement('tr');
+        foreach ([__('Opis'), __('Rok'), __('Izvršitelj'), __('Zadatak se nalazi na')] as $heading) {
+            $cell = $document->createElement('th');
+            $cell->setAttribute('scope', 'col');
+            $cell->appendChild($document->createTextNode($heading));
+            $headingRow->appendChild($cell);
+        }
+        $head->appendChild($headingRow);
+        $table->appendChild($head);
+        $body = $document->createElement('tbody');
+        foreach ($tasks as $entry) {
+            $task = $entry['task'];
+            $page = $entry['page'];
+            $row = $document->createElement('tr');
+            $description = $document->createElement('td');
+            $control = $document->createElement('div');
+            $control->setAttribute('data-editor-html-task-report-item', '1');
+            $control->setAttribute(
+                'data-task-source-workspace',
+                (string)($page['workspace_slug'] ?? ''),
+            );
+            $control->setAttribute('data-task-source-node', (string)($page['node_slug'] ?? ''));
+            $control->setAttribute('data-task-report-uuid', (string)($task['native_uuid'] ?? ''));
+            $control->appendChild($document->createTextNode((string)($task['text'] ?? '')));
+            $description->appendChild($control);
+            $row->appendChild($description);
+            $dueDate = $document->createElement('td');
+            $dueDate->appendChild($document->createTextNode((string)($task['due_date'] ?? '')));
+            $row->appendChild($dueDate);
+            $assignee = (string)($task['assignee'] ?? '');
+            $assigneeCell = $document->createElement('td');
+            $assigneeCell->appendChild($document->createTextNode(
+                $assignee !== '' ? ($context->users[$assignee] ?? $assignee) : '',
+            ));
+            $row->appendChild($assigneeCell);
+            $sourceCell = $document->createElement('td');
+            $link = $document->createElement('a');
+            $taskId = $this->safeFragment((string)($task['id'] ?? ''));
+            $link->setAttribute(
+                'href',
+                ($page['path'] ?? '#') . ($taskId !== '' ? '#confluence-task-' . $taskId : ''),
+            );
+            $link->appendChild($document->createTextNode((string)($page['title'] ?? '')));
+            $sourceCell->appendChild($link);
+            $row->appendChild($sourceCell);
+            $body->appendChild($row);
+        }
+        $table->appendChild($body);
+        $wrapper->appendChild($table);
+
+        return $wrapper;
+    }
+
+    /** HR: Pretvara Confluence task-listu u nativni Editor/Task popis. EN: Converts a Confluence task list into a native Editor/Task list. */
+    private function taskListReplacement(
+        DOMDocument $document,
+        DOMXPath $xpath,
+        DOMElement $taskList,
+        string $sourcePageId,
+        int $listIndex,
+    ): DOMElement {
+        $replacement = $document->createElement('section');
+        $replacement->setAttribute('class', 'editor-html-task-list');
+        $replacement->setAttribute('data-editor-html-task-list', '1');
+        $replacement->setAttribute(
+            'data-task-list-uuid',
+            $this->portableUuid('list|' . $sourcePageId . '|' . $listIndex),
+        );
+        $replacement->setAttribute('data-task-toggle-scope', 'viewers');
+        $items = $document->createElement('ul');
+        $items->setAttribute('class', 'editor-html-task-items');
+        $taskIndex = 0;
+        $this->appendNativeTaskItems(
+            $document,
+            $xpath,
+            $taskList,
+            $items,
+            $sourcePageId,
+            $taskIndex,
+        );
+        $replacement->appendChild($items);
+
+        return $replacement;
+    }
+
+    /** HR: Ravna ugniježđene Confluence zadatke u nativni popis uz očuvanu razinu. EN: Flattens nested Confluence tasks into a native list while retaining their depth. */
+    private function appendNativeTaskItems(
+        DOMDocument $document,
+        DOMXPath $xpath,
+        DOMElement $taskList,
+        DOMElement $items,
+        string $sourcePageId,
+        int &$taskIndex,
+        int $depth = 0,
+    ): void {
+        foreach ($this->elements($xpath->query('./ac:task', $taskList)) as $task) {
+            $status = strtolower($this->nodeText($xpath, './ac:task-status', $task));
+            $body = $this->firstElement($xpath->query('./ac:task-body', $task));
+            if (!$body instanceof DOMElement) {
+                continue;
+            }
+            $text = preg_replace('/\s+/u', ' ', trim($this->taskBodyText($body))) ?? '';
+            $taskId = $this->nodeText($xpath, './ac:task-uuid', $task);
+            if ($taskId === '') {
+                $taskId = $this->nodeText($xpath, './ac:task-id', $task);
+            }
+            if ($text !== '') {
+                $item = $document->createElement('li');
+                $item->setAttribute('class', 'editor-html-task-item');
+                $item->setAttribute(
+                    'data-task-uuid',
+                    $this->portableTaskUuid($sourcePageId, $taskId, $text, $taskIndex),
+                );
+                $item->setAttribute(
+                    'data-task-initial-completed',
+                    $status === 'complete' ? '1' : '0',
+                );
+                if ($depth > 0) {
+                    $item->setAttribute('data-task-depth', (string)min(2, $depth));
+                }
+                $fragment = $this->safeFragment($taskId);
+                if ($fragment !== '') {
+                    $item->setAttribute('id', 'confluence-task-' . $fragment);
+                }
+                $textNode = $document->createElement('span');
+                $textNode->setAttribute('class', 'editor-html-task-text');
+                foreach (iterator_to_array($body->childNodes) as $child) {
+                    if (
+                        $child instanceof DOMElement
+                        && $child->namespaceURI === self::AC_NAMESPACE
+                        && $child->localName === 'task-list'
+                    ) {
+                        continue;
+                    }
+                    $textNode->appendChild($child->cloneNode(true));
+                }
+                if (!$textNode->hasChildNodes()) {
+                    $textNode->appendChild($document->createTextNode($text));
+                }
+                $item->appendChild($textNode);
+                $items->appendChild($item);
+                ++$taskIndex;
+            }
+
+            foreach ($this->elements($xpath->query('./ac:task-list', $body)) as $nestedList) {
+                $this->appendNativeTaskItems(
+                    $document,
+                    $xpath,
+                    $nestedList,
+                    $items,
+                    $sourcePageId,
+                    $taskIndex,
+                    $depth + 1,
+                );
+            }
+        }
+    }
+
+    /** HR: Confluence uređivački placeholderi nisu objavljeni sadržaj. EN: Confluence editor placeholders are not published content. */
+    private function removeConfluencePlaceholders(DOMXPath $xpath): void
+    {
+        foreach ($this->elements($xpath->query('//ac:placeholder')) as $placeholder) {
+            $placeholder->parentNode?->removeChild($placeholder);
+        }
+    }
+
+    /** HR: Čita tekst zadatka bez teksta njegovih ugniježđenih zadataka. EN: Reads task text without duplicating nested-task text. */
+    private function taskBodyText(DOMNode $node): string
+    {
+        if (
+            $node instanceof DOMElement
+            && $node->namespaceURI === self::AC_NAMESPACE
+            && $node->localName === 'task-list'
+        ) {
+            return '';
+        }
+        if ($node->nodeType === XML_TEXT_NODE || $node->nodeType === XML_CDATA_SECTION_NODE) {
+            return $node->nodeValue ?? '';
+        }
+
+        $text = '';
+        foreach ($node->childNodes as $child) {
+            $text .= $this->taskBodyText($child);
+        }
+
+        return $text;
+    }
+
+    /** HR: Gradi stabilan nativni UUID zadatka iz Confluence identiteta. EN: Builds a stable native task UUID from Confluence identity. */
+    private function portableTaskUuid(
+        string $sourcePageId,
+        string $sourceTaskId,
+        string $text,
+        int $index,
+    ): string {
+        $identity = trim($sourceTaskId);
+        if ($identity === '') {
+            $identity = $index . '|' . trim($text);
+        }
+
+        return $this->portableUuid('task|' . trim($sourcePageId) . '|' . $identity);
+    }
+
+    /** HR: Iz proizvoljnog stabilnog imena izvodi RFC 4122 UUID v5 zapis. EN: Derives an RFC 4122 UUID v5 value from an arbitrary stable name. */
+    private function portableUuid(string $name): string
+    {
+        $hex = hash('sha1', 'simbioza-confluence-import|' . $name);
+        $hex[12] = '5';
+        $hex[16] = dechex((hexdec($hex[16]) & 0x3) | 0x8);
+
+        return substr($hex, 0, 8)
+            . '-' . substr($hex, 8, 4)
+            . '-' . substr($hex, 12, 4)
+            . '-' . substr($hex, 16, 4)
+            . '-' . substr($hex, 20, 12);
     }
 
     /**
@@ -2086,7 +2553,6 @@ final readonly class ConfluenceHtmlConverter
         string $sourcePageId,
     ): DOMElement {
         $list = $document->createElement('ul');
-        $list->setAttribute('class', 'confluence-import-attachment-list');
         foreach ($context->attachments as $filename => $url) {
             $attachments[] = ['source_page_id' => $sourcePageId, 'filename' => $filename, 'kind' => 'file'];
             $item = $document->createElement('li');
@@ -2113,7 +2579,7 @@ final readonly class ConfluenceHtmlConverter
             default => 'text-bg-secondary',
         };
         $badge = $document->createElement('span');
-        $badge->setAttribute('class', 'badge ' . $class . ' confluence-import-status');
+        $badge->setAttribute('class', 'badge ' . $class);
         $badge->appendChild($document->createTextNode($this->macroParameter($xpath, $macro, 'title') ?: __('Status')));
         return $badge;
     }
@@ -2126,7 +2592,7 @@ final readonly class ConfluenceHtmlConverter
         $media = $document->createElement($audio ? 'audio' : 'video');
         $media->setAttribute('controls', 'controls');
         $media->setAttribute('src', $url);
-        $media->setAttribute('class', $audio ? 'w-100 confluence-import-media' : 'img-fluid confluence-import-media');
+        $media->setAttribute('class', $audio ? 'w-100' : 'img-fluid');
         $media->appendChild($document->createTextNode(__('Multimedijski privitak:') . ' ' . $filename));
         return $media;
     }
