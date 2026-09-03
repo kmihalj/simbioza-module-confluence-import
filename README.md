@@ -96,15 +96,16 @@ Confluence task lists become native interactive Task lists while retaining
 their initial completion state, rich text, nesting, and stable source anchors.
 Imported HTML uses the same standard Bootstrap and Editor markers as content
 created in Simbioza; `confluence-import-*` classes are not stored in documents.
-`tasks-report-macro` becomes a filtered task table whose first column controls
-the actual task on its imported source page and whose source links remain
-local. Children of excluded draft/deleted intermediaries remain under
+`tasks-report-macro` becomes an independent native task table. Its first column
+contains locally editable tasks; the final column contains ordinary links to
+the pages from which the task text was imported, without synchronizing task
+state between pages. Children of excluded draft/deleted intermediaries remain under
 their nearest imported ancestor instead of being promoted to the root.
 
 ## Quick start
 
 ```bash
-composer require aaieduhr/simbioza-module-confluence-import:^0.1.0
+composer require aaieduhr/simbioza-module-confluence-import:^0.1.8
 vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```

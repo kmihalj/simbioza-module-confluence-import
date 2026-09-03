@@ -110,7 +110,7 @@ XML;
         self::assertSame('Stvarni zadatak', $summaries[0]['text']);
     }
 
-    /** HR: tasks-report-macro postaje filtrirana tablica zadataka s lokalnim poveznicama. EN: tasks-report-macro becomes a filtered task table with local links. */
+    /** HR: tasks-report-macro postaje samostalna nativna tablica zadataka s običnim lokalnim poveznicama. EN: tasks-report-macro becomes an independent native task table with regular local links. */
     public function testConvertsTaskReportMacroToStaticLocalTable(): void
     {
         $body = <<<'XML'
@@ -150,9 +150,13 @@ XML;
         $result = (new ConfluenceHtmlConverter())->convert($body, 'DABAR', '10', $context);
 
         self::assertStringContainsString('class="table-responsive"', $result->html);
-        self::assertStringContainsString('data-editor-html-task-report="1"', $result->html);
-        self::assertStringContainsString('data-task-source-workspace="dabar"', $result->html);
-        self::assertStringContainsString('data-task-report-uuid="e3d1be37-04fd-4f69-ad6e-39fa9f085223"', $result->html);
+        self::assertStringContainsString('data-editor-html-task-list="1"', $result->html);
+        self::assertStringContainsString('data-task-list-view="table"', $result->html);
+        self::assertMatchesRegularExpression('/data-task-list-uuid="[0-9a-f-]{36}"/', $result->html);
+        self::assertMatchesRegularExpression('/data-task-uuid="[0-9a-f-]{36}"/', $result->html);
+        self::assertStringNotContainsString('data-editor-html-task-report', $result->html);
+        self::assertStringNotContainsString('data-task-source-', $result->html);
+        self::assertStringNotContainsString('data-task-report-uuid', $result->html);
         self::assertStringContainsString('Otvoreni zadatak', $result->html);
         self::assertStringContainsString('2026-09-10', $result->html);
         self::assertStringContainsString('Dario Pinturić', $result->html);
@@ -339,7 +343,7 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Expand čuva naslov iznad izvorne vrste liste. EN: Expand keeps its title above the original list type. */
+    /** HR: Expand postaje nativni accordion i čuva izvornu vrstu liste. EN: Expand becomes a native accordion and keeps the original list type. */
     public function testConvertsExpandMacroWithItsTitle(): void
     {
         $body = <<<'XML'
@@ -348,12 +352,31 @@ XML;
 
         $result = (new ConfluenceHtmlConverter())->convert($body, 'CEU', '10');
 
-        self::assertStringContainsString('<section class="mb-3">', $result->html);
-        self::assertStringContainsString('<p class="fw-semibold mb-2">Aktivnosti Srca na projektu</p>', $result->html);
+        self::assertStringContainsString('data-editor-html-accordion="1"', $result->html);
+        self::assertStringContainsString('<summary class="editor-html-accordion__title">Aktivnosti Srca na projektu</summary>', $result->html);
         self::assertStringContainsString('<p>Multiplier event</p>', $result->html);
         self::assertStringContainsString('<ul><li>Barcelona</li></ul>', $result->html);
         self::assertStringNotContainsString('<ol>', $result->html);
         self::assertSame([], $result->unsupportedMacros);
+    }
+
+    /** HR: Samo uzastopni Expand makroi ulaze u istu accordion grupu. EN: Only consecutive Expand macros join the same accordion group. */
+    public function testGroupsOnlyAdjacentExpandMacros(): void
+    {
+        $body = <<<'XML'
+<ac:structured-macro ac:name="expand"><ac:parameter ac:name="title">Prvi</ac:parameter><ac:rich-text-body><p>A</p></ac:rich-text-body></ac:structured-macro>
+<ac:structured-macro ac:name="expand"><ac:parameter ac:name="title">Drugi</ac:parameter><ac:rich-text-body><p>B</p></ac:rich-text-body></ac:structured-macro>
+<p>Razdjelnik</p>
+<ac:structured-macro ac:name="expand"><ac:parameter ac:name="title">Treći</ac:parameter><ac:rich-text-body><p>C</p></ac:rich-text-body></ac:structured-macro>
+XML;
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'CEU', '10');
+
+        self::assertSame(2, substr_count($result->html, 'data-editor-html-accordion="1"'));
+        self::assertSame(3, substr_count($result->html, 'class="editor-html-accordion__item"'));
+        self::assertStringNotContainsString(' name=', $result->html);
+        self::assertLessThan(strpos($result->html, 'Razdjelnik'), strpos($result->html, 'Drugi'));
+        self::assertLessThan(strpos($result->html, 'Treći'), strpos($result->html, 'Razdjelnik'));
     }
 
     /** HR: Stari Section/Column makroi postaju responsivne kartice koje čuvaju omjere. EN: Legacy Section/Column macros become responsive cards that retain their proportions. */
@@ -632,10 +655,10 @@ XML;
         );
         $result = (new ConfluenceHtmlConverter())->convert($body, 'SOKI', '143180505', $context);
 
-        self::assertSame(3, substr_count($result->html, 'data-editor-html-workspace-block="1"'));
+        self::assertSame(4, substr_count($result->html, 'data-editor-html-workspace-block="1"'));
         self::assertStringContainsString('data-workspace-block-kind="attachment-gallery"', $result->html);
         self::assertStringContainsString('data-workspace-block-kind="page-report"', $result->html);
-        self::assertStringNotContainsString('data-workspace-block-kind="workspace-search"', $result->html);
+        self::assertStringContainsString('data-workspace-block-kind="workspace-search"', $result->html);
         self::assertStringContainsString('data-workspace-block-kind="recent-changes"', $result->html);
         self::assertStringContainsString('Poslovi 2026.', $result->html);
         self::assertStringContainsString('Test User', $result->html);
@@ -722,7 +745,7 @@ XML;
             $result->html,
         );
         self::assertSame(1, substr_count($result->html, 'class="table-responsive"'));
-        self::assertStringNotContainsString('data-workspace-block-kind="workspace-search"', $result->html);
+        self::assertStringContainsString('data-workspace-block-kind="workspace-search"', $result->html);
         self::assertSame([], $result->unsupportedMacros);
     }
 

@@ -43,15 +43,15 @@ Calendar and Task modules remain the owners of live calendars and tasks. Importe
   actually contain structured properties are included. The report updates
   dynamically after import and reapplies ACL every time.
 - `gallery` becomes a native gallery of real Editor attachments on the current page.
-- `livesearch` and `pagetreesearch` are not embedded in content. In Confluence
-  they filter an adjacent tree or report, while Simbioza already provides a
-  search that users can scope to a Workspace.
+- `livesearch` and `pagetreesearch` become the native dynamic search form scoped
+  to the current Workspace. Results still pass the current Workspace/page ACL.
 - `recently-updated` becomes an ACL-safe list of recent published changes.
 - `panel` becomes a themed card. Legacy `section` and `column` macros become a
   responsive row of cards: percentage widths map to the Bootstrap grid, and
   every column occupies the full width on a narrow screen.
-- `expand` becomes a static block with its source title above the body. The
-  list type is not changed: `ul` remains bulleted and `ol` remains numbered.
+- `expand` becomes a native editable accordion item. Consecutive Expand macros
+  form one accordion; intervening ordinary content starts a separate one. The
+  title and body remain directly editable, and the list type is unchanged.
 - `html` containing one safe HTTPS iframe becomes a canonical 100%-wide Editor
   embed. It retains height, `allowfullscreen`, and restricted `allow`
   capabilities. The official H5P resizer is recognized and loaded in a
@@ -97,14 +97,13 @@ Calendar and Task modules remain the owners of live calendars and tasks. Importe
 - `content-report-table` becomes an ordinary editable HTML table containing
   the matching page links known at import time. It is not a template or a
   dynamic Workspace component. Source labels remain portable import metadata.
-- `tasks-report-macro` becomes a native task report table. Its first column is
-  the same interactive task stored on the imported source page, not a copied
-  checkbox; changing it updates the source task and its audit trail. The report
-  reapplies source-page ACL and completion-status filters on every view, while
-  retaining the imported due date, mapped assignee, and local source link.
-  Confluence's `pageSize` controlled only source pagination, so every matched
-  row is retained. Reimport is needed when source definitions or report filters
-  change, not merely when a task is checked or reopened in Simbioza.
+- `tasks-report-macro` becomes an independent native task table. Its first
+  column contains locally editable tasks; the imported due date, mapped
+  assignee, and ordinary local ACL-protected source-page link remain in the
+  other columns. Source label and completion-status parameters are applied
+  only while selecting rows during conversion. Confluence's `pageSize`
+  controlled only source pagination, so every matched row is retained.
+  Changing a task does not change a task on another page.
 
 If a published source page is a child of a draft or deleted intermediary that
 was not selected for import, that intermediary is skipped and the page remains

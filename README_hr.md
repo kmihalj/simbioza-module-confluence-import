@@ -96,14 +96,14 @@ Confluence popisi zadataka postaju nativni interaktivni Task popisi uz očuvano
 početno stanje, bogati sadržaj, ugniježđenost i izvorna sidra.
 Uvezeni HTML koristi iste standardne Bootstrap i Editor oznake kao sadržaj
 izrađen u Simbiozi; `confluence-import-*` klase ne spremaju se u dokument.
-`tasks-report-macro` postaje filtrirana tablica čiji prvi stupac upravlja
-stvarnim zadatkom na uvezenoj izvornoj stranici, a poveznica na izvor ostaje
-lokalna i ACL-zaštićena.
+`tasks-report-macro` postaje samostalna nativna tablica zadataka. Prvi stupac
+sadrži lokalno editabilne zadatke, a zadnji obične poveznice na stranice s kojih
+je tekst zadatka uvezen, bez sinkronizacije stanja zadataka između stranica.
 
 ## Brzi početak
 
 ```bash
-composer require aaieduhr/simbioza-module-confluence-import:^0.1.0
+composer require aaieduhr/simbioza-module-confluence-import:^0.1.8
 vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```

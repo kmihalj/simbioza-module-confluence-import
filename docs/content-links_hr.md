@@ -43,15 +43,16 @@ Moduli Calendar i Task ostaju vlasnici živih kalendara i zadataka. Uvezeni zada
   stranice koje doista imaju strukturirana svojstva. Izvještaj se nakon importa
   dinamički ažurira i svaki put ponovno primjenjuje ACL.
 - `gallery` postaje nativna galerija stvarnih Editor privitaka aktualne stranice.
-- `livesearch` i `pagetreesearch` ne umeću se u sadržaj. Oni u Confluenceu
-  filtriraju susjedno stablo ili izvještaj, a Simbioza već ima pretragu koju
-  korisnik može ograničiti na područje.
+- `livesearch` i `pagetreesearch` postaju nativna dinamička forma pretrage
+  ograničena na trenutačno područje. Rezultati i dalje prolaze aktualni ACL
+  područja i stranice.
 - `recently-updated` postaje ACL-siguran popis nedavnih objavljenih promjena.
 - `panel` postaje tematska kartica. Stari `section` i `column` makroi postaju
   responzivni red kartica: postotne širine preslikavaju se na Bootstrap mrežu,
   a na uskom zaslonu svaki stupac zauzima cijelu širinu.
-- `expand` postaje statički blok s izvornim naslovom iznad tijela. Vrsta liste
-  se ne mijenja: `ul` ostaje lista s grafičkim oznakama, a `ol` numerirana lista.
+- `expand` postaje nativni uređivi dio accordiona. Uzastopni Expand makroi čine
+  jedan accordion, a običan sadržaj između njih započinje novi. Naslov i tijelo
+  ostaju izravno uređivi, a vrsta liste se ne mijenja.
 - `html` s jednim sigurnim HTTPS iframeom postaje kanonski Editor embed širine
   100%. Čuva visinu, `allowfullscreen` i ograničene `allow` mogućnosti. Službeni
   H5P resizer prepoznaje se i kontrolirano učitava u pregledu i izvozu. Druga
@@ -95,15 +96,13 @@ Moduli Calendar i Task ostaju vlasnici živih kalendara i zadataka. Uvezeni zada
 - `content-report-table` postaje obična uređiva HTML tablica s odgovarajućim
   poveznicama poznatim u trenutku importa. To nije predložak ni dinamička
   Workspace komponenta. Izvorne oznake ostaju prenosivi metapodaci importa.
-- `tasks-report-macro` postaje nativna tablica izvještaja zadataka. Prvi stupac
-  predstavlja isti interaktivni zadatak koji je spremljen na uvezenoj izvornoj
-  stranici, a ne kopiranu kućicu; promjena ažurira izvorni zadatak i njegov audit
-  trag. Izvještaj pri svakom prikazu ponovno primjenjuje ACL izvorne stranice i
-  filtar dovršenosti, a čuva uvezeni rok, mapiranog izvršitelja i lokalnu
-  poveznicu na izvor. Confluenceov `pageSize` upravljao je samo izvornom
-  paginacijom pa se čuvaju svi odgovarajući retci. Ponovni uvoz potreban je kada
-  se promijene definicije zadataka ili filtri izvještaja, ali ne zbog označavanja
-  ili ponovnog otvaranja zadatka u Simbiozi.
+- `tasks-report-macro` postaje samostalna nativna tablica zadataka. Prvi stupac
+  sadrži lokalno editabilne zadatke, a u ostalim stupcima ostaju uvezeni rok,
+  mapirani izvršitelj i obična lokalna ACL-zaštićena poveznica na izvornu
+  stranicu. Parametri oznaka i dovršenosti primjenjuju se samo pri odabiru
+  redaka tijekom pretvorbe. Confluenceov `pageSize` upravljao je samo izvornom
+  paginacijom pa se čuvaju svi odgovarajući retci. Promjena zadatka ne mijenja
+  zadatak na drugoj stranici.
 
 Ako je objavljena stranica u izvornom stablu dijete nacrta ili obrisanog
 posrednika koji nije odabran za uvoz, posrednik se preskače, a stranica ostaje

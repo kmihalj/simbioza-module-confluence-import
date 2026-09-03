@@ -332,6 +332,12 @@ final readonly class ConfluenceHtmlConverter
             $macro->parentNode?->replaceChild($replacement, $macro);
         }
 
+        // HR: Uzastopni Confluence Expand makroi tvore jednu accordion grupu;
+        //     drugi sadržaj između njih namjerno prekida grupu.
+        // EN: Consecutive Confluence Expand macros form one accordion group;
+        //     other content between them intentionally starts a new group.
+        $this->mergeAdjacentAccordions($xpath);
+
         // HR: Confluence rasporedi nisu standardni HTML elementi. Nakon obrade
         // makroa pretvaraju se u Bootstrap retke i stupce kako bi dvostupčane i
         // trostupčane stranice ostale čitljive i prilagodljive manjim ekranima.
@@ -568,24 +574,14 @@ final readonly class ConfluenceHtmlConverter
         }
 
         if ($name === 'expand') {
-            // HR: Editor nema opći sklopivi blok. Zato se izvorni naslov čuva
-            //     iznad tijela, a izvorni ul/ol određuje vrstu liste.
-            // EN: The Editor has no general collapsible block. The source title
-            //     is therefore kept above the body, while the source ul/ol
-            //     continues to determine the list type.
-            $section = $document->createElement('section');
-            $section->setAttribute('class', 'mb-3');
-            $title = $document->createElement('p');
-            $title->setAttribute('class', 'fw-semibold mb-2');
             $titleText = $this->macroParameter($xpath, $macro, 'title');
-            $title->appendChild($document->createTextNode(
+            return $this->accordionNode(
+                $document,
                 $titleText !== '' ? $titleText : __('Prikaži sadržaj'),
-            ));
-            $section->appendChild($title);
-            $body = $document->createElement('div');
-            $this->appendRichBody($document, $body, $rich, $plain);
-            $section->appendChild($body);
-            return $section;
+                $rich,
+                $plain,
+                $sourcePageId . '|' . $macro->getNodePath(),
+            );
         }
 
         if ($name === 'column') {
@@ -683,13 +679,12 @@ final readonly class ConfluenceHtmlConverter
         }
 
         if (in_array($name, ['livesearch', 'pagetreesearch'], true)) {
-            // HR: Ovi Confluence makroi samo filtriraju susjedno stablo ili
-            //     izvještaj. Simbioza već ima pretragu područja pa u sadržaj
-            //     ne umećemo drugu, semantički širu formu.
-            // EN: These Confluence macros only filter an adjacent tree or
-            //     report. Simbioza already provides Workspace search, so a
-            //     second, semantically broader form is not embedded in content.
-            return $document->createDocumentFragment();
+            return $this->workspaceBlockNode(
+                $document,
+                'workspace-search',
+                ['title' => $this->macroParameter($xpath, $macro, 'placeholder')],
+                __('Pretraga trenutačnog područja'),
+            );
         }
 
         if (in_array($name, ['recently-updated', 'recently-updated-dashboard'], true)) {
@@ -750,7 +745,13 @@ final readonly class ConfluenceHtmlConverter
         }
 
         if ($name === 'tasks-report-macro') {
-            return $this->staticTaskReport($document, $xpath, $macro, $context);
+            return $this->staticTaskReport(
+                $document,
+                $xpath,
+                $macro,
+                $context,
+                $sourcePageId,
+            );
         }
 
         if ($name === 'tableenhancer' && $rich instanceof DOMElement) {
@@ -1280,6 +1281,62 @@ final readonly class ConfluenceHtmlConverter
         $block->appendChild($paragraph);
 
         return $block;
+    }
+
+    /** HR: Gradi samostalni nativni accordion s jednim izravno uređivim dijelom. EN: Builds a standalone native accordion with one directly editable item. */
+    private function accordionNode(
+        DOMDocument $document,
+        string $titleText,
+        ?DOMElement $rich,
+        string $plain,
+        string $identity,
+    ): DOMElement {
+        $id = 'accordion-' . str_replace('-', '', $this->portableUuid('accordion|' . $identity));
+        $section = $document->createElement('section');
+        $section->setAttribute('class', 'editor-html-accordion');
+        $section->setAttribute('data-editor-html-accordion', '1');
+        $section->setAttribute('data-editor-html-accordion-id', $id);
+        $section->setAttribute('contenteditable', 'false');
+        $item = $document->createElement('details');
+        $item->setAttribute('class', 'editor-html-accordion__item');
+        $title = $document->createElement('summary');
+        $title->setAttribute('class', 'editor-html-accordion__title');
+        $title->appendChild($document->createTextNode($titleText));
+        $body = $document->createElement('div');
+        $body->setAttribute('class', 'editor-html-accordion__body');
+        $this->appendRichBody($document, $body, $rich, $plain);
+        $item->appendChild($title);
+        $item->appendChild($body);
+        $section->appendChild($item);
+
+        return $section;
+    }
+
+    /** HR: Spaja samo susjedne accordion blokove, uz ignoriranje praznog XML razmaka. EN: Merges only adjacent accordion blocks while ignoring empty XML whitespace. */
+    private function mergeAdjacentAccordions(DOMXPath $xpath): void
+    {
+        foreach ($this->elements($xpath->query('//*[@data-editor-html-accordion="1"]')) as $accordion) {
+            $previous = $accordion->previousSibling;
+            while ($previous instanceof DOMNode && !($previous instanceof DOMElement)) {
+                if (trim($previous->textContent) !== '') {
+                    $previous = null;
+                    break;
+                }
+                $previous = $previous->previousSibling;
+            }
+            if (
+                !$previous instanceof DOMElement
+                || $previous->getAttribute('data-editor-html-accordion') !== '1'
+            ) {
+                continue;
+            }
+
+            while ($accordion->firstChild instanceof DOMNode) {
+                $child = $accordion->firstChild;
+                $previous->appendChild($child);
+            }
+            $accordion->parentNode?->removeChild($accordion);
+        }
     }
 
     /** HR: Pretvara naslov svojstva u stabilan lokalni ključ. EN: Converts a property label into a stable local key. */
@@ -2118,16 +2175,19 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Materijalizira Confluence tasks-report-macro kao prenosivi izvještaj
-     *     koji Task modul povezuje s izvornim zadacima uvezenih stranica.
-     * EN: Materializes Confluence tasks-report-macro as a portable report that
-     *     the Task module links to source tasks on imported pages.
+     * HR: Materijalizira Confluence tasks-report-macro kao samostalni nativni
+     *     tablični popis zadataka. Izvorna stranica ostaje obična poveznica;
+     *     uvezeni zadaci nemaju skrivenu vezu sa zadacima na drugim stranicama.
+     * EN: Materializes Confluence tasks-report-macro as an independent native
+     *     task table. The source page remains a regular link; imported tasks
+     *     have no hidden relationship with tasks on other pages.
      */
     private function staticTaskReport(
         DOMDocument $document,
         DOMXPath $xpath,
         DOMElement $macro,
         ?ConfluenceMacroContext $context,
+        string $sourcePageId,
     ): DOMNode {
         $labels = array_values(array_filter(
             preg_split('/[\s,]+/', strtolower($this->macroParameter($xpath, $macro, 'labels'))) ?: [],
@@ -2171,14 +2231,22 @@ final readonly class ConfluenceHtmlConverter
             return $empty;
         }
 
+        $taskList = $document->createElement('section');
+        $taskList->setAttribute('class', 'editor-html-task-list');
+        $taskList->setAttribute('data-editor-html-task-list', '1');
+        $taskList->setAttribute(
+            'data-task-list-uuid',
+            $this->portableUuid('task-report|' . $sourcePageId . '|' . $macro->getNodePath()),
+        );
+        $taskList->setAttribute('data-task-toggle-scope', 'viewers');
+        $taskList->setAttribute('data-task-list-view', 'table');
         $wrapper = $document->createElement('div');
         $wrapper->setAttribute('class', 'table-responsive');
-        $wrapper->setAttribute('data-editor-html-task-report', '1');
-        if (in_array($requestedStatus, ['complete', 'incomplete'], true)) {
-            $wrapper->setAttribute('data-task-report-status', $requestedStatus);
-        }
         $table = $document->createElement('table');
-        $table->setAttribute('class', 'table table-bordered table-striped table-hover');
+        $table->setAttribute(
+            'class',
+            'table table-bordered table-striped table-hover editor-html-task-table',
+        );
         $head = $document->createElement('thead');
         $head->setAttribute('class', 'table-light');
         $headingRow = $document->createElement('tr');
@@ -2191,21 +2259,27 @@ final readonly class ConfluenceHtmlConverter
         $head->appendChild($headingRow);
         $table->appendChild($head);
         $body = $document->createElement('tbody');
-        foreach ($tasks as $entry) {
+        foreach ($tasks as $index => $entry) {
             $task = $entry['task'];
             $page = $entry['page'];
             $row = $document->createElement('tr');
             $description = $document->createElement('td');
-            $control = $document->createElement('div');
-            $control->setAttribute('data-editor-html-task-report-item', '1');
-            $control->setAttribute(
-                'data-task-source-workspace',
-                (string)($page['workspace_slug'] ?? ''),
+            $description->setAttribute('class', 'editor-html-task-item');
+            $description->setAttribute(
+                'data-task-uuid',
+                $this->portableUuid(
+                    'task-report-item|' . $sourcePageId . '|' . $macro->getNodePath()
+                    . '|' . ($task['native_uuid'] ?? $index),
+                ),
             );
-            $control->setAttribute('data-task-source-node', (string)($page['node_slug'] ?? ''));
-            $control->setAttribute('data-task-report-uuid', (string)($task['native_uuid'] ?? ''));
-            $control->appendChild($document->createTextNode((string)($task['text'] ?? '')));
-            $description->appendChild($control);
+            $description->setAttribute(
+                'data-task-initial-completed',
+                (bool)($task['complete'] ?? false) ? '1' : '0',
+            );
+            $taskText = $document->createElement('span');
+            $taskText->setAttribute('class', 'editor-html-task-text');
+            $taskText->appendChild($document->createTextNode((string)($task['text'] ?? '')));
+            $description->appendChild($taskText);
             $row->appendChild($description);
             $dueDate = $document->createElement('td');
             $dueDate->appendChild($document->createTextNode((string)($task['due_date'] ?? '')));
@@ -2230,8 +2304,9 @@ final readonly class ConfluenceHtmlConverter
         }
         $table->appendChild($body);
         $wrapper->appendChild($table);
+        $taskList->appendChild($wrapper);
 
-        return $wrapper;
+        return $taskList;
     }
 
     /** HR: Pretvara Confluence task-listu u nativni Editor/Task popis. EN: Converts a Confluence task list into a native Editor/Task list. */

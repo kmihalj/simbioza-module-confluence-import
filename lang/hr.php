@@ -223,6 +223,7 @@ return [
     'Izvještaj stranica' => 'Izvještaj stranica',
     'Korisnik' => 'Korisnik',
     'Nedavne promjene' => 'Nedavne promjene',
+    'Pretraga trenutačnog područja' => 'Pretraga trenutačnog područja',
     'Priprema sadržaja' => 'Priprema sadržaja',
     'Spremljena faza Confluence importa nije valjana.' => 'Spremljena faza Confluence importa nije valjana.',
     'Stanje Confluence importa nije moguće spremiti.' => 'Stanje Confluence importa nije moguće spremiti.',

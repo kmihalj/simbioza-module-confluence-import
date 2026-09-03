@@ -223,6 +223,7 @@ return [
     'Izvještaj stranica' => 'Page report',
     'Korisnik' => 'User',
     'Nedavne promjene' => 'Recent changes',
+    'Pretraga trenutačnog područja' => 'Search the current Workspace',
     'Priprema sadržaja' => 'Preparing content',
     'Spremljena faza Confluence importa nije valjana.' => 'The saved Confluence import stage is invalid.',
     'Stanje Confluence importa nije moguće spremiti.' => 'The Confluence import state could not be saved.',
