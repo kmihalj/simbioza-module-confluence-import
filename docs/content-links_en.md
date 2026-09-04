@@ -52,8 +52,12 @@ static representation remains in the imported page.
   actually contain structured properties are included. The report updates
   dynamically after import and reapplies ACL every time.
 - `gallery` becomes a native gallery of real Editor attachments on the current page.
-- `livesearch` and `pagetreesearch` become the native dynamic search form scoped
-  to the current Workspace. Results still pass the current Workspace/page ACL.
+- `livesearch` and `pagetreesearch` become a native, manually editable dynamic
+  search form. Without `spaceKey` they target the current Workspace; every XML
+  `ri:space` is otherwise stored as a portable Confluence reference. A reference
+  resolves only after its target Workspace has been imported. Until then the
+  form is disabled and never falls back to another or global scope. All results
+  still pass current Workspace/page ACL.
 - `recently-updated` becomes an ACL-safe list of recent published changes.
 - `panel` becomes a themed card. Legacy `section` and `column` macros become a
   responsive row of cards: percentage widths map to the Bootstrap grid, and

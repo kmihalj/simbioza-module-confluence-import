@@ -116,7 +116,7 @@ module; embedding a calendar never expands its permissions.
 ## Quick start
 
 ```bash
-composer require aaieduhr/simbioza-module-confluence-import:^0.1.9
+composer require aaieduhr/simbioza-module-confluence-import:^0.1.10
 vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```

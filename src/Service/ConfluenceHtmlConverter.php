@@ -720,11 +720,23 @@ final readonly class ConfluenceHtmlConverter
         }
 
         if (in_array($name, ['livesearch', 'pagetreesearch'], true)) {
+            $configuration = ['title' => $this->macroParameter($xpath, $macro, 'placeholder')];
+            $spaceKeys = $this->macroWorkspaceReferences($xpath, $macro);
+            if ($spaceKeys !== []) {
+                $configuration['workspace_refs'] = array_map(
+                    static fn(string $spaceKey): array => [
+                        'provider' => 'confluence',
+                        'reference' => $spaceKey,
+                    ],
+                    $spaceKeys,
+                );
+            }
+
             return $this->workspaceBlockNode(
                 $document,
                 'workspace-search',
-                ['title' => $this->macroParameter($xpath, $macro, 'placeholder')],
-                __('Pretraga trenutačnog područja'),
+                $configuration,
+                __('Pretraga područja'),
             );
         }
 
@@ -1413,6 +1425,46 @@ final readonly class ConfluenceHtmlConverter
         }
 
         return '';
+    }
+
+    /**
+     * HR: Čita ciljana područja iz stvarnog `spaceKey` XML parametra. Ugniježđeni
+     *     `ri:space` ima prednost, a tekstualni zapis služi starijim izvozima.
+     * EN: Reads target Workspaces from the actual `spaceKey` XML parameter. A
+     *     nested `ri:space` takes precedence, with scalar text for older exports.
+     *
+     * @return list<string>
+     */
+    private function macroWorkspaceReferences(DOMXPath $xpath, DOMElement $macro): array
+    {
+        $references = [];
+        foreach ($this->elements($xpath->query('./ac:parameter', $macro)) as $parameter) {
+            if ($this->attribute($parameter, self::AC_NAMESPACE, 'name') !== 'spaceKey') {
+                continue;
+            }
+
+            foreach ($this->elements($xpath->query('.//ri:space', $parameter)) as $space) {
+                $spaceKey = $this->attribute($space, self::RI_NAMESPACE, 'space-key');
+                if ($spaceKey !== '') {
+                    $references[] = $spaceKey;
+                }
+            }
+            if ($references !== []) {
+                continue;
+            }
+
+            foreach (preg_split('/[\s,]+/u', trim($parameter->textContent)) ?: [] as $spaceKey) {
+                $spaceKey = trim($spaceKey);
+                if (
+                    $spaceKey !== ''
+                    && !in_array(strtolower($spaceKey), ['@self', 'current', 'currentspace()'], true)
+                ) {
+                    $references[] = $spaceKey;
+                }
+            }
+        }
+
+        return array_slice(array_values(array_unique($references)), 0, 50);
     }
 
     /**

@@ -42,6 +42,7 @@ use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluencePageSlugger;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluencePageHierarchy;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluencePrincipalMatcher;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceReferenceResolver;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceWorkspaceReferenceProvider;
 use AaiEduHr\SimbiozaModuleUser\Service\PersonalWorkspaceService;
 use HeartPhrame\Config\ConfigInterface;
 use HeartPhrame\Http\ResponseFactory;
@@ -68,6 +69,9 @@ $services = [
         new ConfluenceImportConfig($container->get(ConfigInterface::class), dirname(__DIR__)),
     ConfluenceImportRepository::class => static fn(ContainerInterface $container): ConfluenceImportRepository =>
         new ConfluenceImportRepository($container->get(Database::class)),
+    ConfluenceWorkspaceReferenceProvider::class =>
+        static fn(ContainerInterface $container): ConfluenceWorkspaceReferenceProvider =>
+            new ConfluenceWorkspaceReferenceProvider($container->get(ConfluenceImportRepository::class)),
     ConfluenceArchive::class => static fn(ContainerInterface $container): ConfluenceArchive =>
         new ConfluenceArchive($container->get(ConfluenceImportConfig::class)),
     ConfluenceExportReader::class => static fn(ContainerInterface $container): ConfluenceExportReader =>

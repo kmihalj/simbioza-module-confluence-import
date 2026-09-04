@@ -8,12 +8,14 @@ use AaiEduHr\HeartPhrameModuleEditorHtml\ModuleEditorHtml;
 use AaiEduHr\HeartPhrameModuleMenu\ModuleMenu;
 use AaiEduHr\HeartPhrameModuleOrm\Database\Database;
 use AaiEduHr\SimbiozaModuleWorkspace\ModuleWorkspace;
+use AaiEduHr\SimbiozaModuleWorkspace\Service\WorkspaceExternalReferenceRegistry;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Command\HpSimbiozaConfluenceImportCommand;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Controller\ConfluenceImportController;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Listener\PurgeConfluencePageImport;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Listener\PurgeConfluenceWorkspaceImport;
 use AaiEduHr\SimbiozaModuleConfluenceImport\ModuleSimbiozaConfluenceImport;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportMenuIntegration;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceWorkspaceReferenceProvider;
 use AaiEduHr\SimbiozaModuleUser\ModuleSimbiozaUser;
 use HeartPhrame\Bridge\ComposerBridge;
 use HeartPhrame\Command\CommandDefinition;
@@ -241,6 +243,14 @@ return new class extends AbstractModuleManifest {
             $integration = $container->get(ConfluenceImportMenuIntegration::class);
             if ($integration instanceof ConfluenceImportMenuIntegration) {
                 $integration->register();
+            }
+            $references = $container->get(WorkspaceExternalReferenceRegistry::class);
+            $provider = $container->get(ConfluenceWorkspaceReferenceProvider::class);
+            if (
+                $references instanceof WorkspaceExternalReferenceRegistry
+                && $provider instanceof ConfluenceWorkspaceReferenceProvider
+            ) {
+                $references->register($provider);
             }
         }];
     }

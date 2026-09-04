@@ -336,6 +336,28 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
+     * HR: Razrješava Confluence ključ područja u zadnje spremljeno lokalno mapiranje.
+     * EN: Resolves a Confluence space key to the latest stored local mapping.
+     *
+     * @return array<string,mixed>|null
+     */
+    public function spaceBySourceKey(string $sourceKey): ?array
+    {
+        $sourceKey = trim($sourceKey);
+        if ($sourceKey === '') {
+            return null;
+        }
+
+        $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_SPACES)
+            ->where('source_instance', '=', 'archive')
+            ->where('source_space_key', '=', $sourceKey)
+            ->orderBy('updated_at', 'DESC')
+            ->first();
+
+        return is_array($row) ? $this->normalizeRow($row) : null;
+    }
+
+    /**
      * HR: Sprema izričito mapiranje izvornog korisnika.
      * EN: Stores an explicit source-user mapping.
      *

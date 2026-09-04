@@ -719,6 +719,61 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
+    /** HR: Ciljani Confluence livesearch čuva prijenosne XML ključeve područja. EN: Targeted Confluence livesearch preserves portable XML Workspace keys. */
+    public function testLiveSearchPreservesTargetWorkspaceReferencesFromXml(): void
+    {
+        $body = <<<'XML'
+<ac:structured-macro ac:name="livesearch">
+<ac:parameter ac:name="placeholder">Pretraži dokumentaciju</ac:parameter>
+<ac:parameter ac:name="spaceKey"><ri:space ri:space-key="AAIUPUTE" /></ac:parameter>
+</ac:structured-macro>
+XML;
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'DSU', '10');
+
+        self::assertMatchesRegularExpression(
+            '/data-workspace-block-kind="workspace-search"[^>]+data-workspace-block-config="([^"]+)"/',
+            $result->html,
+        );
+        preg_match(
+            '/data-workspace-block-kind="workspace-search"[^>]+data-workspace-block-config="([^"]+)"/',
+            $result->html,
+            $matches,
+        );
+        $encoded = strtr($matches[1] ?? '', '-_', '+/');
+        $encoded .= str_repeat('=', (4 - strlen($encoded) % 4) % 4);
+        $configuration = json_decode((string)base64_decode($encoded, true), true, 512, JSON_THROW_ON_ERROR);
+
+        self::assertSame('Pretraži dokumentaciju', $configuration['title']);
+        self::assertSame(
+            [['provider' => 'confluence', 'reference' => 'AAIUPUTE']],
+            $configuration['workspace_refs'],
+        );
+        self::assertArrayNotHasKey('workspace_slugs', $configuration);
+        self::assertSame([], $result->unsupportedMacros);
+    }
+
+    /** HR: Livesearch bez `spaceKey` ostaje uređiva pretraga trenutačnog područja. EN: Livesearch without `spaceKey` remains an editable current-Workspace search. */
+    public function testLiveSearchWithoutTargetKeepsImplicitCurrentWorkspace(): void
+    {
+        $result = (new ConfluenceHtmlConverter())->convert(
+            '<ac:structured-macro ac:name="livesearch" />',
+            'DSU',
+            '10',
+        );
+
+        preg_match(
+            '/data-workspace-block-kind="workspace-search"[^>]+data-workspace-block-config="([^"]+)"/',
+            $result->html,
+            $matches,
+        );
+        $encoded = strtr($matches[1] ?? '', '-_', '+/');
+        $encoded .= str_repeat('=', (4 - strlen($encoded) % 4) % 4);
+        $configuration = json_decode((string)base64_decode($encoded, true), true, 512, JSON_THROW_ON_ERROR);
+
+        self::assertSame(['title' => ''], $configuration);
+    }
+
     /** HR: SOKI horizontalna Page Properties tablica zadržava sva četiri polja. EN: A horizontal SOKI Page Properties table preserves all four fields. */
     public function testConvertsHorizontalSokiPageProperties(): void
     {

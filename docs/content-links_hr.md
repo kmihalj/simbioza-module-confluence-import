@@ -52,9 +52,11 @@ prikaz.
   stranice koje doista imaju strukturirana svojstva. Izvještaj se nakon importa
   dinamički ažurira i svaki put ponovno primjenjuje ACL.
 - `gallery` postaje nativna galerija stvarnih Editor privitaka aktualne stranice.
-- `livesearch` i `pagetreesearch` postaju nativna dinamička forma pretrage
-  ograničena na trenutačno područje. Rezultati i dalje prolaze aktualni ACL
-  područja i stranice.
+- `livesearch` i `pagetreesearch` postaju nativna, ručno uređiva dinamička forma
+  pretrage. Bez `spaceKey` cilja trenutačno područje, a svaki XML `ri:space`
+  sprema kao prijenosnu Confluence referencu. Referenca se razrješava tek kada je
+  ciljno područje uvezeno; do tada je forma onemogućena i ne prelazi na drugi ili
+  globalni opseg. Svi rezultati prolaze aktualni ACL područja i stranice.
 - `recently-updated` postaje ACL-siguran popis nedavnih objavljenih promjena.
 - `panel` postaje tematska kartica. Stari `section` i `column` makroi postaju
   responzivni red kartica: postotne širine preslikavaju se na Bootstrap mrežu,
