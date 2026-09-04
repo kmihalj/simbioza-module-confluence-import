@@ -46,4 +46,26 @@ final class ConfluenceImportViewTest extends TestCase
         );
         self::assertStringNotContainsString('--hph-muted-bg', $styles);
     }
+
+    /** HR: Razrješenje kalendara ne traži ručni naziv koji ICS već sadrži. EN: Calendar resolution does not request a manual name already carried by the ICS file. */
+    public function testCalendarImportUsesTheIcsCalendarName(): void
+    {
+        $view = file_get_contents(dirname(__DIR__) . '/views/settings/report.php');
+        $service = file_get_contents(dirname(__DIR__) . '/src/Service/ConfluenceCalendarResolutionService.php');
+
+        self::assertIsString($view);
+        self::assertIsString($service);
+        self::assertStringNotContainsString('name="calendar_name"', $view);
+        self::assertStringContainsString(
+            "__('Naziv kalendara preuzima se iz ICS datoteke; ako u njoj nije naveden, koristi se naziv iz Confluencea.')",
+            $view,
+        );
+        self::assertStringContainsString("'prefer_ics_name' => true", $service);
+        self::assertStringContainsString("\$issue['source_calendar_name']", $service);
+        self::assertStringContainsString('$matchedCalendarUuid', $view);
+        self::assertStringContainsString(
+            "__('Pronađen je postojeći kalendar istog naziva i unaprijed je odabran. Provjerite ga prije povezivanja.')",
+            $view,
+        );
+    }
 }

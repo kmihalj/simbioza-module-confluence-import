@@ -56,6 +56,11 @@ $calendarVisibilityLabel = static function (array $calendar): string {
 
     return __('čitanje prema ACL-u kalendara');
 };
+$normalizeCalendarName = static function (string $name): string {
+    $normalized = preg_replace('/\s+/u', ' ', trim($name));
+
+    return mb_strtolower(is_string($normalized) ? $normalized : trim($name), 'UTF-8');
+};
 ?>
 <link rel="stylesheet" href="<?= $this->escape($stylesPath) ?>">
 
@@ -126,10 +131,25 @@ $calendarVisibilityLabel = static function (array $calendar): string {
                                 <div class="d-grid gap-3 mt-3">
                                     <?php foreach ($issues as $issue) : ?>
                                         <?php if (is_array($issue) && ($issue['type'] ?? '') === 'calendar') :
-                                            $calendarName = trim((string)($issue['source_calendar_name'] ?? ''));
-                                            $calendarName = $calendarName !== ''
-                                                ? $calendarName
+                                            $sourceCalendarName = trim((string)($issue['source_calendar_name'] ?? ''));
+                                            $calendarName = $sourceCalendarName !== ''
+                                                ? $sourceCalendarName
                                                 : (string)($issue['source_calendar_id'] ?? __('Nepoznati kalendar'));
+                                            $matchingCalendarUuids = [];
+                                            if ($sourceCalendarName !== '') {
+                                                $normalizedSourceCalendarName = $normalizeCalendarName($sourceCalendarName);
+                                                foreach ($calendarOptions as $calendarOption) {
+                                                    if (
+                                                        $normalizeCalendarName((string)($calendarOption['name'] ?? ''))
+                                                        === $normalizedSourceCalendarName
+                                                    ) {
+                                                        $matchingCalendarUuids[] = (string)($calendarOption['uuid'] ?? '');
+                                                    }
+                                                }
+                                            }
+                                            $matchedCalendarUuid = count($matchingCalendarUuids) === 1
+                                                ? $matchingCalendarUuids[0]
+                                                : '';
                                             ?>
                                             <section class="confluence-import-calendar-resolution" data-confluence-calendar-issue>
                                                 <div class="d-flex flex-wrap align-items-start justify-content-between gap-2">
@@ -176,6 +196,15 @@ $calendarVisibilityLabel = static function (array $calendar): string {
                                                                 <p class="small text-body-secondary">
                                                                     <?= $this->escape(__('Odaberite kalendar koji već postoji u Simbiozi. Naziv ne mora odgovarati nazivu iz Confluencea.')) ?>
                                                                 </p>
+                                                                <?php if ($matchedCalendarUuid !== '') : ?>
+                                                                    <div class="alert alert-info py-2 small" role="status">
+                                                                        <?= $this->escape(__('Pronađen je postojeći kalendar istog naziva i unaprijed je odabran. Provjerite ga prije povezivanja.')) ?>
+                                                                    </div>
+                                                                <?php elseif (count($matchingCalendarUuids) > 1) : ?>
+                                                                    <div class="alert alert-warning py-2 small" role="status">
+                                                                        <?= $this->escape(__('Pronađeno je više dostupnih kalendara istog naziva. Odaberite odgovarajući kalendar.')) ?>
+                                                                    </div>
+                                                                <?php endif; ?>
                                                                 <label class="form-label" for="calendar-existing-<?= $this->escape((string)($issue['marker'] ?? '')) ?>"><?= $this->escape(__('Kalendar')) ?></label>
                                                                 <select
                                                                     class="form-select"
@@ -186,7 +215,10 @@ $calendarVisibilityLabel = static function (array $calendar): string {
                                                                 >
                                                                     <option value=""><?= $this->escape(__('Odaberite kalendar')) ?></option>
                                                                     <?php foreach ($calendarOptions as $calendar) : ?>
-                                                                        <option value="<?= $this->escape((string)($calendar['uuid'] ?? '')) ?>">
+                                                                        <option
+                                                                            value="<?= $this->escape((string)($calendar['uuid'] ?? '')) ?>"
+                                                                            <?= (string)($calendar['uuid'] ?? '') === $matchedCalendarUuid ? 'selected' : '' ?>
+                                                                        >
                                                                             <?= $this->escape(sprintf(
                                                                                 '%s · %s · %s',
                                                                                 (string)($calendar['name'] ?? __('Calendar')),
@@ -224,10 +256,9 @@ $calendarVisibilityLabel = static function (array $calendar): string {
                                                                     <div class="col-12">
                                                                         <label class="form-label"><?= $this->escape(__('iCalendar datoteka')) ?></label>
                                                                         <input class="form-control" type="file" name="ics_file" accept=".ics,text/calendar" required>
-                                                                    </div>
-                                                                    <div class="col-md-7">
-                                                                        <label class="form-label"><?= $this->escape(__('Naziv novog kalendara')) ?></label>
-                                                                        <input class="form-control" type="text" name="calendar_name" value="<?= $this->escape($calendarName) ?>">
+                                                                        <div class="form-text">
+                                                                            <?= $this->escape(__('Naziv kalendara preuzima se iz ICS datoteke; ako u njoj nije naveden, koristi se naziv iz Confluencea.')) ?>
+                                                                        </div>
                                                                     </div>
                                                                     <div class="col-md-5">
                                                                         <label class="form-label"><?= $this->escape(__('Vrsta')) ?></label>
