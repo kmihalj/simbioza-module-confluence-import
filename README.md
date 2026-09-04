@@ -41,8 +41,8 @@ Internal packages use compatible `^0.1.0` releases; this module does not commit 
   replacing that Workspace and importing an isolated copy;
 - imports current pages by default and recreates their tree;
 - optionally imports history, drafts and soft-deleted pages;
-- rewrites same-space links and reconciles cross-space links after later imports;
-- registers every imported file as a real private Editor page attachment and serves it through current Workspace/page ACL; source attachment identity is isolated per import job so a later copy or replacement never reuses another document's UUID;
+- rewrites same-space links and rechecks every cross-space link after each import or replacement; stable intermediary URLs allow a target imported later to become active without editing the source page;
+- registers every imported file as a real private Editor page attachment and serves it through current Workspace/page ACL; a replacement preserves the same source page slugs and attachment UUIDs, while a separate copy receives isolated identities;
 - prepares cached web-sized copies of imported JPEG, PNG, and WebP attachments
   after they are registered; originals remain unchanged and available on click;
 - safely suggests exact existing user and group matches for mapping;
@@ -116,7 +116,7 @@ module; embedding a calendar never expands its permissions.
 ## Quick start
 
 ```bash
-composer require aaieduhr/simbioza-module-confluence-import:^0.1.10
+composer require aaieduhr/simbioza-module-confluence-import:^0.1.11
 vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```

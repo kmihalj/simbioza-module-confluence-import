@@ -17,7 +17,8 @@ Create an XML export of exactly one Confluence space. Do not unpack or change th
    or **Import a separate copy**. Replacement permanently removes the earlier
    imported Workspace before any new page is written. A copy keeps the
    existing Workspace unchanged and uses isolated source and attachment
-   identities.
+   identities. Replacement preserves public page and attachment links and
+   rechecks references from other imported Workspaces during finalization.
 6. Keep the default current-content selection or explicitly enable history, drafts or deleted pages.
 7. Review every proposed user and group mapping. For an unmapped user, keep
    access blocked or explicitly create an inactive staged account without a

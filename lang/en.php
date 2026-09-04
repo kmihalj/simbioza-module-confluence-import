@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 return [
     'Prikaži sadržaj' => 'Show content',
+    'Pretraga područja' => 'Workspace search',
     'Ugrađeni sadržaj' => 'Embedded content',
     '1. Prenesi i provjeri Confluence arhivu' => '1. Upload and verify the Confluence archive',
     '2. Pregledaj mapiranja i pokreni import' => '2. Review mappings and start the import',

@@ -89,6 +89,44 @@ final class ConfluenceAttachmentRegistrationTest extends TestCase
         self::assertSame((int)$second['id'], (int)$repository->attachmentBySourceVersion(2, 'attachment-1', 1)['id']);
     }
 
+    /** HR: Zamjenski import može sačuvati javne identitete stranica i privitaka. EN: A replacement import can preserve public page and attachment identities. */
+    public function testExposesAndAcceptsReplacementIdentities(): void
+    {
+        $repository = $this->repository();
+        $uuid = '123e4567-e89b-42d3-a456-426614174000';
+        $repository->mapContent([
+            'source_id' => 'page-version-2',
+            'logical_source_id' => 'page-1',
+            'source_type' => 'page',
+            'status' => 'current',
+            'version' => 2,
+            'title' => 'Renamed page',
+        ], [
+            'source_space_key' => 'DOCS',
+            'workspace_id' => 9,
+            'node_id' => 12,
+            'document_key' => 'document-key',
+            'slug' => 'stable-page',
+        ], 1);
+        $saved = $repository->recordAttachment([
+            'uuid' => $uuid,
+            'source_attachment_id' => 'attachment-version-3',
+            'logical_source_id' => 'attachment-1',
+            'source_page_id' => 'page-1',
+            'source_version' => 3,
+            'original_name' => 'demo.pdf',
+            'workspace_id' => 9,
+            'status' => 'registered',
+        ], 1);
+
+        self::assertSame(['page-1' => 'stable-page'], $repository->pageSlugsByWorkspace(9));
+        self::assertSame(
+            ['attachment-version-3:3' => $uuid],
+            $repository->attachmentUuidsByWorkspace(9),
+        );
+        self::assertSame($uuid, $saved['uuid']);
+    }
+
     private function repository(): ConfluenceImportRepository
     {
         $helper = new Helper();

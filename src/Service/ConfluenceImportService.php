@@ -284,7 +284,12 @@ final readonly class ConfluenceImportService
             $dataset['users'] = $this->rows($scan['users'] ?? []);
             $dataset['calendars'] = $this->rows($scan['calendars'] ?? []);
             $pages = $this->selectedPageGroups($dataset['pages'], $normalized);
-            $targets = $this->plannedTargets($pages, $workspace, $dataset['pages']);
+            $targets = $this->plannedTargets(
+                $pages,
+                $workspace,
+                $dataset['pages'],
+                $this->scalarMap($normalized['_replacement_page_slugs'] ?? []),
+            );
             $phase = $normalized['include_attachments'] ? 'attachments' : 'pages';
             $state = [
                 'version' => 1,
@@ -374,6 +379,7 @@ final readonly class ConfluenceImportService
                     (int)$state['job_id'],
                     (int)($state['attachment_offset'] ?? 0),
                     25,
+                    $this->scalarMap($state['options']['_replacement_attachment_uuids'] ?? []),
                 );
                 $stored = is_array($state['attachment_result'] ?? null) ? $state['attachment_result'] : [];
                 $state['attachment_result'] = [
@@ -494,7 +500,12 @@ final readonly class ConfluenceImportService
             $dataset['users'] = $this->rows($scan['users'] ?? []);
             $dataset['calendars'] = $this->rows($scan['calendars'] ?? []);
             $pages = $this->selectedPageGroups($dataset['pages'], $normalized);
-            $targets = $this->plannedTargets($pages, $workspace, $dataset['pages']);
+            $targets = $this->plannedTargets(
+                $pages,
+                $workspace,
+                $dataset['pages'],
+                $this->scalarMap($normalized['_replacement_page_slugs'] ?? []),
+            );
             $this->repository->setStage($jobId, 'attachments');
             $attachmentResult = $normalized['include_attachments']
                 ? $this->importAttachments(
@@ -502,6 +513,7 @@ final readonly class ConfluenceImportService
                     $dataset,
                     $workspace,
                     $jobId,
+                    preferredUuids: $this->scalarMap($normalized['_replacement_attachment_uuids'] ?? []),
                 )
                 : ['urls' => [], 'imported' => 0, 'failed' => 0, 'warnings' => []];
             $attachments = $attachmentResult['urls'];
@@ -568,7 +580,9 @@ final readonly class ConfluenceImportService
             $pageResult = $contentResult['pages'];
             $commentResult = $contentResult['comments'];
             $this->repository->setStage($jobId, 'links_and_search');
-            $reconciled = $this->reconcileLinks();
+            $reconciled = $this->reconcileLinks(
+                $this->text($normalized['mapping_space_key'] ?? $space['source_key'] ?? ''),
+            );
             $includesReconciled = $this->reconcileIncludes(
                 $this->text($space['source_key'] ?? ''),
                 $targets,
@@ -702,7 +716,9 @@ final readonly class ConfluenceImportService
         });
 
         $this->repository->setStage($jobId, 'links_and_search');
-        $reconciled = $this->reconcileLinks();
+        $reconciled = $this->reconcileLinks(
+            $this->text($options['mapping_space_key'] ?? $space['source_key'] ?? ''),
+        );
         $includesReconciled = $this->reconcileIncludes(
             $this->text($space['source_key'] ?? ''),
             is_array($state['targets'] ?? null) ? $state['targets'] : [],
@@ -1565,10 +1581,15 @@ final readonly class ConfluenceImportService
      * @param array<string,list<array<string,mixed>>> $pages
      * @param array<string,mixed> $workspace
      * @param list<array<string,mixed>> $allPages
+     * @param array<string,string> $preferredSlugs
      * @return array<string,array<string,mixed>>
      */
-    private function plannedTargets(array $pages, array $workspace, array $allPages): array
-    {
+    private function plannedTargets(
+        array $pages,
+        array $workspace,
+        array $allPages,
+        array $preferredSlugs = [],
+    ): array {
         $used = [];
         $result = [];
         $workspaceSlug = $this->text($workspace['slug'] ?? '');
@@ -1576,11 +1597,16 @@ final readonly class ConfluenceImportService
         foreach ($pages as $logicalId => $versions) {
             $current = $this->currentPage($versions);
             $title = $this->text($current['title'] ?? '');
-            $slug = $this->pageSlugger->unique(
-                $this->editor->slugFromTitle($title),
-                'page-' . $logicalId,
-                $used,
-            );
+            $slug = $this->pageSlugger->shorten($this->text($preferredSlugs[(string)$logicalId] ?? ''));
+            if ($slug === '' || isset($used[$slug])) {
+                $slug = $this->pageSlugger->unique(
+                    $this->editor->slugFromTitle($title),
+                    'page-' . $logicalId,
+                    $used,
+                );
+            } else {
+                $used[$slug] = true;
+            }
             $result[$logicalId] = [
                 'slug' => $slug,
                 'title' => $title,
@@ -1600,6 +1626,7 @@ final readonly class ConfluenceImportService
      *
      * @param array<string,mixed> $dataset
      * @param array<string,mixed> $workspace
+     * @param array<string,string> $preferredUuids
      * @return array{urls:array<string,array<string,string>>,imported:int,failed:int,warnings:list<string>}
      */
     private function importAttachments(
@@ -1609,6 +1636,7 @@ final readonly class ConfluenceImportService
         int $jobId,
         int $offset = 0,
         int $limit = PHP_INT_MAX,
+        array $preferredUuids = [],
     ): array {
         $latest = [];
         foreach ($this->rows($dataset['attachments'] ?? []) as $attachment) {
@@ -1665,6 +1693,7 @@ final readonly class ConfluenceImportService
             $path = $this->config->attachmentDirectory() . DIRECTORY_SEPARATOR . $storedName;
             $metadata = is_array($properties[$sourceId] ?? null) ? $properties[$sourceId] : [];
             $record = [
+                'uuid' => $this->text($preferredUuids[$sourceId . ':' . $version] ?? ''),
                 'source_attachment_id' => $sourceId,
                 'logical_source_id' => $this->text($attachment['logical_source_id'] ?? $sourceId),
                 'source_page_id' => $pageId,
@@ -2701,10 +2730,10 @@ final readonly class ConfluenceImportService
     }
 
     /** HR: Pokušava razriješiti stare cross-space poveznice nakon svakog novog importa. EN: Attempts to resolve old cross-space links after each new import. */
-    private function reconcileLinks(): int
+    private function reconcileLinks(string $changedSpaceKey): int
     {
         $resolved = 0;
-        foreach ($this->repository->unresolvedLinks() as $link) {
+        foreach ($this->repository->linksForReconciliation($changedSpaceKey) as $link) {
             $spaceKey = $this->text($link['destination_space_key'] ?? '');
             $pageId = $this->text($link['destination_page_id'] ?? '');
             $title = $this->text($link['destination_page_title'] ?? '');
@@ -2716,12 +2745,14 @@ final readonly class ConfluenceImportService
                 $mapping = $spaceKey !== '' ? $this->repository->contentByTitle($spaceKey, $title) : null;
             }
             if (!is_array($mapping)) {
+                $this->repository->updateLinkResolution((int)$link['id'], null);
                 continue;
             }
             $space = $this->repository->spaceByWorkspaceId((int)($mapping['target_workspace_id'] ?? 0));
             $spaceSlug = is_array($space) ? $this->text($space['target_workspace_slug'] ?? '') : '';
             $nodeSlug = $this->text($mapping['target_slug'] ?? '');
             if ($spaceSlug === '' || $nodeSlug === '') {
+                $this->repository->updateLinkResolution((int)$link['id'], null);
                 continue;
             }
             $target = $this->nodePath($spaceSlug, $nodeSlug);
@@ -2731,7 +2762,7 @@ final readonly class ConfluenceImportService
                 $safeFragment = $this->safeFragment($fragment);
                 $target .= $safeFragment !== '' ? '#' . $safeFragment : '';
             }
-            $this->repository->resolveLink((int)$link['id'], $target);
+            $this->repository->updateLinkResolution((int)$link['id'], $target);
             ++$resolved;
         }
 
@@ -2860,6 +2891,16 @@ final readonly class ConfluenceImportService
         }
 
         if (is_array($existingWorkspace)) {
+            $existingName = $this->text($existingWorkspace['name'] ?? '');
+            $existingSlug = $this->text($existingWorkspace['slug'] ?? '');
+            if ($existingName !== '') {
+                $options['workspace_name'] = $existingName;
+            }
+            if ($existingSlug !== '') {
+                $options['workspace_slug'] = $existingSlug;
+            }
+            $options['_replacement_page_slugs'] = $this->repository->pageSlugsByWorkspace($workspaceId);
+            $options['_replacement_attachment_uuids'] = $this->repository->attachmentUuidsByWorkspace($workspaceId);
             if (!(bool)($existingWorkspace['is_deleted'] ?? false)) {
                 $this->workspaces->softDeleteWorkspace($workspaceId, $actorUserId);
             }
@@ -3189,6 +3230,29 @@ final readonly class ConfluenceImportService
             }
         }
         return $rows;
+    }
+
+    /**
+     * HR: Zadržava samo neprazne skalarne ključeve i vrijednosti interne mape.
+     * EN: Keeps only non-empty scalar keys and values from an internal map.
+     *
+     * @return array<string,string>
+     */
+    private function scalarMap(mixed $value): array
+    {
+        $result = [];
+        foreach (is_array($value) ? $value : [] as $key => $item) {
+            if (!is_scalar($item)) {
+                continue;
+            }
+            $normalizedKey = trim((string)$key);
+            $normalizedValue = trim((string)$item);
+            if ($normalizedKey !== '' && $normalizedValue !== '') {
+                $result[$normalizedKey] = $normalizedValue;
+            }
+        }
+
+        return $result;
     }
 
     /** HR: Normalizira skalarnu tekstualnu vrijednost. EN: Normalizes a scalar text value. */

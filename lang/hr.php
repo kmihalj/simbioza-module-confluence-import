@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 return [
     'Prikaži sadržaj' => 'Prikaži sadržaj',
+    'Pretraga područja' => 'Pretraga područja',
     'Ugrađeni sadržaj' => 'Ugrađeni sadržaj',
     '1. Prenesi i provjeri Confluence arhivu' => '1. Prenesi i provjeri Confluence arhivu',
     '2. Pregledaj mapiranja i pokreni import' => '2. Pregledaj mapiranja i pokreni import',

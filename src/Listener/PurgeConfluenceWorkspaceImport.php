@@ -36,6 +36,7 @@ final readonly class PurgeConfluenceWorkspaceImport
     public function __invoke(WorkspacePermanentlyDeleting $event): void
     {
         $jobIds = [];
+        $sourceSpaceKeys = [];
         foreach (
             $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
             ->select(['id'])
@@ -48,15 +49,19 @@ final readonly class PurgeConfluenceWorkspaceImport
         }
         foreach (
             $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_SPACES)
-            ->select(['job_id'])
+            ->select(['job_id', 'source_space_key'])
             ->where('target_workspace_id', '=', $event->workspaceId)
             ->get() as $row
         ) {
             if (is_array($row) && is_numeric($row['job_id'] ?? null)) {
                 $jobIds[] = (int)$row['job_id'];
             }
+            if (is_array($row) && is_scalar($row['source_space_key'] ?? null)) {
+                $sourceSpaceKeys[] = trim((string)$row['source_space_key']);
+            }
         }
         $jobIds = array_values(array_filter(array_unique($jobIds)));
+        $sourceSpaceKeys = array_values(array_filter(array_unique($sourceSpaceKeys)));
 
         $managedFiles = [];
         $attachmentQuery = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS)
@@ -87,7 +92,7 @@ final readonly class PurgeConfluenceWorkspaceImport
             }
         }
 
-        $this->database->transaction(function (Database $database) use ($event, $jobIds): void {
+        $this->database->transaction(function (Database $database) use ($event, $jobIds, $sourceSpaceKeys): void {
             $database->table(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS)
                 ->where('target_workspace_id', '=', $event->workspaceId)
                 ->delete();
@@ -122,6 +127,15 @@ final readonly class PurgeConfluenceWorkspaceImport
             $database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
                 ->whereIn('id', $jobIds)
                 ->delete();
+            if ($sourceSpaceKeys !== []) {
+                $database->table(ModuleSimbiozaConfluenceImport::TABLE_LINKS)
+                    ->whereIn('destination_space_key', $sourceSpaceKeys)
+                    ->update([
+                        'resolved_target' => null,
+                        'status' => 'unresolved',
+                        'updated_at' => date('Y-m-d H:i:s'),
+                    ]);
+            }
         });
 
         foreach (array_unique($managedFiles) as $path) {

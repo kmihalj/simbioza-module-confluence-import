@@ -51,7 +51,11 @@ metapodataka za administratorsku dijagnostiku.
 Prije `startImport()` priprema ponovnog uvoza razrješava kanonsko mapiranje
 izvora. Strategija `replace` kroz javni Maintenance servis trajno briše ranije
 uvezeno područje, dok `copy` dodaje sufiks izvornim identitetima i izrađuje
-zasebno područje. Izrada stranica označava logički Confluence `homePage` kao
+zasebno područje. Prije brisanja zamjena pamti javne slugove stranica i UUID-e
+nativnih privitaka te ih vraća istim logičkim izvornim zapisima. Finalizacija
+ponovno provjerava i razriješene i neriješene uvezene poveznice, pa drugo
+uvezeno područje ne može nakon zamjene ostati usmjereno na zastarjeli cilj.
+Izrada stranica označava logički Confluence `homePage` kao
 naslovnicu područja, uz fallback na aktualnu korijensku stranicu.
 
 Otkazivanje radi samo nad zaključanim privremenim poslom prijavljenog

@@ -123,11 +123,11 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                             <div class="row g-3">
                                 <div class="col-md-5">
                                     <label class="form-label" for="confluence-import-workspace-name"><?= $this->escape(__('Naziv ciljnog područja')) ?></label>
-                                    <input class="form-control" id="confluence-import-workspace-name" name="workspace_name" value="<?= $this->escape((string)($space['name'] ?? '')) ?>" required>
+                                    <input class="form-control" id="confluence-import-workspace-name" name="workspace_name" value="<?= $this->escape((string)($existingImport['workspace_name'] ?? $space['name'] ?? '')) ?>" required>
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label" for="confluence-import-workspace-slug"><?= $this->escape(__('Slug ciljnog područja')) ?></label>
-                                    <input class="form-control" id="confluence-import-workspace-slug" name="workspace_slug" value="<?= $this->escape((string)($space['source_key'] ?? '')) ?>" required>
+                                    <input class="form-control" id="confluence-import-workspace-slug" name="workspace_slug" value="<?= $this->escape((string)($existingImport['workspace_slug'] ?? $space['source_key'] ?? '')) ?>" required>
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label" for="confluence-import-language"><?= $this->escape(__('Jezik uvezenog sadržaja')) ?></label>

@@ -44,6 +44,29 @@ final class ConfluenceLinkBatchPersistenceTest extends TestCase
         );
     }
 
+    /** HR: Ponovno usklađivanje obuhvaća i ranije razriješene veze. EN: Reconciliation includes links that were resolved previously. */
+    public function testAllLinksCanBeRecheckedAndInvalidated(): void
+    {
+        [$repository] = $this->environment();
+        $uuid = $repository->recordLink([
+            'source_page_id' => 'source',
+            'source_space_key' => 'SOURCE',
+            'destination_space_key' => 'TARGET',
+            'destination_page_id' => 'target',
+            'resolved_target' => '/workspace/target/page',
+            'status' => 'resolved',
+        ], 1);
+
+        $links = $repository->linksForReconciliation('TARGET');
+        self::assertCount(1, $links);
+        self::assertSame($uuid, $links[0]['uuid']);
+
+        $repository->updateLinkResolution((int)$links[0]['id'], null);
+        $updated = $repository->linkByUuid($uuid);
+        self::assertSame('unresolved', $updated['status']);
+        self::assertNull($updated['resolved_target']);
+    }
+
     /** @return array{ConfluenceImportRepository,Database} */
     private function environment(): array
     {

@@ -258,6 +258,9 @@ final readonly class ConfluenceCalendarResolutionService
     }
 
     /**
+     * HR: Pronalazi točno kalendarsko upozorenje u spremljenom izvještaju importa.
+     * EN: Finds the exact calendar issue in the persisted import report.
+     *
      * @param array<string,mixed> $summary
      * @return array{0:int,1:int,2:array<string,mixed>}
      */
@@ -341,6 +344,7 @@ final readonly class ConfluenceCalendarResolutionService
         return trim($result);
     }
 
+    /** HR: Vraća dostupni i kompatibilni Calendar servis. EN: Returns the available compatible Calendar service. */
     private function calendarManager(): ?object
     {
         if (!interface_exists(self::CALENDAR_MANAGER) || !$this->container->has(self::CALENDAR_MANAGER)) {
@@ -361,6 +365,7 @@ final readonly class ConfluenceCalendarResolutionService
             : null;
     }
 
+    /** HR: Zahtijeva dostupni Calendar servis za izmjenu. EN: Requires the Calendar service for a mutation. */
     private function requiredCalendarManager(): object
     {
         $manager = $this->calendarManager();
@@ -387,11 +392,13 @@ final readonly class ConfluenceCalendarResolutionService
         return $callable(...$arguments);
     }
 
+    /** HR: Sigurno normalizira skalarnu tekstnu vrijednost. EN: Safely normalizes a scalar text value. */
     private function text(mixed $value): string
     {
         return is_scalar($value) ? trim((string)$value) : '';
     }
 
+    /** HR: Zahtijeva pozitivni cijeli broj ili prekida zadanom porukom. EN: Requires a positive integer or fails with the supplied message. */
     private function positiveInt(mixed $value, string $message): int
     {
         $number = is_numeric($value) ? (int)$value : 0;

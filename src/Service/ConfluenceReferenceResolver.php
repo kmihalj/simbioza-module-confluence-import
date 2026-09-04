@@ -15,6 +15,7 @@ use function preg_replace_callback;
 use function rawurldecode;
 use function rawurlencode;
 use function str_contains;
+use function strcasecmp;
 use function trim;
 
 /** HR: Razrješava Confluence reference nakon što su sve ciljne stranice poznate. EN: Resolves Confluence references after all target pages are known. */
@@ -93,7 +94,12 @@ final readonly class ConfluenceReferenceResolver
                     'status' => $target !== '#' ? 'resolved' : 'unresolved',
                 ];
 
-                return $target !== '#' ? $target : $this->unresolvedPath($linkUuid);
+                $crossSpace = $destinationSpace !== ''
+                    && strcasecmp($destinationSpace, $sourceSpaceKey) !== 0;
+
+                return $crossSpace || $target === '#'
+                    ? $this->unresolvedPath($linkUuid)
+                    : $target;
             },
             $html,
         ) ?? $html;

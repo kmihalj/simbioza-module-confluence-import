@@ -18,16 +18,23 @@ use function trim;
  */
 final readonly class ConfluenceWorkspaceReferenceProvider implements WorkspaceExternalReferenceProviderInterface
 {
+    /** HR: Prima spremište spremljenih mapiranja importa. EN: Receives the persisted import-mapping repository. */
     public function __construct(private ConfluenceImportRepository $repository)
     {
     }
 
+    /** HR: Vraća stabilni identifikator izvornog sustava. EN: Returns the stable source-system identifier. */
     public function provider(): string
     {
         return 'confluence';
     }
 
-    /** @return array{slug:string,title:string}|null */
+    /**
+     * HR: Razrješava Confluence ključ tek kada postoji lokalno mapiranje područja.
+     * EN: Resolves a Confluence key only after its local Workspace mapping exists.
+     *
+     * @return array{slug:string,title:string}|null
+     */
     public function resolve(string $reference): ?array
     {
         $mapping = $this->repository->spaceBySourceKey($reference);

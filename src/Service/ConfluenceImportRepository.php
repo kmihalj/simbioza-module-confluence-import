@@ -16,7 +16,9 @@ use function is_numeric;
 use function is_scalar;
 use function json_decode;
 use function json_encode;
+use function preg_match;
 use function random_bytes;
+use function strtolower;
 use function trim;
 
 use const JSON_INVALID_UTF8_SUBSTITUTE;
@@ -652,6 +654,41 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
+     * HR: Čuva javne slugove stranica prije zamjenskog importa kako bi stare
+     *     međupodručne poveznice nastavile voditi na isti URL.
+     * EN: Preserves public page slugs before a replacement import so existing
+     *     cross-Workspace links keep pointing at the same URL.
+     *
+     * @return array<string,string>
+     */
+    public function pageSlugsByWorkspace(int $workspaceId): array
+    {
+        if ($workspaceId <= 0) {
+            return [];
+        }
+
+        $result = [];
+        foreach (
+            $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_CONTENT)
+                ->where('target_workspace_id', '=', $workspaceId)
+                ->where('import_status', '=', 'imported')
+                ->orderBy('source_version', 'ASC')
+                ->get() as $row
+        ) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $sourceId = $this->string($row['logical_source_id'] ?? '');
+            $slug = $this->string($row['target_slug'] ?? '');
+            if ($sourceId !== '' && $slug !== '') {
+                $result[$sourceId] = $slug;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * HR: Vraća izvorno mapiranje ciljnog područja.
      * EN: Returns the source mapping for a target Workspace.
      *
@@ -749,37 +786,82 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Vraća poveznice koje čekaju naknadno usklađivanje.
-     * EN: Returns links awaiting later reconciliation.
+     * HR: Vraća neriješene poveznice i sve poveznice prema upravo promijenjenom području.
+     * EN: Returns unresolved links plus every link to the Workspace that just changed.
      *
      * @return list<array<string,mixed>>
      */
-    public function unresolvedLinks(): array
+    public function linksForReconciliation(string $destinationSpaceKey = ''): array
     {
         $rows = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_LINKS)
             ->where('status', '=', 'unresolved')
             ->orderBy('id', 'ASC')
             ->get();
+        if (trim($destinationSpaceKey) !== '') {
+            $rows = [
+                ...$rows,
+                ...$this->database->table(ModuleSimbiozaConfluenceImport::TABLE_LINKS)
+                    ->where('destination_space_key', '=', trim($destinationSpaceKey))
+                    ->orderBy('id', 'ASC')
+                    ->get(),
+            ];
+        }
         $result = [];
         foreach ($rows as $row) {
             if (is_array($row)) {
-                $result[] = $this->normalizeRow($row);
+                $normalized = $this->normalizeRow($row);
+                $result[$this->integer($normalized['id'] ?? 0)] = $normalized;
+            }
+        }
+
+        return array_values($result);
+    }
+
+    /** HR: Sprema aktualno razrješenje poveznice ili je ponovno označava neriješenom. EN: Stores the current link resolution or marks it unresolved again. */
+    public function updateLinkResolution(int $linkId, ?string $target): void
+    {
+        $target = trim((string)$target);
+        $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_LINKS)
+            ->where('id', '=', $linkId)
+            ->update([
+                'resolved_target' => $target !== '' ? $target : null,
+                'status' => $target !== '' ? 'resolved' : 'unresolved',
+                'updated_at' => gmdate('Y-m-d H:i:s'),
+            ]);
+    }
+
+    /**
+     * HR: Čuva UUID-e Editor privitaka prije zamjenskog importa kako bi svi
+     *     postojeći linkovi na njih ostali valjani.
+     * EN: Preserves Editor attachment UUIDs before a replacement import so all
+     *     existing links to them remain valid.
+     *
+     * @return array<string,string>
+     */
+    public function attachmentUuidsByWorkspace(int $workspaceId): array
+    {
+        if ($workspaceId <= 0) {
+            return [];
+        }
+
+        $result = [];
+        foreach (
+            $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS)
+                ->where('target_workspace_id', '=', $workspaceId)
+                ->get() as $row
+        ) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $sourceId = $this->string($row['source_attachment_id'] ?? '');
+            $version = max(1, $this->integer($row['source_version'] ?? 1));
+            $uuid = strtolower($this->string($row['uuid'] ?? ''));
+            if ($sourceId !== '' && preg_match('/^[0-9a-f-]{36}$/', $uuid) === 1) {
+                $result[$sourceId . ':' . $version] = $uuid;
             }
         }
 
         return $result;
-    }
-
-    /** HR: Označava ranije neriješenu poveznicu stvarnim ciljem. EN: Marks a previously unresolved link with its real target. */
-    public function resolveLink(int $linkId, string $target): void
-    {
-        $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_LINKS)
-            ->where('id', '=', $linkId)
-            ->update([
-                'resolved_target' => trim($target),
-                'status' => 'resolved',
-                'updated_at' => gmdate('Y-m-d H:i:s'),
-            ]);
     }
 
     /**
@@ -822,8 +904,12 @@ final readonly class ConfluenceImportRepository
             return $this->attachmentById($id);
         }
 
+        $uuid = strtolower($this->string($attachment['uuid'] ?? ''));
+        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $uuid) !== 1) {
+            $uuid = $this->uuid();
+        }
         $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS)->insert([
-            'uuid' => $this->uuid(),
+            'uuid' => $uuid,
             'source_attachment_id' => $sourceId,
             'source_version' => $version,
             'created_at' => $now,

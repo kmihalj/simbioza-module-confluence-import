@@ -52,7 +52,11 @@ enough metadata for administrator diagnostics.
 Before `startImport()`, re-import preparation resolves the canonical source
 mapping. `replace` permanently deletes the earlier imported Workspace through
 the public Maintenance service, while `copy` suffixes source identities and
-creates a separate Workspace. Page creation marks the logical Confluence
+creates a separate Workspace. Before deletion, replacement captures the public
+page slugs and native attachment UUIDs and applies them to the same logical
+source records. Finalization rechecks resolved as well as unresolved imported
+links, so replacement cannot leave another imported Workspace pointing at stale
+targets. Page creation marks the logical Confluence
 `homePage` as the Workspace homepage, with a current root-page fallback.
 
 Cancellation operates only on an actor-owned locked transient job. The service
