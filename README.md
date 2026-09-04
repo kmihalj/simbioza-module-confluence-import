@@ -22,6 +22,8 @@ Optional integrations:
 - Full-site and Workspaces component backups include durable import mappings; Editor backup providers include the native page attachments.
 - A backup of one Workspace includes only that Workspace's Confluence provenance while its real attachments travel with the Editor documents.
 - Comment imports comments whose authors and pages are mapped.
+- Calendar lets an administrator explicitly import an ICS file as a new shared
+  calendar or link an already visible calendar from the durable import report.
 - Workspace Search rebuilds its derived index automatically after import.
 
 Internal packages use compatible `^0.1.0` releases; this module does not commit a `composer.lock`.
@@ -53,6 +55,9 @@ Internal packages use compatible `^0.1.0` releases; this module does not commit 
 - applies unresolved ACL identities fail-closed;
 - maps a personal Confluence space to the confirmed owner's Personal Workspace;
 - records unsupported macros and other decisions in a durable per-import report linked from **Recent Confluence imports**;
+- records each Confluence Team Calendar macro in that report because the XML
+  contains its identity but not its events; no calendar is matched or created
+  automatically;
 - allows an unfinished import to be cancelled, immediately deleting its uploaded archive and preparation data;
 - removes the uploaded source archive after a successful import.
 - processes a large confirmed import in bounded resumable batches and
@@ -101,11 +106,17 @@ contains locally editable tasks; the final column contains ordinary links to
 the pages from which the task text was imported, without synchronizing task
 state between pages. Children of excluded draft/deleted intermediaries remain under
 their nearest imported ancestor instead of being promoted to the root.
+When the optional Calendar module is installed, each reported `calendar` macro
+offers two explicit choices: upload an ICS file as a new team/resource calendar,
+including its initial read visibility, or select any existing calendar the
+administrator may read. The resulting page contains the standard native Editor
+calendar element. Calendar type and ACL remain owned and enforced by the Calendar
+module; embedding a calendar never expands its permissions.
 
 ## Quick start
 
 ```bash
-composer require aaieduhr/simbioza-module-confluence-import:^0.1.8
+composer require aaieduhr/simbioza-module-confluence-import:^0.1.9
 vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```

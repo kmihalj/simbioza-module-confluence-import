@@ -29,7 +29,16 @@ The converter recognises modern `/spaces/SPACE/pages/ID/title`, legacy `/display
 
 Code, noformat, info, note, tip and warning structures have safe HTML representations. Confluence task lists become native interactive Task lists. Their imported completion value is the initial state until a Simbioza user changes it; rich content, HTTP(S) links, source nesting, and stable source anchors are retained. Unsupported or application-specific macros keep a visible safe fallback and create an administrator warning rather than silently disappearing.
 
-Calendar and Task modules remain the owners of live calendars and tasks. Imported tasks use the Task module's normal ACL, CSRF protection, state storage, and audit trail. A different Confluence macro is not silently converted to a live business object unless its complete data and ACL can be mapped safely; otherwise the static representation remains in the imported page.
+Calendar and Task modules remain the owners of live calendars and tasks.
+Imported tasks use the Task module's normal ACL, CSRF protection, state storage,
+and audit trail. Confluence XML retains a Team Calendar identity but not its
+events. A `calendar` macro therefore remains marked in the page and durable
+report until an administrator explicitly imports an ICS file into a new
+team/resource calendar or selects an existing readable calendar. The Calendar
+module validates type and permissions, and embedding never expands the calendar
+ACL. A different Confluence macro is not silently converted to a live business
+object unless its complete data and ACL can be mapped safely; otherwise the
+static representation remains in the imported page.
 
 ### Supported macro conversion
 

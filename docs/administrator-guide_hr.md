@@ -25,7 +25,11 @@ Izradite XML izvoz točno jednog Confluence spacea. ZIP nemojte raspakirati ni m
 8. Pokrenite potvrđeni import. Stranica prikazuje fazu, postotak te broj
    obrađenih privitaka i stranica. Možete je zatvoriti; ponovnim otvaranjem
    istog posla nastavlja se od zadnjeg potvrđenog koraka.
-9. Pod **Nedavni Confluence importi** otvorite trajni izvještaj. On povezuje svaku stranicu čiji nepodržani sadržaj zahtijeva ručnu provjeru.
+9. Pod **Nedavni Confluence importi** otvorite trajni izvještaj. On povezuje
+   svaku stranicu čiji sadržaj zahtijeva ručnu provjeru. Za prijavljeni Calendar
+   makro ručno odaberite postojeći dostupni kalendar ili uvezite njegov ICS kao
+   novi timski/resursni kalendar, vrstu i početnu vidljivost odredite izričito.
+   Ugradnja u stranicu ne zaobilazi ACL kalendara.
 10. Otvorite novo područje i provjerite prijavljene stranice.
 
 Provjereni prijenos i mapiranja ostaju dostupni nakon napuštanja stranice. Dok

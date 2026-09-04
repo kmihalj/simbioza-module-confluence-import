@@ -55,6 +55,44 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
+    /** HR: Calendar makro ostaje označen za izričiti ručni izbor bez automatskog povezivanja. EN: A Calendar macro remains marked for an explicit manual choice without automatic linking. */
+    public function testMarksCalendarMacroForManualResolution(): void
+    {
+        $sourceUuid = '3c1a6576-55e6-4776-9296-b95a00f980b7';
+        $body = <<<XML
+<ac:structured-macro ac:name="calendar" ac:macro-id="calendar-macro-1">
+<ac:parameter ac:name="id">{$sourceUuid}</ac:parameter>
+</ac:structured-macro>
+XML;
+        $context = new ConfluenceMacroContext(
+            '10',
+            [],
+            [],
+            [],
+            [$sourceUuid => 'CroRIS javni kalendar događanja'],
+        );
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'CRORIS', '10', $context);
+
+        self::assertSame([], $result->unsupportedMacros);
+        self::assertCount(1, $result->reviewIssues);
+        self::assertSame('calendar', $result->reviewIssues[0]['type']);
+        self::assertSame($sourceUuid, $result->reviewIssues[0]['source_calendar_id']);
+        self::assertSame(
+            'CroRIS javni kalendar događanja',
+            $result->reviewIssues[0]['source_calendar_name'],
+        );
+        self::assertMatchesRegularExpression(
+            '/^confluence-calendar-[a-f0-9]{20}$/',
+            (string)$result->reviewIssues[0]['marker'],
+        );
+        self::assertStringContainsString(
+            'id="' . $result->reviewIssues[0]['marker'] . '"',
+            $result->html,
+        );
+        self::assertStringContainsString('CroRIS javni kalendar događanja', $result->html);
+    }
+
     /** HR: Čuva status, bogati sadržaj i ugniježđenost Confluence zadataka bez udvostručavanja teksta. EN: Preserves status, rich content, and nesting of Confluence tasks without duplicating text. */
     public function testPreservesNestedConfluenceTaskLists(): void
     {

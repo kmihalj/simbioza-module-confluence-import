@@ -8,6 +8,7 @@ use AaiEduHr\SimbiozaModuleWorkspace\Service\WorkspaceAccessService;
 use AaiEduHr\SimbiozaModuleWorkspace\Service\WorkspaceRepository;
 use AaiEduHr\HeartPhrameModuleMenu\Service\MenuRenderer;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Exception\ConfluenceImportException;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceCalendarResolutionService;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportConfig;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportModuleViewRenderer;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportRepository;
@@ -22,9 +23,13 @@ use HeartPhrame\Routing\UrlGenerator;
 use HeartPhrame\Session\SessionInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Message\UploadedFileInterface;
 use Throwable;
 
+use function http_build_query;
 use function is_resource;
+
+use const UPLOAD_ERR_OK;
 
 /**
  * HR: Administratorsko sučelje za nastavivi upload, pregled mapiranja i kontrolirani Confluence import.
@@ -41,6 +46,7 @@ final readonly class ConfluenceImportController
         private ConfluenceImportRepository $repository,
         private ConfluenceImportUploadService $uploads,
         private ConfluenceImportService $imports,
+        private ConfluenceCalendarResolutionService $calendarResolution,
         private ConfluenceImportConfig $config,
         private UrlGenerator $urls,
         private SessionInterface $session,
@@ -125,12 +131,28 @@ final readonly class ConfluenceImportController
                     $reviewPages[] = $page;
                 }
             }
+            $actor = $this->access->currentUser();
+            if (!is_array($actor)) {
+                throw new ConfluenceImportException(__('Prijavljeni administrator nije pronađen.'));
+            }
+            $calendarAvailable = $this->calendarResolution->isAvailable();
+            $query = $request->getQueryParams();
 
             return $this->views->render('settings/report', [
                 'title' => __('Izvještaj Confluence importa'),
                 'job' => $job,
                 'summary' => $summary,
                 'reviewPages' => $reviewPages,
+                'calendarAvailable' => $calendarAvailable,
+                'calendarOptions' => $calendarAvailable
+                    ? $this->calendarResolution->availableCalendars($actor)
+                    : [],
+                'calendarResolvePath' => $this->calendarResolutionPath($this->text($job['uuid'] ?? '')),
+                'calendarAdminPath' => $calendarAvailable
+                    ? $this->path('calendar.admin', '/settings/calendar')
+                    : null,
+                'calendarResolutionStatus' => $this->text($query['calendar_resolution'] ?? ''),
+                'calendarResolutionMessage' => $this->text($query['calendar_message'] ?? ''),
                 'settingsPath' => $this->path('simbioza-confluence-import.settings', '/settings/confluence-import'),
                 'workspacePath' => $this->workspacePathById($this->integer($job['workspace_id'] ?? 0)),
                 'stylesPath' => $this->path('simbioza-confluence-import.assets.css', '/confluence-import/assets.css'),
@@ -139,6 +161,38 @@ final readonly class ConfluenceImportController
             ]);
         } catch (Throwable) {
             return $this->responses->text(__('Izvještaj Confluence importa nije pronađen.'), 404);
+        }
+    }
+
+    /** HR: Ručno uvozi ili povezuje kalendar iz trajnog izvještaja. EN: Manually imports or links a calendar from the durable report. */
+    public function resolveCalendar(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->access->isAdministrator()) {
+            return $this->denied();
+        }
+
+        $uuid = $this->text($request->getAttribute('uuid'));
+        try {
+            $body = $this->body($request);
+            $actor = $this->access->currentUser();
+            if (!is_array($actor)) {
+                throw new ConfluenceImportException(__('Prijavljeni administrator nije pronađen.'));
+            }
+
+            $ics = $this->text($body['resolution_mode'] ?? '') === 'import'
+                ? $this->uploadedIcsContent($request)
+                : '';
+            $result = $this->calendarResolution->resolve($uuid, $body, $ics, $actor);
+            $message = sprintf(
+                __('Stranica sada prikazuje kalendar „%s”.'),
+                $this->text($result['target_calendar_name'] ?? __('Calendar')),
+            );
+
+            return $this->responses->redirect($this->calendarResolutionRedirect($uuid, 'success', $message));
+        } catch (Throwable $throwable) {
+            return $this->responses->redirect(
+                $this->calendarResolutionRedirect($uuid, 'error', $throwable->getMessage()),
+            );
         }
     }
 
@@ -519,6 +573,41 @@ final readonly class ConfluenceImportController
 
         return rtrim($this->urls->getBasePath(), '/')
             . '/settings/confluence-import/report/' . rawurlencode($uuid);
+    }
+
+    /** HR: Gradi putanju ručnog razrješenja kalendara. EN: Builds the manual calendar-resolution path. */
+    private function calendarResolutionPath(string $uuid): string
+    {
+        if ($this->urls->namedRouteExists('simbioza-confluence-import.report.calendar')) {
+            return $this->urls->getPathFor('simbioza-confluence-import.report.calendar', ['uuid' => $uuid]);
+        }
+
+        return $this->reportPath($uuid) . '/calendar';
+    }
+
+    /** HR: Vraća na izvještaj s kratkom porukom ishoda. EN: Returns to the report with a concise outcome message. */
+    private function calendarResolutionRedirect(string $uuid, string $status, string $message): string
+    {
+        return $this->reportPath($uuid) . '?' . http_build_query([
+            'calendar_resolution' => $status,
+            'calendar_message' => $message,
+        ]);
+    }
+
+    /** HR: Čita izričito odabranu ICS datoteku. EN: Reads the explicitly selected ICS file. */
+    private function uploadedIcsContent(ServerRequestInterface $request): string
+    {
+        $file = $request->getUploadedFiles()['ics_file'] ?? null;
+        if (!$file instanceof UploadedFileInterface || $file->getError() !== UPLOAD_ERR_OK) {
+            throw new ConfluenceImportException(__('Odaberite ispravnu iCalendar datoteku.'));
+        }
+
+        $content = (string)$file->getStream();
+        if (trim($content) === '') {
+            throw new ConfluenceImportException(__('iCalendar datoteka je prazna.'));
+        }
+
+        return $content;
     }
 
     /** HR: Razrješava imenovanu rutu uz lokalni fallback. EN: Resolves a named route with a local fallback. */

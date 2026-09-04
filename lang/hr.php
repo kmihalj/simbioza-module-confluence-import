@@ -252,5 +252,70 @@ return [
         'Confluence područje već je uvezeno. Odaberite zamjenu postojećeg područja ili uvoz nove kopije.',
     'Osobno Confluence područje nije moguće uvesti kao zasebnu kopiju.' =>
         'Osobno Confluence područje nije moguće uvesti kao zasebnu kopiju.',
+    'Calendar' => 'Kalendar',
+    'Kalendar je moguće povezati tek nakon dovršenog importa.' =>
+        'Kalendar je moguće povezati tek nakon dovršenog importa.',
+    'Confluence calendar makro nije valjano odabran.' => 'Confluence calendar makro nije valjano odabran.',
+    'Ovaj Confluence kalendar već je povezan.' => 'Ovaj Confluence kalendar već je povezan.',
+    'Ciljna stranica nije pronađena.' => 'Ciljna stranica nije pronađena.',
+    'Ciljni dokument nije pronađen.' => 'Ciljni dokument nije pronađen.',
+    'Ciljna stranica još nije objavljena.' => 'Ciljna stranica još nije objavljena.',
+    'Stranica ima neobjavljeni nacrt. Najprije ga objavite ili odbacite pa ponovno povežite kalendar.' =>
+        'Stranica ima neobjavljeni nacrt. Najprije ga objavite ili odbacite pa ponovno povežite kalendar.',
+    'Oznaka Confluence kalendara više nije prisutna na stranici.' =>
+        'Oznaka Confluence kalendara više nije prisutna na stranici.',
+    'Odaberite ICS datoteku za uvoz kalendara.' => 'Odaberite ICS datoteku za uvoz kalendara.',
+    'Odaberite timski ili resursni kalendar.' => 'Odaberite timski ili resursni kalendar.',
+    'Calendar modul nije vratio rezultat uvoza.' => 'Calendar modul nije vratio rezultat uvoza.',
+    'Odabrani kalendar nije dostupan za povezivanje.' => 'Odabrani kalendar nije dostupan za povezivanje.',
+    'Odaberite uvoz ICS-a ili povezivanje postojećeg kalendara.' =>
+        'Odaberite uvoz ICS-a ili povezivanje postojećeg kalendara.',
+    'Odabrani kalendar nema stabilni UUID.' => 'Odabrani kalendar nema stabilni UUID.',
+    'Confluence calendar makro nije pronađen u izvještaju importa.' =>
+        'Confluence calendar makro nije pronađen u izvještaju importa.',
+    'Kalendar: %s' => 'Kalendar: %s',
+    'Calendar modul nije dostupan na ovoj instalaciji.' => 'Calendar modul nije dostupan na ovoj instalaciji.',
+    'Calendar modul nema potrebnu funkcionalnost.' => 'Calendar modul nema potrebnu funkcionalnost.',
+    'Confluence kalendar: %s' => 'Confluence kalendar: %s',
+    'Kalendar treba povezati ili uvesti u izvještaju Confluence importa.' =>
+        'Kalendar treba povezati ili uvesti u izvještaju Confluence importa.',
+    'Stranica sada prikazuje kalendar „%s”.' => 'Stranica sada prikazuje kalendar „%s”.',
+    'Odaberite ispravnu iCalendar datoteku.' => 'Odaberite ispravnu iCalendar datoteku.',
+    'iCalendar datoteka je prazna.' => 'iCalendar datoteka je prazna.',
+    'Osobni kalendar' => 'Osobni kalendar',
+    'Resursni kalendar' => 'Resursni kalendar',
+    'Timski kalendar' => 'Timski kalendar',
+    'javno čitanje' => 'javno čitanje',
+    'čitanje za prijavljene' => 'čitanje za prijavljene',
+    'čitanje prema ACL-u kalendara' => 'čitanje prema ACL-u kalendara',
+    'Nepoznati kalendar' => 'Nepoznati kalendar',
+    'XML sadrži identitet kalendara, ali ne i njegove događaje. Kalendar se zato ne povezuje automatski.' =>
+        'XML sadrži identitet kalendara, ali ne i njegove događaje. Kalendar se zato ne povezuje automatski.',
+    'Razriješeno' => 'Razriješeno',
+    'Stranica prikazuje kalendar „%s”.' => 'Stranica prikazuje kalendar „%s”.',
+    ' Događaji: %d dodano, %d ažurirano, %d preskočeno.' =>
+        ' Događaji: %d dodano, %d ažurirano, %d preskočeno.',
+    'Calendar modul nije dostupan. Instalirajte ga prije povezivanja ovog makroa.' =>
+        'Calendar modul nije dostupan. Instalirajte ga prije povezivanja ovog makroa.',
+    'Poveži postojeći kalendar' => 'Poveži postojeći kalendar',
+    'Odaberite kalendar koji već postoji u Simbiozi. Naziv ne mora odgovarati nazivu iz Confluencea.' =>
+        'Odaberite kalendar koji već postoji u Simbiozi. Naziv ne mora odgovarati nazivu iz Confluencea.',
+    'Kalendar' => 'Kalendar',
+    'Odaberite kalendar' => 'Odaberite kalendar',
+    'Nema kalendara koje smijete čitati.' => 'Nema kalendara koje smijete čitati.',
+    'Poveži odabrani kalendar' => 'Poveži odabrani kalendar',
+    'Uvezi ICS kao novi kalendar' => 'Uvezi ICS kao novi kalendar',
+    'Uvoz koristi postojeće vrste i ovlasti Calendar modula. Izvorni Confluence ACL ne nagađa se iz XML-a.' =>
+        'Uvoz koristi postojeće vrste i ovlasti Calendar modula. Izvorni Confluence ACL ne nagađa se iz XML-a.',
+    'iCalendar datoteka' => 'iCalendar datoteka',
+    'Naziv novog kalendara' => 'Naziv novog kalendara',
+    'Vrsta' => 'Vrsta',
+    'Svi prijavljeni korisnici mogu čitati' => 'Svi prijavljeni korisnici mogu čitati',
+    'Javno čitanje bez prijave' => 'Javno čitanje bez prijave',
+    'Uvezi i prikaži na stranici' => 'Uvezi i prikaži na stranici',
+    'Ovlasti kalendara vrijede i nakon ugradnje u stranicu; ovlasti stranice ne daju dodatni pristup kalendaru.' =>
+        'Ovlasti kalendara vrijede i nakon ugradnje u stranicu; ovlasti stranice ne daju dodatni pristup kalendaru.',
+    'Detaljne korisničke i grupne ovlasti uredite u postavkama kalendara.' =>
+        'Detaljne korisničke i grupne ovlasti uredite u postavkama kalendara.',
     'kopija' => 'kopija',
 ];

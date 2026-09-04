@@ -141,6 +141,7 @@ final readonly class ConfluenceHtmlConverter
         $links = [];
         $attachments = [];
         $unsupported = [];
+        $reviewIssues = [];
         $includes = [];
         $properties = [];
 
@@ -322,6 +323,7 @@ final readonly class ConfluenceHtmlConverter
                 $macro,
                 $name,
                 $unsupported,
+                $reviewIssues,
                 $attachments,
                 $includes,
                 $sourceSpaceKey,
@@ -373,6 +375,7 @@ final readonly class ConfluenceHtmlConverter
             array_values(array_unique($unsupported)),
             array_values($includes),
             $properties,
+            $reviewIssues,
         );
     }
 
@@ -508,6 +511,7 @@ final readonly class ConfluenceHtmlConverter
      * EN: Converts a supported macro into a safe static HTML element.
      *
      * @param list<string> $unsupported
+     * @param list<array<string,mixed>> $reviewIssues
      * @param array<int,array<string,string>> $attachments
      * @param array<int,array<string,string>> $includes
      * @param list<array{key:string,label:string,type:string,value:string,sort_order:int}> $properties
@@ -518,6 +522,7 @@ final readonly class ConfluenceHtmlConverter
         DOMElement $macro,
         string $name,
         array &$unsupported,
+        array &$reviewIssues,
         array &$attachments,
         array &$includes,
         string $sourceSpaceKey,
@@ -527,6 +532,42 @@ final readonly class ConfluenceHtmlConverter
     ): DOMNode {
         $plain = trim($this->nodeText($xpath, './/ac:plain-text-body', $macro));
         $rich = $this->firstElement($xpath->query('.//ac:rich-text-body', $macro));
+
+        if ($name === 'calendar') {
+            $sourceCalendarId = $this->macroParameter($xpath, $macro, 'id');
+            $sourceCalendarName = $context instanceof ConfluenceMacroContext
+                ? ($context->calendars[$sourceCalendarId] ?? '')
+                : '';
+            $macroId = $this->attribute($macro, self::AC_NAMESPACE, 'macro-id');
+            $marker = 'confluence-calendar-' . substr(hash(
+                'sha256',
+                $sourcePageId . '|' . $sourceCalendarId . '|' . ($macroId !== '' ? $macroId : $macro->getNodePath()),
+            ), 0, 20);
+            $reviewIssues[] = [
+                'type' => 'calendar',
+                'macro' => 'calendar',
+                'source_calendar_id' => $sourceCalendarId,
+                'source_calendar_name' => $sourceCalendarName,
+                'marker' => $marker,
+            ];
+
+            $box = $document->createElement('div');
+            $box->setAttribute('id', $marker);
+            $box->setAttribute('class', 'alert alert-secondary');
+            $title = $document->createElement('strong');
+            $title->appendChild($document->createTextNode(sprintf(
+                __('Confluence kalendar: %s'),
+                $sourceCalendarName !== '' ? $sourceCalendarName : ($sourceCalendarId !== '' ? $sourceCalendarId : __('nepoznat')),
+            )));
+            $box->appendChild($title);
+            $description = $document->createElement('div');
+            $description->appendChild($document->createTextNode(
+                __('Kalendar treba povezati ili uvesti u izvještaju Confluence importa.'),
+            ));
+            $box->appendChild($description);
+
+            return $box;
+        }
 
         if (in_array($name, ['code', 'noformat'], true)) {
             $pre = $document->createElement('pre');

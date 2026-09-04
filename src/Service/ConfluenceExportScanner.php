@@ -27,6 +27,7 @@ final readonly class ConfluenceExportScanner
     private const SUPPORTED_MACROS = [
         'anchor',
         'attachments',
+        'calendar',
         'chart',
         'children',
         'content-report-table',
@@ -84,6 +85,8 @@ final readonly class ConfluenceExportScanner
         $comments = 0;
         $labels = [];
         $labellings = [];
+        $calendarContents = [];
+        $calendarProperties = [];
 
         foreach ($this->reader->objects($archivePath) as $object) {
             $counts[$object->className] = ($counts[$object->className] ?? 0) + 1;
@@ -121,6 +124,22 @@ final readonly class ConfluenceExportScanner
                     break;
                 case 'BodyContent':
                     $this->countMacros($object->string('body'), $macros);
+                    break;
+                case 'CustomContentEntityObject':
+                    if (
+                        $object->string('pluginModuleKey')
+                        === 'com.atlassian.confluence.extra.team-calendars:calendar-content-type'
+                    ) {
+                        $calendarContents[$object->string('id')] = [
+                            'source_id' => $object->string('id'),
+                            'name' => $object->string('title'),
+                        ];
+                    }
+                    break;
+                case 'ContentProperty':
+                    if ($object->string('name') === 'subCalendarId') {
+                        $calendarProperties[$object->reference('content')] = $object->string('stringValue');
+                    }
                     break;
                 case 'SpacePermission':
                     $permission = $this->permission($object);
@@ -172,6 +191,13 @@ final readonly class ConfluenceExportScanner
                 $pageLabels[$pageId][] = $label;
             }
         }
+        $calendars = [];
+        foreach ($calendarContents as $contentId => $calendar) {
+            $sourceUuid = trim($calendarProperties[$contentId] ?? '');
+            if ($sourceUuid !== '') {
+                $calendars[] = [...$calendar, 'source_uuid' => $sourceUuid];
+            }
+        }
 
         return [
             'archive' => $archive,
@@ -192,6 +218,7 @@ final readonly class ConfluenceExportScanner
             'counts' => $counts,
             'statuses' => $statuses,
             'macros' => $macros,
+            'calendars' => $calendars,
             'comments' => $comments,
             'page_labels' => $pageLabels,
             'warnings' => $warnings,

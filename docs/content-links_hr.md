@@ -29,7 +29,16 @@ Pretvornik prepoznaje moderne `/spaces/SPACE/pages/ID/title`, stare `/display/SP
 
 Code, noformat, info, note, tip i warning strukture imaju sigurne HTML prikaze. Confluence task liste postaju nativni interaktivni Task popisi. Uvezeno dovršeno/nedovršeno stanje početno je stanje dok ga korisnik Simbioze ne promijeni; čuvaju se bogati sadržaj, HTTP(S) poveznice, izvorno ugniježđenje i stabilna izvorna sidra. Nepodržani ili aplikacijski specifični makroi dobivaju vidljivi sigurni zamjenski prikaz i administratorsko upozorenje umjesto tihog nestanka.
 
-Moduli Calendar i Task ostaju vlasnici živih kalendara i zadataka. Uvezeni zadaci koriste uobičajeni ACL, CSRF zaštitu, spremanje stanja i audit trag Task modula. Drugi Confluence makro ne pretvara se neprimjetno u živi poslovni objekt ako se njegovi potpuni podaci i ACL ne mogu sigurno mapirati; u tom slučaju u uvezenoj stranici ostaje statički prikaz.
+Moduli Calendar i Task ostaju vlasnici živih kalendara i zadataka. Uvezeni
+zadaci koriste uobičajeni ACL, CSRF zaštitu, spremanje stanja i audit trag Task
+modula. Confluence XML čuva identitet Team Calendara, ali ne i njegove događaje.
+Zato `calendar` makro ostaje označen na stranici i u trajnom izvještaju dok
+administrator izričito ne prenese ICS u novi timski/resursni kalendar ili ne
+odabere postojeći čitljivi kalendar. Calendar modul provjerava vrstu i ovlasti,
+a ugradnja u stranicu ne proširuje ACL kalendara. Drugi Confluence makro ne
+pretvara se neprimjetno u živi poslovni objekt ako se njegovi potpuni podaci i
+ACL ne mogu sigurno mapirati; u tom slučaju u uvezenoj stranici ostaje statički
+prikaz.
 
 ### Pretvorba podržanih makroa
 

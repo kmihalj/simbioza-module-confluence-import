@@ -82,7 +82,13 @@ vratiti.
 
 ## Proširenje podrške za makroe
 
-Dodajte pretvornik storage-format sadržaja makroa, sigurni statički zamjenski prikaz te fixturee za neispravne i potpune podatke. Izrada živog Calendar/Task objekta zahtijeva izričiti adapter u vlasničkom modulu i potpuno mapiranje ACL-a. Iz nedostajućeg izvornog subjekta nikada ne zaključujte da je pristup javan.
+Dodajte pretvornik storage-format sadržaja makroa, sigurni statički zamjenski
+prikaz te fixturee za neispravne i potpune podatke. Izrada živog Calendar/Task
+objekta zahtijeva izričiti adapter kroz javni servis vlasničkog modula. Ako XML
+ne sadrži događaje ili potpuni ACL, kao kod Team Calendara, trajni izvještaj mora
+zahtijevati svjestan administratorski izbor ICS-a/cilja, vrste i početne
+vidljivosti. Iz nedostajućeg izvornog subjekta nikada ne zaključujte da je
+pristup javan.
 
 Adapter za `chart` referentni je primjer nativnog Editor sadržaja: čita tablicu
 i parametre prikaza makroa, normaliziranu definiciju predaje servisu

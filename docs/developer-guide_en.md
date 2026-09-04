@@ -83,7 +83,13 @@ the page can still be restored.
 
 ## Extending macro support
 
-Add a converter for the macro's storage-format payload, create a safe static fallback and add fixtures for malformed and complete data. Creating a live Calendar/Task object requires an explicit adapter in the owning module and complete ACL mapping. Never infer public access from a missing source principal.
+Add a converter for the macro's storage-format payload, create a safe static
+fallback and add fixtures for malformed and complete data. Creating a live
+Calendar/Task object requires an explicit adapter through the owning module's
+public service. If XML omits events or a complete ACL, as with Team Calendars,
+the durable report must require a conscious administrator choice of ICS/target,
+type, and initial visibility. Never infer public access from a missing source
+principal.
 
 The `chart` adapter is a reference implementation for native Editor content:
 it reads the macro table and presentation parameters, passes a normalized

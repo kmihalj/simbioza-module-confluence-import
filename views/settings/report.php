@@ -7,6 +7,12 @@ declare(strict_types=1);
  * @var array<string,mixed> $job
  * @var array<string,mixed> $summary
  * @var list<array<string,mixed>> $reviewPages
+ * @var bool $calendarAvailable
+ * @var list<array<string,mixed>> $calendarOptions
+ * @var string $calendarResolvePath
+ * @var string|null $calendarAdminPath
+ * @var string $calendarResolutionStatus
+ * @var string $calendarResolutionMessage
  * @var string $settingsPath
  * @var string|null $workspacePath
  * @var string $stylesPath
@@ -23,6 +29,33 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
     }
 }
 $number = static fn(mixed $value): int => is_numeric($value) ? (int)$value : 0;
+$unresolvedReviewPages = array_filter(
+    $reviewPages,
+    static function (array $page): bool {
+        foreach (is_array($page['issues'] ?? null) ? $page['issues'] : [] as $issue) {
+            if (!is_array($issue) || !($issue['resolved'] ?? false)) {
+                return true;
+            }
+        }
+
+        return false;
+    },
+);
+$calendarTypeLabel = static fn(string $type): string => match ($type) {
+    'personal' => __('Osobni kalendar'),
+    'resource' => __('Resursni kalendar'),
+    default => __('Timski kalendar'),
+};
+$calendarVisibilityLabel = static function (array $calendar): string {
+    if ((bool)($calendar['is_public_read'] ?? false)) {
+        return __('javno čitanje');
+    }
+    if ((bool)($calendar['is_authenticated_read'] ?? false)) {
+        return __('čitanje za prijavljene');
+    }
+
+    return __('čitanje prema ACL-u kalendara');
+};
 ?>
 <link rel="stylesheet" href="<?= $this->escape($stylesPath) ?>">
 
@@ -54,11 +87,17 @@ $number = static fn(mixed $value): int => is_numeric($value) ? (int)$value : 0;
                     </div>
                 </header>
 
+                <?php if ($calendarResolutionStatus === 'success' && $calendarResolutionMessage !== '') : ?>
+                    <div class="alert alert-success" role="status"><?= $this->escape($calendarResolutionMessage) ?></div>
+                <?php elseif ($calendarResolutionStatus === 'error' && $calendarResolutionMessage !== '') : ?>
+                    <div class="alert alert-danger" role="alert"><?= $this->escape($calendarResolutionMessage) ?></div>
+                <?php endif; ?>
+
                 <div class="row g-3 mb-4">
                     <div class="col-sm-6 col-xl-3"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Stranice')) ?></span><strong><?= $number($summary['pages_imported'] ?? 0) ?></strong></div></div>
                     <div class="col-sm-6 col-xl-3"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Privitci')) ?></span><strong><?= $number($summary['attachments_imported'] ?? 0) ?></strong></div></div>
                     <div class="col-sm-6 col-xl-3"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Komentari')) ?></span><strong><?= $number($summary['comments_imported'] ?? 0) ?></strong></div></div>
-                    <div class="col-sm-6 col-xl-3"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Stranice za provjeru')) ?></span><strong><?= count($reviewPages) ?></strong></div></div>
+                    <div class="col-sm-6 col-xl-3"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Stranice za provjeru')) ?></span><strong><?= count($unresolvedReviewPages) ?></strong></div></div>
                 </div>
 
                 <h2 class="h4 mb-2"><?= $this->escape(__('Sadržaj koji zahtijeva provjeru')) ?></h2>
@@ -84,20 +123,158 @@ $number = static fn(mixed $value): int => is_numeric($value) ? (int)$value : 0;
                                         <a class="btn btn-sm btn-primary" href="<?= $this->escape($pageUrl) ?>"><?= $this->escape(__('Provjeri stranicu')) ?></a>
                                     <?php endif; ?>
                                 </div>
-                                <ul class="mb-0 mt-2">
+                                <div class="d-grid gap-3 mt-3">
                                     <?php foreach ($issues as $issue) : ?>
-                                        <li><?php
-                                        if (is_array($issue) && ($issue['type'] ?? '') === 'unsupported_macro') {
-                                            echo $this->escape(sprintf(
-                                                __('Confluence makro „%s” nema odgovarajuću Simbioza funkcionalnost.'),
-                                                (string)($issue['macro'] ?? ''),
-                                            ));
-                                        } else {
-                                            echo $this->escape(is_scalar($issue) ? (string)$issue : __('Nepoznato upozorenje konverzije.'));
-                                        }
-                                        ?></li>
+                                        <?php if (is_array($issue) && ($issue['type'] ?? '') === 'calendar') :
+                                            $calendarName = trim((string)($issue['source_calendar_name'] ?? ''));
+                                            $calendarName = $calendarName !== ''
+                                                ? $calendarName
+                                                : (string)($issue['source_calendar_id'] ?? __('Nepoznati kalendar'));
+                                            ?>
+                                            <section class="confluence-import-calendar-resolution" data-confluence-calendar-issue>
+                                                <div class="d-flex flex-wrap align-items-start justify-content-between gap-2">
+                                                    <div>
+                                                        <h4 class="h6 mb-1"><?= $this->escape(sprintf(__('Confluence kalendar: %s'), $calendarName)) ?></h4>
+                                                        <p class="small text-body-secondary mb-0">
+                                                            <?= $this->escape(__('XML sadrži identitet kalendara, ali ne i njegove događaje. Kalendar se zato ne povezuje automatski.')) ?>
+                                                        </p>
+                                                    </div>
+                                                    <?php if ((bool)($issue['resolved'] ?? false)) : ?>
+                                                        <span class="badge text-bg-success"><?= $this->escape(__('Razriješeno')) ?></span>
+                                                    <?php endif; ?>
+                                                </div>
+
+                                                <?php if ((bool)($issue['resolved'] ?? false)) : ?>
+                                                    <div class="alert alert-success mt-3 mb-0" role="status">
+                                                        <?= $this->escape(sprintf(
+                                                            __('Stranica prikazuje kalendar „%s”.'),
+                                                            (string)($issue['target_calendar_name'] ?? __('Calendar')),
+                                                        )) ?>
+                                                        <?php if (($issue['resolution_mode'] ?? '') === 'import') : ?>
+                                                            <?= $this->escape(sprintf(
+                                                                __(' Događaji: %d dodano, %d ažurirano, %d preskočeno.'),
+                                                                $number($issue['events_created'] ?? 0),
+                                                                $number($issue['events_updated'] ?? 0),
+                                                                $number($issue['events_skipped'] ?? 0),
+                                                            )) ?>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                <?php elseif (!$calendarAvailable) : ?>
+                                                    <div class="alert alert-warning mt-3 mb-0" role="alert">
+                                                        <?= $this->escape(__('Calendar modul nije dostupan. Instalirajte ga prije povezivanja ovog makroa.')) ?>
+                                                    </div>
+                                                <?php else : ?>
+                                                    <div class="row g-3 mt-1">
+                                                        <div class="col-xl-6">
+                                                            <form class="confluence-import-resolution-option h-100" method="post" action="<?= $this->escape($calendarResolvePath) ?>">
+                                                                <?= $this->csrfHandler->generateCsrfTokenInputField() ?>
+                                                                <input type="hidden" name="resolution_mode" value="existing">
+                                                                <input type="hidden" name="source_page_id" value="<?= $this->escape((string)($page['source_page_id'] ?? '')) ?>">
+                                                                <input type="hidden" name="source_calendar_id" value="<?= $this->escape((string)($issue['source_calendar_id'] ?? '')) ?>">
+                                                                <input type="hidden" name="marker" value="<?= $this->escape((string)($issue['marker'] ?? '')) ?>">
+                                                                <h5 class="h6"><?= $this->escape(__('Poveži postojeći kalendar')) ?></h5>
+                                                                <p class="small text-body-secondary">
+                                                                    <?= $this->escape(__('Odaberite kalendar koji već postoji u Simbiozi. Naziv ne mora odgovarati nazivu iz Confluencea.')) ?>
+                                                                </p>
+                                                                <label class="form-label" for="calendar-existing-<?= $this->escape((string)($issue['marker'] ?? '')) ?>"><?= $this->escape(__('Kalendar')) ?></label>
+                                                                <select
+                                                                    class="form-select"
+                                                                    id="calendar-existing-<?= $this->escape((string)($issue['marker'] ?? '')) ?>"
+                                                                    name="calendar_uuid"
+                                                                    required
+                                                                    <?= $calendarOptions === [] ? 'disabled' : '' ?>
+                                                                >
+                                                                    <option value=""><?= $this->escape(__('Odaberite kalendar')) ?></option>
+                                                                    <?php foreach ($calendarOptions as $calendar) : ?>
+                                                                        <option value="<?= $this->escape((string)($calendar['uuid'] ?? '')) ?>">
+                                                                            <?= $this->escape(sprintf(
+                                                                                '%s · %s · %s',
+                                                                                (string)($calendar['name'] ?? __('Calendar')),
+                                                                                $calendarTypeLabel((string)($calendar['calendar_type'] ?? 'team')),
+                                                                                $calendarVisibilityLabel($calendar),
+                                                                            )) ?>
+                                                                        </option>
+                                                                    <?php endforeach; ?>
+                                                                </select>
+                                                                <?php if ($calendarOptions === []) : ?>
+                                                                    <div class="form-text"><?= $this->escape(__('Nema kalendara koje smijete čitati.')) ?></div>
+                                                                <?php endif; ?>
+                                                                <button class="btn btn-primary mt-3" type="submit" <?= $calendarOptions === [] ? 'disabled' : '' ?>>
+                                                                    <?= $this->escape(__('Poveži odabrani kalendar')) ?>
+                                                                </button>
+                                                            </form>
+                                                        </div>
+                                                        <div class="col-xl-6">
+                                                            <form
+                                                                class="confluence-import-resolution-option h-100"
+                                                                method="post"
+                                                                action="<?= $this->escape($calendarResolvePath) ?>"
+                                                                enctype="multipart/form-data"
+                                                            >
+                                                                <?= $this->csrfHandler->generateCsrfTokenInputField() ?>
+                                                                <input type="hidden" name="resolution_mode" value="import">
+                                                                <input type="hidden" name="source_page_id" value="<?= $this->escape((string)($page['source_page_id'] ?? '')) ?>">
+                                                                <input type="hidden" name="source_calendar_id" value="<?= $this->escape((string)($issue['source_calendar_id'] ?? '')) ?>">
+                                                                <input type="hidden" name="marker" value="<?= $this->escape((string)($issue['marker'] ?? '')) ?>">
+                                                                <h5 class="h6"><?= $this->escape(__('Uvezi ICS kao novi kalendar')) ?></h5>
+                                                                <p class="small text-body-secondary">
+                                                                    <?= $this->escape(__('Uvoz koristi postojeće vrste i ovlasti Calendar modula. Izvorni Confluence ACL ne nagađa se iz XML-a.')) ?>
+                                                                </p>
+                                                                <div class="row g-3">
+                                                                    <div class="col-12">
+                                                                        <label class="form-label"><?= $this->escape(__('iCalendar datoteka')) ?></label>
+                                                                        <input class="form-control" type="file" name="ics_file" accept=".ics,text/calendar" required>
+                                                                    </div>
+                                                                    <div class="col-md-7">
+                                                                        <label class="form-label"><?= $this->escape(__('Naziv novog kalendara')) ?></label>
+                                                                        <input class="form-control" type="text" name="calendar_name" value="<?= $this->escape($calendarName) ?>">
+                                                                    </div>
+                                                                    <div class="col-md-5">
+                                                                        <label class="form-label"><?= $this->escape(__('Vrsta')) ?></label>
+                                                                        <select class="form-select" name="calendar_type">
+                                                                            <option value="team"><?= $this->escape(__('Timski kalendar')) ?></option>
+                                                                            <option value="resource"><?= $this->escape(__('Resursni kalendar')) ?></option>
+                                                                        </select>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="mt-3 d-grid gap-2">
+                                                                    <label class="form-check">
+                                                                        <input type="hidden" name="is_authenticated_read" value="0">
+                                                                        <input class="form-check-input" type="checkbox" name="is_authenticated_read" value="1">
+                                                                        <span class="form-check-label"><?= $this->escape(__('Svi prijavljeni korisnici mogu čitati')) ?></span>
+                                                                    </label>
+                                                                    <label class="form-check">
+                                                                        <input type="hidden" name="is_public_read" value="0">
+                                                                        <input class="form-check-input" type="checkbox" name="is_public_read" value="1">
+                                                                        <span class="form-check-label"><?= $this->escape(__('Javno čitanje bez prijave')) ?></span>
+                                                                    </label>
+                                                                </div>
+                                                                <button class="btn btn-primary mt-3" type="submit"><?= $this->escape(__('Uvezi i prikaži na stranici')) ?></button>
+                                                            </form>
+                                                        </div>
+                                                    </div>
+                                                    <p class="small text-body-secondary mt-3 mb-0">
+                                                        <?= $this->escape(__('Ovlasti kalendara vrijede i nakon ugradnje u stranicu; ovlasti stranice ne daju dodatni pristup kalendaru.')) ?>
+                                                        <?php if (is_string($calendarAdminPath) && $calendarAdminPath !== '') : ?>
+                                                            <a href="<?= $this->escape($calendarAdminPath) ?>"><?= $this->escape(__('Detaljne korisničke i grupne ovlasti uredite u postavkama kalendara.')) ?></a>
+                                                        <?php endif; ?>
+                                                    </p>
+                                                <?php endif; ?>
+                                            </section>
+                                        <?php elseif (is_array($issue) && ($issue['type'] ?? '') === 'unsupported_macro') : ?>
+                                            <div class="alert alert-warning mb-0">
+                                                <?= $this->escape(sprintf(
+                                                    __('Confluence makro „%s” nema odgovarajuću Simbioza funkcionalnost.'),
+                                                    (string)($issue['macro'] ?? ''),
+                                                )) ?>
+                                            </div>
+                                        <?php else : ?>
+                                            <div class="alert alert-warning mb-0">
+                                                <?= $this->escape(is_scalar($issue) ? (string)$issue : __('Nepoznato upozorenje konverzije.')) ?>
+                                            </div>
+                                        <?php endif; ?>
                                     <?php endforeach; ?>
-                                </ul>
+                                </div>
                             </article>
                         <?php endforeach; ?>
                     </div>

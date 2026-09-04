@@ -26,7 +26,11 @@ Create an XML export of exactly one Confluence space. Do not unpack or change th
 8. Start the confirmed import. The page shows the phase, percentage, and
    processed attachment/page counts. You may close it; reopening the same job
    continues from the last confirmed step.
-9. Under **Recent Confluence imports**, open the durable report. It links every page whose unsupported content requires manual review.
+9. Under **Recent Confluence imports**, open the durable report. It links every
+   page whose content requires manual review. For a reported Calendar macro,
+   explicitly select an existing visible calendar or import its ICS as a new
+   team/resource calendar, including its type and initial read visibility.
+   Embedding never bypasses the calendar ACL.
 10. Open the new Workspace and verify the reported pages.
 
 A verified upload and its mappings remain available after leaving the page.

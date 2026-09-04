@@ -77,7 +77,7 @@
     "suggest": {
         "aaieduhr/heartphrame-module-audit": "Records import decisions and outcomes in the business audit log.",
         "aaieduhr/heartphrame-module-backup": "Includes import mappings and retained source metadata in full-site backups.",
-        "aaieduhr/heartphrame-module-calendar": "Can receive future mappings for Confluence calendar macros.",
+        "aaieduhr/heartphrame-module-calendar": "Lets administrators manually import or link Confluence calendar macros from the durable report.",
         "aaieduhr/heartphrame-module-comment": "Imports mapped Confluence comments into Simbioza discussions.",
         "aaieduhr/heartphrame-module-task": "Can receive future mappings for Confluence task macros.",
         "aaieduhr/simbioza-module-workspace-search": "Rebuilds the derived Workspace index after a successful import."

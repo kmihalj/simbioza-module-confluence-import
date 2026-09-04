@@ -282,6 +282,7 @@ final readonly class ConfluenceImportService
             // EN: Preflight user records are small and are retained in the
             //     phased state so profile macros can show real names.
             $dataset['users'] = $this->rows($scan['users'] ?? []);
+            $dataset['calendars'] = $this->rows($scan['calendars'] ?? []);
             $pages = $this->selectedPageGroups($dataset['pages'], $normalized);
             $targets = $this->plannedTargets($pages, $workspace, $dataset['pages']);
             $phase = $normalized['include_attachments'] ? 'attachments' : 'pages';
@@ -491,6 +492,7 @@ final readonly class ConfluenceImportService
             // HR: I sinkroni import treba isti kontekst korisnika kao fazni.
             // EN: A synchronous import needs the same user context as a phased import.
             $dataset['users'] = $this->rows($scan['users'] ?? []);
+            $dataset['calendars'] = $this->rows($scan['calendars'] ?? []);
             $pages = $this->selectedPageGroups($dataset['pages'], $normalized);
             $targets = $this->plannedTargets($pages, $workspace, $dataset['pages']);
             $this->repository->setStage($jobId, 'attachments');
@@ -1745,6 +1747,13 @@ final readonly class ConfluenceImportService
         $localByTitle = [];
         $macroPages = [];
         $macroUsers = [];
+        $macroCalendars = [];
+        foreach ($this->rows($dataset['calendars'] ?? []) as $calendar) {
+            $sourceUuid = $this->text($calendar['source_uuid'] ?? '');
+            if ($sourceUuid !== '') {
+                $macroCalendars[$sourceUuid] = $this->text($calendar['name'] ?? '');
+            }
+        }
         foreach ($this->rows($dataset['users'] ?? []) as $sourceUser) {
             $displayName = $this->sourceUserDisplayName($sourceUser);
             $sourceKey = $this->text($sourceUser['source_key'] ?? '');
@@ -1852,6 +1861,7 @@ final readonly class ConfluenceImportService
                         $macroPages,
                         $attachments[$logicalId] ?? [],
                         $macroUsers,
+                        $macroCalendars,
                     ),
                 );
                 $warnings = [...$warnings, ...$converted['warnings']];
@@ -1952,6 +1962,7 @@ final readonly class ConfluenceImportService
                             $macroPages,
                             $attachments[$logicalId] ?? [],
                             $macroUsers,
+                            $macroCalendars,
                         ),
                     );
                     $warnings = [...$warnings, ...$converted['warnings']];
@@ -1980,6 +1991,7 @@ final readonly class ConfluenceImportService
                             $macroPages,
                             $attachments[$logicalId] ?? [],
                             $macroUsers,
+                            $macroCalendars,
                         ),
                     );
                     $warnings = [...$warnings, ...$converted['warnings']];
@@ -2140,7 +2152,7 @@ final readonly class ConfluenceImportService
      * EN: Groups conversion warnings by target page for the durable import report.
      *
      * @param array<string,array<string,mixed>> $reviewPages
-     * @param list<array{type:string,macro:string}> $issues
+     * @param list<array<string,mixed>> $issues
      * @param array<string,mixed> $page
      * @param array<string,mixed> $target
      */
@@ -2163,13 +2175,29 @@ final readonly class ConfluenceImportService
         $known = [];
         foreach (is_array($reviewPages[$key]['issues'] ?? null) ? $reviewPages[$key]['issues'] : [] as $issue) {
             if (is_array($issue)) {
-                $known[$this->text($issue['type'] ?? '') . ':' . $this->text($issue['macro'] ?? '')] = $issue;
+                $known[$this->reviewIssueKey($issue)] = $issue;
             }
         }
         foreach ($issues as $issue) {
-            $known[$this->text($issue['type'] ?? '') . ':' . $this->text($issue['macro'] ?? '')] = $issue;
+            $known[$this->reviewIssueKey($issue)] = $issue;
         }
         $reviewPages[$key]['issues'] = array_values($known);
+    }
+
+    /**
+     * HR: Razlikuje više istovrsnih makroa na istoj stranici stabilnom oznakom.
+     * EN: Distinguishes multiple macros of the same kind on one page by their stable marker.
+     *
+     * @param array<string,mixed> $issue
+     */
+    private function reviewIssueKey(array $issue): string
+    {
+        return implode(':', [
+            $this->text($issue['type'] ?? ''),
+            $this->text($issue['macro'] ?? ''),
+            $this->text($issue['marker'] ?? ''),
+            $this->text($issue['source_calendar_id'] ?? ''),
+        ]);
     }
 
     /**
@@ -2181,7 +2209,7 @@ final readonly class ConfluenceImportService
      * @param array<string,string> $attachmentUrls
      * @param array<string,string> $localById
      * @param array<string,string> $localByTitle
-     * @return array{html:string,warnings:list<string>,review_issues:list<array{type:string,macro:string}>,properties:list<array{key:string,label:string,type:string,value:string,sort_order:int}>}
+     * @return array{html:string,warnings:list<string>,review_issues:list<array<string,mixed>>,properties:list<array{key:string,label:string,type:string,value:string,sort_order:int}>}
      */
     private function convertedBody(
         array $dataset,
@@ -2256,6 +2284,7 @@ final readonly class ConfluenceImportService
                 $converted->unsupportedMacros,
             ),
             'review_issues' => [
+                ...$converted->reviewIssues,
                 ...array_map(
                     static fn(string $macro): array => ['type' => 'unsupported_macro', 'macro' => $macro],
                     $converted->unsupportedMacros,

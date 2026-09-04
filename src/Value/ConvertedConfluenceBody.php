@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace AaiEduHr\SimbiozaModuleConfluenceImport\Value;
 
-/** HR: Prenosi HTML, poveznice, privitke, svojstva stranice, uključene stranice i upozorenja pretvorbe. EN: Carries HTML, links, attachments, page properties, included pages, and conversion warnings. */
+/** HR: Prenosi HTML, reference i strojno čitljive stavke za ručnu provjeru. EN: Carries HTML, references, and machine-readable manual-review items. */
 final readonly class ConvertedConfluenceBody
 {
     /**
@@ -16,6 +16,7 @@ final readonly class ConvertedConfluenceBody
      * @param list<string> $unsupportedMacros
      * @param list<array<string,string>> $includes
      * @param list<array{key:string,label:string,type:string,value:string,sort_order:int}> $properties
+     * @param list<array<string,mixed>> $reviewIssues
      */
     public function __construct(
         public string $html,
@@ -24,6 +25,7 @@ final readonly class ConvertedConfluenceBody
         public array $unsupportedMacros,
         public array $includes = [],
         public array $properties = [],
+        public array $reviewIssues = [],
     ) {
     }
 }

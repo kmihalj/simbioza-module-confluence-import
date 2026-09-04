@@ -547,6 +547,49 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
+     * HR: Vraća najnovije mapiranje stranice iz točno određenog importa.
+     * EN: Returns the newest page mapping from one exact import.
+     *
+     * @return array<string,mixed>|null
+     */
+    public function contentForJobSource(int $jobId, string $sourceId): ?array
+    {
+        if ($jobId <= 0 || trim($sourceId) === '') {
+            return null;
+        }
+
+        $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_CONTENT)
+            ->where('job_id', '=', $jobId)
+            ->where('logical_source_id', '=', trim($sourceId))
+            ->where('import_status', '=', 'imported')
+            ->orderBy('source_version', 'DESC')
+            ->first();
+
+        return is_array($row) ? $this->normalizeRow($row) : null;
+    }
+
+    /**
+     * HR: Ažurira samo trajni izvještaj već dovršenog importa.
+     * EN: Updates only the durable report of an already completed import.
+     *
+     * @param array<string,mixed> $summary
+     */
+    public function updateCompletedSummary(int $jobId, array $summary): void
+    {
+        if ($jobId <= 0) {
+            throw new ConfluenceImportException(__('Confluence import posao nije pronađen.'));
+        }
+
+        $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
+            ->where('id', '=', $jobId)
+            ->where('status', '=', 'completed')
+            ->update([
+                'summary_json' => $this->json($summary),
+                'updated_at' => gmdate('Y-m-d H:i:s'),
+            ]);
+    }
+
+    /**
      * HR: Razrješava pageId URL kada izvorni URL ne sadrži ključ područja.
      * EN: Resolves a pageId URL when the source URL does not contain a space key.
      *

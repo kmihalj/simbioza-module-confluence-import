@@ -22,6 +22,8 @@ Opcionalne integracije:
 - Backup cijelog sitea i poslovne cjeline Područja uključuje trajna mapiranja importa, a Editorovi backup provideri uključuju nativne privitke stranica.
 - Backup jednog područja uključuje njegove Confluence izvorne podatke, dok se stvarni privitci prenose zajedno s Editor dokumentima.
 - Comment uvozi komentare čiji su autori i stranice mapirani.
+- Calendar administratoru omogućuje da iz trajnog izvještaja izričito uveze
+  ICS kao novi zajednički kalendar ili poveže već vidljiv kalendar.
 - Workspace Search automatski obnavlja izvedeni indeks nakon importa.
 
 Interni paketi koriste kompatibilna izdanja `^0.1.0`; ovaj modul ne sprema `composer.lock`.
@@ -53,6 +55,9 @@ Interni paketi koriste kompatibilna izdanja `^0.1.0`; ovaj modul ne sprema `comp
 - neriješene ACL identitete obrađuje zatvoreno, bez proširenja pristupa;
 - osobni Confluence space mapira u osobno područje potvrđenog vlasnika;
 - nepodržane makroe i druge odluke bilježi u trajnom izvještaju importa povezanom iz popisa **Nedavni Confluence importi**;
+- svaki Confluence Team Calendar makro bilježi u tom izvještaju jer XML sadrži
+  identitet kalendara, ali ne i njegove događaje; kalendar se ne traži niti
+  izrađuje automatski;
 - omogućuje odustajanje od nedovršenog importa uz trenutačno brisanje prenesene arhive i podataka pripreme;
 - nakon uspješnog importa briše prenesenu izvornu arhivu.
 - veliki potvrđeni import obrađuje u ograničenim faznim koracima koji se mogu nastaviti i
@@ -99,11 +104,17 @@ izrađen u Simbiozi; `confluence-import-*` klase ne spremaju se u dokument.
 `tasks-report-macro` postaje samostalna nativna tablica zadataka. Prvi stupac
 sadrži lokalno editabilne zadatke, a zadnji obične poveznice na stranice s kojih
 je tekst zadatka uvezen, bez sinkronizacije stanja zadataka između stranica.
+Kada je instaliran opcionalni Calendar modul, svaki prijavljeni `calendar` makro
+nudi dva izričita izbora: uvoz ICS datoteke kao novog timskog/resursnog kalendara
+uz početnu vidljivost čitanja ili odabir postojećeg kalendara koji administrator
+smije čitati. U stranicu se zatim umeće standardni nativni Editor kalendarski
+element. Vrsta i ACL ostaju u vlasništvu Calendar modula; ugradnja kalendara
+nikada ne proširuje njegove ovlasti.
 
 ## Brzi početak
 
 ```bash
-composer require aaieduhr/simbioza-module-confluence-import:^0.1.8
+composer require aaieduhr/simbioza-module-confluence-import:^0.1.9
 vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```

@@ -28,6 +28,7 @@ use AaiEduHr\SimbiozaModuleConfluenceImport\Listener\PurgeConfluencePageImport;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Listener\PurgeConfluenceWorkspaceImport;
 use AaiEduHr\SimbiozaModuleConfluenceImport\ModuleSimbiozaConfluenceImport;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceArchive;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceCalendarResolutionService;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceExportReader;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceExportScanner;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceHtmlConverter;
@@ -126,6 +127,17 @@ $services = [
             $container,
             $container->get(LoggerInterface::class),
         ),
+    ConfluenceCalendarResolutionService::class =>
+        static fn(ContainerInterface $container): ConfluenceCalendarResolutionService =>
+            new ConfluenceCalendarResolutionService(
+                $container->get(ConfluenceImportRepository::class),
+                $container->get(ConfluenceImportConfig::class),
+                $container->get(EditorService::class),
+                $container->get(EditorApiActorContext::class),
+                $container->get(WorkspaceWorkflowService::class),
+                $container->get(WorkspaceContentChangeBatch::class),
+                $container,
+            ),
     ConfluenceImportModuleViewRenderer::class =>
         static fn(ContainerInterface $container): ConfluenceImportModuleViewRenderer =>
             new ConfluenceImportModuleViewRenderer($container->get(ResponseFactory::class)),
@@ -144,6 +156,7 @@ $services = [
             $container->get(ConfluenceImportRepository::class),
             $container->get(ConfluenceImportUploadService::class),
             $container->get(ConfluenceImportService::class),
+            $container->get(ConfluenceCalendarResolutionService::class),
             $container->get(ConfluenceImportConfig::class),
             $container->get(UrlGenerator::class),
             $container->get(SessionInterface::class),

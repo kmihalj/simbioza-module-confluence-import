@@ -112,6 +112,13 @@ return new class extends AbstractModuleManifest {
                 $authenticated,
             ],
             [
+                'POST',
+                '/settings/confluence-import/report/{uuid}/calendar',
+                ConfluenceImportController::class . '@resolveCalendar',
+                'simbioza-confluence-import.report.calendar',
+                $authenticated,
+            ],
+            [
                 'GET',
                 '/settings/confluence-import/csrf',
                 ConfluenceImportController::class . '@csrf',

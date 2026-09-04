@@ -252,5 +252,70 @@ return [
         'The Confluence Workspace has already been imported. Choose whether to replace it or import a new copy.',
     'Osobno Confluence područje nije moguće uvesti kao zasebnu kopiju.' =>
         'A personal Confluence Workspace cannot be imported as a separate copy.',
+    'Calendar' => 'Calendar',
+    'Kalendar je moguće povezati tek nakon dovršenog importa.' =>
+        'A calendar can only be linked after the import is complete.',
+    'Confluence calendar makro nije valjano odabran.' => 'The Confluence Calendar macro selection is invalid.',
+    'Ovaj Confluence kalendar već je povezan.' => 'This Confluence calendar has already been linked.',
+    'Ciljna stranica nije pronađena.' => 'The target page was not found.',
+    'Ciljni dokument nije pronađen.' => 'The target document was not found.',
+    'Ciljna stranica još nije objavljena.' => 'The target page has not been published yet.',
+    'Stranica ima neobjavljeni nacrt. Najprije ga objavite ili odbacite pa ponovno povežite kalendar.' =>
+        'The page has an unpublished draft. Publish or discard it before linking the calendar again.',
+    'Oznaka Confluence kalendara više nije prisutna na stranici.' =>
+        'The Confluence calendar marker is no longer present on the page.',
+    'Odaberite ICS datoteku za uvoz kalendara.' => 'Select an ICS file to import the calendar.',
+    'Odaberite timski ili resursni kalendar.' => 'Select a team or resource calendar.',
+    'Calendar modul nije vratio rezultat uvoza.' => 'The Calendar module did not return an import result.',
+    'Odabrani kalendar nije dostupan za povezivanje.' => 'The selected calendar is not available for linking.',
+    'Odaberite uvoz ICS-a ili povezivanje postojećeg kalendara.' =>
+        'Choose ICS import or link an existing calendar.',
+    'Odabrani kalendar nema stabilni UUID.' => 'The selected calendar does not have a stable UUID.',
+    'Confluence calendar makro nije pronađen u izvještaju importa.' =>
+        'The Confluence Calendar macro was not found in the import report.',
+    'Kalendar: %s' => 'Calendar: %s',
+    'Calendar modul nije dostupan na ovoj instalaciji.' => 'The Calendar module is not available on this installation.',
+    'Calendar modul nema potrebnu funkcionalnost.' => 'The Calendar module does not provide the required functionality.',
+    'Confluence kalendar: %s' => 'Confluence calendar: %s',
+    'Kalendar treba povezati ili uvesti u izvještaju Confluence importa.' =>
+        'Link or import the calendar from the Confluence import report.',
+    'Stranica sada prikazuje kalendar „%s”.' => 'The page now displays the calendar “%s”.',
+    'Odaberite ispravnu iCalendar datoteku.' => 'Select a valid iCalendar file.',
+    'iCalendar datoteka je prazna.' => 'The iCalendar file is empty.',
+    'Osobni kalendar' => 'Personal calendar',
+    'Resursni kalendar' => 'Resource calendar',
+    'Timski kalendar' => 'Team calendar',
+    'javno čitanje' => 'public read',
+    'čitanje za prijavljene' => 'authenticated read',
+    'čitanje prema ACL-u kalendara' => 'read according to the calendar ACL',
+    'Nepoznati kalendar' => 'Unknown calendar',
+    'XML sadrži identitet kalendara, ali ne i njegove događaje. Kalendar se zato ne povezuje automatski.' =>
+        'The XML contains the calendar identity but not its events, so the calendar is not linked automatically.',
+    'Razriješeno' => 'Resolved',
+    'Stranica prikazuje kalendar „%s”.' => 'The page displays the calendar “%s”.',
+    ' Događaji: %d dodano, %d ažurirano, %d preskočeno.' =>
+        ' Events: %d added, %d updated, %d skipped.',
+    'Calendar modul nije dostupan. Instalirajte ga prije povezivanja ovog makroa.' =>
+        'The Calendar module is unavailable. Install it before linking this macro.',
+    'Poveži postojeći kalendar' => 'Link an existing calendar',
+    'Odaberite kalendar koji već postoji u Simbiozi. Naziv ne mora odgovarati nazivu iz Confluencea.' =>
+        'Select a calendar that already exists in Simbioza. Its name does not need to match the Confluence name.',
+    'Kalendar' => 'Calendar',
+    'Odaberite kalendar' => 'Select a calendar',
+    'Nema kalendara koje smijete čitati.' => 'There are no calendars you may read.',
+    'Poveži odabrani kalendar' => 'Link selected calendar',
+    'Uvezi ICS kao novi kalendar' => 'Import ICS as a new calendar',
+    'Uvoz koristi postojeće vrste i ovlasti Calendar modula. Izvorni Confluence ACL ne nagađa se iz XML-a.' =>
+        'The import uses the Calendar module types and permissions. The source Confluence ACL is not inferred from XML.',
+    'iCalendar datoteka' => 'iCalendar file',
+    'Naziv novog kalendara' => 'New calendar name',
+    'Vrsta' => 'Type',
+    'Svi prijavljeni korisnici mogu čitati' => 'All authenticated users may read',
+    'Javno čitanje bez prijave' => 'Public read without signing in',
+    'Uvezi i prikaži na stranici' => 'Import and display on the page',
+    'Ovlasti kalendara vrijede i nakon ugradnje u stranicu; ovlasti stranice ne daju dodatni pristup kalendaru.' =>
+        'Calendar permissions still apply when embedded; page permissions do not grant additional calendar access.',
+    'Detaljne korisničke i grupne ovlasti uredite u postavkama kalendara.' =>
+        'Manage detailed user and group permissions in Calendar settings.',
     'kopija' => 'copy',
 ];
