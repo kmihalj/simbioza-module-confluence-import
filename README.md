@@ -119,7 +119,7 @@ the report selects it as a suggestion that the administrator must still confirm.
 ## Quick start
 
 ```bash
-composer require aaieduhr/simbioza-module-confluence-import:^0.1.12
+composer require aaieduhr/simbioza-module-confluence-import:^0.1.13
 vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```

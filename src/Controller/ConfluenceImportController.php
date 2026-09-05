@@ -182,6 +182,16 @@ final readonly class ConfluenceImportController
             $ics = $this->text($body['resolution_mode'] ?? '') === 'import'
                 ? $this->uploadedIcsContent($request)
                 : '';
+
+            /*
+             * HR: Nakon CSRF-a, ovlasti i uploada više ne mijenjamo session. Dugi
+             *     ICS uvoz zato ne smije držati PHP session lock i blokirati sve
+             *     ostale tabove istoga administratora.
+             * EN: After CSRF, authorization, and upload parsing, the session is no
+             *     longer mutated. Release its PHP lock before the potentially long
+             *     ICS import so the administrator's other tabs remain responsive.
+             */
+            $this->session->close();
             $result = $this->calendarResolution->resolve($uuid, $body, $ics, $actor);
             $message = sprintf(
                 __('Stranica sada prikazuje kalendar „%s”.'),

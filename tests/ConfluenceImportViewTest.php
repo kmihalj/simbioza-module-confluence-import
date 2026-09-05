@@ -67,5 +67,13 @@ final class ConfluenceImportViewTest extends TestCase
             "__('Pronađen je postojeći kalendar istog naziva i unaprijed je odabran. Provjerite ga prije povezivanja.')",
             $view,
         );
+
+        $controller = file_get_contents(dirname(__DIR__) . '/src/Controller/ConfluenceImportController.php');
+        self::assertIsString($controller);
+        self::assertStringContainsString('$this->session->close();', $controller);
+        self::assertLessThan(
+            strpos($controller, '$this->calendarResolution->resolve('),
+            strpos($controller, '$this->session->close();'),
+        );
     }
 }
