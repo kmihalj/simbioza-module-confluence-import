@@ -111,12 +111,15 @@ offers two explicit choices: upload an ICS file as a new team/resource calendar,
 including its initial read visibility, or select any existing calendar the
 administrator may read. The resulting page contains the standard native Editor
 calendar element. Calendar type and ACL remain owned and enforced by the Calendar
-module; embedding a calendar never expands its permissions.
+module; embedding a calendar never expands its permissions. A new calendar uses
+the name embedded in the ICS file, with the Confluence XML name as a fallback.
+When exactly one visible existing calendar has the same name as the XML source,
+the report selects it as a suggestion that the administrator must still confirm.
 
 ## Quick start
 
 ```bash
-composer require aaieduhr/simbioza-module-confluence-import:^0.1.11
+composer require aaieduhr/simbioza-module-confluence-import:^0.1.12
 vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```

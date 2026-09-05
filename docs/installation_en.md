@@ -15,7 +15,7 @@ The module must appear after ORM, Menu, Auth, HTML Editor, Workspace and Simbioz
 ## Install
 
 ```bash
-composer require aaieduhr/simbioza-module-confluence-import:^0.1.11
+composer require aaieduhr/simbioza-module-confluence-import:^0.1.12
 vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```

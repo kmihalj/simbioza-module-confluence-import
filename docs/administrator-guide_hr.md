@@ -31,7 +31,9 @@ Izradite XML izvoz točno jednog Confluence spacea. ZIP nemojte raspakirati ni m
    svaku stranicu čiji sadržaj zahtijeva ručnu provjeru. Za prijavljeni Calendar
    makro ručno odaberite postojeći dostupni kalendar ili uvezite njegov ICS kao
    novi timski/resursni kalendar, vrstu i početnu vidljivost odredite izričito.
-   Ugradnja u stranicu ne zaobilazi ACL kalendara.
+   Jedno točno podudaranje naziva samo se unaprijed odabire za potvrdu; novi
+   kalendar preuzima naziv iz ICS-a, a XML naziv koristi kao rezervu. Ugradnja u
+   stranicu ne zaobilazi ACL kalendara.
 10. Otvorite novo područje i provjerite prijavljene stranice.
 
 Provjereni prijenos i mapiranja ostaju dostupni nakon napuštanja stranice. Dok

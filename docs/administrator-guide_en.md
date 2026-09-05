@@ -30,8 +30,10 @@ Create an XML export of exactly one Confluence space. Do not unpack or change th
 9. Under **Recent Confluence imports**, open the durable report. It links every
    page whose content requires manual review. For a reported Calendar macro,
    explicitly select an existing visible calendar or import its ICS as a new
-   team/resource calendar, including its type and initial read visibility.
-   Embedding never bypasses the calendar ACL.
+   team/resource calendar, including its type and initial read visibility. An
+   exact single name match is only preselected for confirmation; a new calendar
+   takes its name from the ICS file, with the XML name as a fallback. Embedding
+   never bypasses the calendar ACL.
 10. Open the new Workspace and verify the reported pages.
 
 A verified upload and its mappings remain available after leaving the page.

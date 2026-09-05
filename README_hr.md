@@ -109,12 +109,15 @@ nudi dva izričita izbora: uvoz ICS datoteke kao novog timskog/resursnog kalenda
 uz početnu vidljivost čitanja ili odabir postojećeg kalendara koji administrator
 smije čitati. U stranicu se zatim umeće standardni nativni Editor kalendarski
 element. Vrsta i ACL ostaju u vlasništvu Calendar modula; ugradnja kalendara
-nikada ne proširuje njegove ovlasti.
+nikada ne proširuje njegove ovlasti. Novi kalendar preuzima naziv zapisan u ICS
+datoteci, a naziv iz Confluence XML-a koristi kao rezervu. Kada točno jedan
+dostupni postojeći kalendar ima isti naziv kao XML izvor, izvještaj ga označava
+kao prijedlog koji administrator i dalje mora izričito potvrditi.
 
 ## Brzi početak
 
 ```bash
-composer require aaieduhr/simbioza-module-confluence-import:^0.1.11
+composer require aaieduhr/simbioza-module-confluence-import:^0.1.12
 vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```
