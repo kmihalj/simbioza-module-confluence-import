@@ -141,6 +141,10 @@ return [
     'Privremena upload datoteka nije u očekivanom stanju.' => 'Privremena upload datoteka nije u očekivanom stanju.',
     'Privremenu XML datoteku nije moguće kreirati.' => 'Privremenu XML datoteku nije moguće kreirati.',
     'Privremenu datoteku uploada nije moguće kreirati.' => 'Privremenu datoteku uploada nije moguće kreirati.',
+    'Privremenu datoteku dovršenog importa nije moguće ukloniti.' =>
+        'Privremenu datoteku dovršenog importa nije moguće ukloniti.',
+    'Privremeni direktorij dovršenog importa nije moguće ukloniti.' =>
+        'Privremeni direktorij dovršenog importa nije moguće ukloniti.',
     'Provjera arhive' => 'Provjera arhive',
     'Radnja' => 'Radnja',
     'Raspakirani Confluence sadržaj prelazi dopuštenu veličinu.' => 'Raspakirani Confluence sadržaj prelazi dopuštenu veličinu.',

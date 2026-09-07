@@ -141,6 +141,10 @@ return [
     'Privremena upload datoteka nije u očekivanom stanju.' => 'The temporary upload file is not in the expected state.',
     'Privremenu XML datoteku nije moguće kreirati.' => 'The temporary XML file could not be created.',
     'Privremenu datoteku uploada nije moguće kreirati.' => 'The temporary upload file could not be created.',
+    'Privremenu datoteku dovršenog importa nije moguće ukloniti.' =>
+        'The temporary file of the completed import could not be removed.',
+    'Privremeni direktorij dovršenog importa nije moguće ukloniti.' =>
+        'The temporary directory of the completed import could not be removed.',
     'Provjera arhive' => 'Archive verification',
     'Radnja' => 'Action',
     'Raspakirani Confluence sadržaj prelazi dopuštenu veličinu.' => 'The uncompressed Confluence content exceeds the permitted size.',
