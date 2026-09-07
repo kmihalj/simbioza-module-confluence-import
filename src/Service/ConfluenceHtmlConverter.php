@@ -28,6 +28,7 @@ use function ceil;
 use function filter_var;
 use function count;
 use function dechex;
+use function explode;
 use function hash;
 use function hexdec;
 use function html_entity_decode;
@@ -67,6 +68,7 @@ use const JSON_THROW_ON_ERROR;
 use const JSON_UNESCAPED_SLASHES;
 use const JSON_UNESCAPED_UNICODE;
 use const FILTER_VALIDATE_URL;
+use const FILTER_VALIDATE_EMAIL;
 use const PHP_URL_HOST;
 use const PHP_URL_SCHEME;
 
@@ -682,6 +684,11 @@ final readonly class ConfluenceHtmlConverter
             if ($buttonLink instanceof DOMNode) {
                 return $buttonLink;
             }
+
+            $table = $this->htmlTableReplacement($document, $plain);
+            if ($table instanceof DOMNode) {
+                return $table;
+            }
         }
 
         if ($name === 'details') {
@@ -1128,6 +1135,129 @@ final readonly class ConfluenceHtmlConverter
         $link->appendChild($document->createTextNode($label));
 
         return $link;
+    }
+
+    /**
+     * HR: Pretvara samo HTML makro koji se sastoji od jedne statične tablice.
+     *     Elementi, atributi i poveznice prolaze strogu listu dopuštenoga;
+     *     skripte, obrasci, ugrađeni sadržaj i proizvoljni HTML ostaju u
+     *     izvještaju za ručni pregled.
+     * EN: Converts only an HTML macro made up of one static table. Elements,
+     *     attributes, and links pass a strict allowlist; scripts, forms,
+     *     embedded content, and arbitrary HTML remain in the manual-review report.
+     */
+    private function htmlTableReplacement(DOMDocument $document, string $plain): ?DOMElement
+    {
+        if (trim($plain) === '') {
+            return null;
+        }
+
+        $source = new DOMDocument('1.0', 'UTF-8');
+        $previous = libxml_use_internal_errors(true);
+        try {
+            $loaded = $source->loadHTML(
+                '<?xml encoding="UTF-8"><div id="confluence-html-macro-root">' . $plain . '</div>',
+                LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD | LIBXML_NONET,
+            );
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
+        if (!$loaded) {
+            return null;
+        }
+
+        $root = $source->getElementById('confluence-html-macro-root');
+        if (!$root instanceof DOMElement) {
+            return null;
+        }
+        $significant = [];
+        foreach ($root->childNodes as $child) {
+            if ($child instanceof DOMElement || trim($child->textContent) !== '') {
+                $significant[] = $child;
+            }
+        }
+        if (
+            count($significant) !== 1
+            || !$significant[0] instanceof DOMElement
+            || strtolower($significant[0]->tagName) !== 'table'
+        ) {
+            return null;
+        }
+
+        $sourceTable = $significant[0];
+        $allowed = [
+            'table', 'caption', 'colgroup', 'col', 'thead', 'tbody', 'tfoot',
+            'tr', 'th', 'td', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br',
+            'strong', 'b', 'em', 'i', 'u', 's', 'small', 'code', 'ul', 'ol',
+            'li', 'a', 'span',
+        ];
+        foreach ($this->elements($sourceTable->getElementsByTagName('*')) as $element) {
+            $tag = strtolower($element->tagName);
+            if (!in_array($tag, $allowed, true)) {
+                return null;
+            }
+            if ($tag === 'a' && !$this->isSafeHtmlContentLink(trim($element->getAttribute('href')))) {
+                return null;
+            }
+        }
+
+        $replacement = $this->copySafeHtmlTableNode($document, $sourceTable);
+        return $replacement instanceof DOMElement ? $replacement : null;
+    }
+
+    /** HR: Kopira samo semantički sadržaj sigurne HTML tablice. EN: Copies only semantic content from a safe HTML table. */
+    private function copySafeHtmlTableNode(DOMDocument $document, DOMNode $source): ?DOMNode
+    {
+        if ($source->nodeType === XML_TEXT_NODE || $source->nodeType === XML_CDATA_SECTION_NODE) {
+            return $document->createTextNode($source->nodeValue ?? '');
+        }
+        if (!$source instanceof DOMElement) {
+            return null;
+        }
+
+        $tag = strtolower($source->tagName);
+        $replacement = $document->createElement($tag);
+        if (in_array($tag, ['th', 'td'], true)) {
+            foreach (['colspan', 'rowspan'] as $attribute) {
+                $value = trim($source->getAttribute($attribute));
+                if (preg_match('/^[1-9][0-9]?$/', $value) === 1) {
+                    $replacement->setAttribute($attribute, $value);
+                }
+            }
+        }
+        if ($tag === 'th') {
+            $scope = strtolower(trim($source->getAttribute('scope')));
+            if (in_array($scope, ['row', 'col', 'rowgroup', 'colgroup'], true)) {
+                $replacement->setAttribute('scope', $scope);
+            }
+        }
+        if ($tag === 'a') {
+            $replacement->setAttribute('href', trim($source->getAttribute('href')));
+        }
+
+        foreach ($source->childNodes as $child) {
+            $copy = $this->copySafeHtmlTableNode($document, $child);
+            if ($copy instanceof DOMNode) {
+                $replacement->appendChild($copy);
+            }
+        }
+
+        return $replacement;
+    }
+
+    /** HR: Dopušta obične HTTP(S) i valjane e-mail poveznice. EN: Allows ordinary HTTP(S) and valid email links. */
+    private function isSafeHtmlContentLink(string $href): bool
+    {
+        if ($this->isSafeRemoteUrl($href)) {
+            return true;
+        }
+        if (!str_starts_with(strtolower($href), 'mailto:')) {
+            return false;
+        }
+
+        $parts = explode('?', substr($href, 7), 2);
+        return filter_var(rawurldecode($parts[0]), FILTER_VALIDATE_EMAIL) !== false;
     }
 
     /** HR: Dopušta samo potpune HTTPS izvore iframea. EN: Allows only absolute HTTPS iframe sources. */

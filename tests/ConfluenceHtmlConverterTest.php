@@ -525,6 +525,45 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
+    /** HR: Statična tablica iz HTML makroa postaje tematska Editor tablica bez izvornog CSS-a. EN: A static HTML-macro table becomes a themed Editor table without source CSS. */
+    public function testConvertsSafeStaticHtmlTable(): void
+    {
+        $body = <<<'XML'
+<ac:structured-macro ac:name="html"><ac:plain-text-body><![CDATA[<table class="table-responsive" style="border: 1px solid black; padding: 10px; background-color: #E3F5F2;"><tbody><tr><td align="left" valign="middle" style="width: 80%; padding: 5px;"><h1><strong>Dobro došli na stranice Obrazovnih programa Srca!</strong></h1><p>U okviru programa održavaju se <strong>tečajevi i radionice</strong>.</p><p><strong>Kontakt:</strong> <a href="mailto:edu@srce.hr">edu@srce.hr</a></p></td></tr></tbody></table>]]></ac:plain-text-body></ac:structured-macro>
+XML;
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'OBRAZOVNIPROGRAMI', '156795246');
+
+        self::assertStringContainsString('<div class="table-responsive">', $result->html);
+        self::assertStringContainsString(
+            '<table class="table table-bordered table-striped table-hover">',
+            $result->html,
+        );
+        self::assertStringContainsString(
+            '<h1><strong>Dobro došli na stranice Obrazovnih programa Srca!</strong></h1>',
+            $result->html,
+        );
+        self::assertStringContainsString('<a href="mailto:edu@srce.hr">edu@srce.hr</a>', $result->html);
+        self::assertStringNotContainsString('style=', $result->html);
+        self::assertStringNotContainsString('align=', $result->html);
+        self::assertStringNotContainsString('valign=', $result->html);
+        self::assertSame([], $result->unsupportedMacros);
+    }
+
+    /** HR: Skripta, čak i unutar tablice, sprječava automatski uvoz HTML makroa. EN: A script, even inside a table, prevents automatic HTML-macro import. */
+    public function testRejectsHtmlTableContainingJavascript(): void
+    {
+        $body = <<<'XML'
+<ac:structured-macro ac:name="html"><ac:plain-text-body><![CDATA[<table><tbody><tr><td>Sadržaj<script src="https://pristupacnost.netlify.app/assets/js/pristupacnost_1.0.1.js"></script></td></tr></tbody></table>]]></ac:plain-text-body></ac:structured-macro>
+XML;
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'UNIZG', '10');
+
+        self::assertStringContainsString('Confluence makro: html', $result->html);
+        self::assertStringNotContainsString('<script', $result->html);
+        self::assertSame(['html'], $result->unsupportedMacros);
+    }
+
     /** HR: Nesigurna shema HTML gumba ostaje označena za ručni pregled. EN: An unsafe HTML button scheme remains marked for manual review. */
     public function testRejectsUnsafeHtmlButtonLink(): void
     {
