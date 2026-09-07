@@ -22,6 +22,7 @@ use function fwrite;
 use function hash_file;
 use function is_dir;
 use function is_file;
+use function is_link;
 use function gmdate;
 use function is_int;
 use function is_resource;
@@ -29,6 +30,8 @@ use function is_string;
 use function max;
 use function mkdir;
 use function rename;
+use function rmdir;
+use function scandir;
 use function set_time_limit;
 use function strtolower;
 use function str_ends_with;
@@ -291,6 +294,37 @@ final readonly class ConfluenceImportUploadService
             }
         }
 
+        // HR: Novi prijenos ujedno ponavlja sigurno čišćenje dovršenih poslova
+        //     ako je prethodni zahtjev prekinut između finalizacije i brisanja.
+        // EN: A new upload also retries safe cleanup for completed jobs when a
+        //     previous request stopped between finalization and deletion.
+        $this->cleanupCompletedArtifacts();
+
+        return $removed;
+    }
+
+    /**
+     * HR: Uklanja samo privremene artefakte dovršenih poslova. Ne dira
+     *     nastavive ili neuspjele importe jer njihovi podaci trebaju za oporavak.
+     * EN: Removes only transient artifacts of completed jobs. Resumable or
+     *     failed imports remain untouched because their data is needed for recovery.
+     */
+    public function cleanupCompletedArtifacts(): int
+    {
+        $removed = 0;
+        foreach ($this->repository->completedJobsForStorageCleanup() as $job) {
+            $path = is_scalar($job['archive_path'] ?? null) ? trim((string)$job['archive_path']) : '';
+            $jobId = is_numeric($job['id'] ?? null) ? (int)$job['id'] : 0;
+            if ($jobId > 0 && $path !== '' && $this->deleteManagedFile($path, $this->config->uploadDirectory())) {
+                $this->repository->clearArchivePath($jobId);
+                ++$removed;
+            }
+            $uuid = is_scalar($job['uuid'] ?? null) ? trim((string)$job['uuid']) : '';
+            if ($uuid !== '' && $this->deleteManagedStagingDirectory($uuid)) {
+                ++$removed;
+            }
+        }
+
         return $removed;
     }
 
@@ -362,8 +396,88 @@ final readonly class ConfluenceImportUploadService
     public function deleteArchive(array $job): void
     {
         $path = is_scalar($job['archive_path'] ?? null) ? trim((string)$job['archive_path']) : '';
-        if ($path !== '' && is_file($path) && str_starts_with($path, $this->config->uploadDirectory())) {
-            @unlink($path);
+        $jobId = is_numeric($job['id'] ?? null) ? (int)$job['id'] : 0;
+        if (
+            $jobId > 0
+            && $this->deleteManagedFile($path, $this->config->uploadDirectory())
+        ) {
+            $this->repository->clearArchivePath($jobId);
+        }
+    }
+
+    /**
+     * HR: Uklanja datoteku samo iz izričito zadanog upravljanog direktorija.
+     *     Datoteka koja je već nestala smatra se očišćenom.
+     * EN: Removes a file only from the explicitly supplied managed directory.
+     *     A file that is already absent is considered cleaned.
+     */
+    private function deleteManagedFile(string $path, string $directory): bool
+    {
+        if ($path === '' || !is_file($path)) {
+            return true;
+        }
+
+        $root = realpath($directory);
+        $real = realpath($path);
+        if (
+            !is_string($root)
+            || !is_string($real)
+            || !str_starts_with($real, rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)
+        ) {
+            return false;
+        }
+
+        return unlink($real) || !is_file($real);
+    }
+
+    /**
+     * HR: Uklanja završeni staging samo iz izravnog direktorija poznatog posla.
+     * EN: Removes completed staging only from the direct directory of a known job.
+     */
+    private function deleteManagedStagingDirectory(string $jobUuid): bool
+    {
+        $stagingRoot = rtrim($this->config->dataDirectory(), DIRECTORY_SEPARATOR)
+            . DIRECTORY_SEPARATOR . 'staging';
+        $path = $stagingRoot . DIRECTORY_SEPARATOR . $jobUuid;
+        if (!is_dir($path)) {
+            return false;
+        }
+
+        $root = realpath($stagingRoot);
+        $real = realpath($path);
+        if (
+            !is_string($root)
+            || !is_string($real)
+            || !str_starts_with($real, rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)
+        ) {
+            return false;
+        }
+
+        $this->removeManagedDirectory($real);
+
+        return !is_dir($real);
+    }
+
+    /** HR: Rekurzivno uklanja već provjeren staging direktorij. EN: Recursively removes an already verified staging directory. */
+    private function removeManagedDirectory(string $directory): void
+    {
+        foreach (scandir($directory) ?: [] as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $path = $directory . DIRECTORY_SEPARATOR . $item;
+            if (is_link($path) || is_file($path)) {
+                if (!unlink($path) && is_file($path)) {
+                    throw new ConfluenceImportException(__('Privremenu datoteku dovršenog importa nije moguće ukloniti.'));
+                }
+                continue;
+            }
+            if (is_dir($path)) {
+                $this->removeManagedDirectory($path);
+            }
+        }
+        if (!rmdir($directory) && is_dir($directory)) {
+            throw new ConfluenceImportException(__('Privremeni direktorij dovršenog importa nije moguće ukloniti.'));
         }
     }
 

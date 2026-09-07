@@ -610,6 +610,7 @@ final readonly class ConfluenceImportService
             ];
             $this->repository->completeImport($jobId, $workspaceId, $summary);
             $this->uploads->deleteArchive($job);
+            $this->uploads->cleanupCompletedArtifacts();
             $this->removeDirectory($staging);
             $this->audit('simbioza_confluence_import.completed', [
                 'action' => 'import_completed',
@@ -746,9 +747,10 @@ final readonly class ConfluenceImportService
                 ...$this->strings($attachments['warnings'] ?? []),
             ])),
         ];
-        $this->repository->completeImport($jobId, $workspaceId, $summary);
         $job = $this->repository->jobByUuid($this->text($state['job_uuid'] ?? ''));
+        $this->repository->completeImport($jobId, $workspaceId, $summary);
         $this->uploads->deleteArchive($job);
+        $this->uploads->cleanupCompletedArtifacts();
         $this->audit('simbioza_confluence_import.completed', [
             'action' => 'import_completed',
             'actor_user_id' => $actorUserId,

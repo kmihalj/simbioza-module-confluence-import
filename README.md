@@ -59,7 +59,8 @@ Internal packages use compatible `^0.1.0` releases; this module does not commit 
   contains its identity but not its events; no calendar is matched or created
   automatically;
 - allows an unfinished import to be cancelled, immediately deleting its uploaded archive and preparation data;
-- removes the uploaded source archive after a successful import.
+- removes the uploaded source archive and per-job parser staging after a successful import;
+- never treats a stored attachment as disposable merely because its local page target is not yet set, because another imported space may still reference it.
 - processes a large confirmed import in bounded resumable batches and
   reconciles links, the report, and search index exactly once at the end.
 

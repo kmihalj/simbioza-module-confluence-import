@@ -68,6 +68,11 @@ djelomično izvedeni import ne može se pogrešno prikazati kao sigurno otkazan.
 
 Opcionalni Backup provideri za cijeli site i poslovnu cjelinu izvoze samo dovršene poslove i njihove trajne retke, uključujući strukturirani izvještaj stranica za provjeru. Zasebni provider `simbioza-confluence-import-workspace` izvršava se nakon `workspace-scope` providera i prenosi samo izvorne podatke odabranog područja. Registrirane binarne privitke posjeduje Editor i prenosi ih svojim redovnim backup providerom, bez dupliciranja blobova. Obnova kao kopija preko zajedničkog stanja ponovo veže izvorne identitete i dokumente. Privremeni prijenosi i staging datoteke nisu backup podaci.
 
+Ponovni cleanup dovršenog posla uklanja samo njegov izvorni ZIP i parserski
+staging direktorij. Ne briše spremljeni privitak samo zato što mu ciljni čvor ili
+dokument još nije postavljen: takav privitak može biti referenciran iz drugog
+Confluence spacea i zahtijeva izričitu provjeru referenci prije uklanjanja.
+
 ## Trajno čišćenje područja
 
 Modul uvjetno sluša javni događaj trajnog brisanja Workspace modula. Prije nego

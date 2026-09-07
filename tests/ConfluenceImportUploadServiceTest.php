@@ -29,6 +29,8 @@ final class ConfluenceImportUploadServiceTest extends TestCase
 
     private ConfluenceImportUploadService $uploads;
 
+    private ConfluenceImportConfig $config;
+
     protected function setUp(): void
     {
         $this->directory = sys_get_temp_dir() . '/simbioza-confluence-upload-' . bin2hex(random_bytes(8));
@@ -53,6 +55,7 @@ final class ConfluenceImportUploadServiceTest extends TestCase
         $migration = require dirname(__DIR__) . '/resources/migrations/initial_simbioza_confluence_import_schema.php';
         $migration->up($this->database);
         $config = new ConfluenceImportConfig($configuration, dirname(__DIR__));
+        $this->config = $config;
         $this->repository = new ConfluenceImportRepository($this->database);
         $archive = new ConfluenceArchive($config);
         $scanner = new ConfluenceExportScanner($archive, new ConfluenceExportReader($archive));
@@ -159,12 +162,91 @@ final class ConfluenceImportUploadServiceTest extends TestCase
         $path = (string)$job['archive_path'];
 
         $this->repository->completeImport((int)$job['id'], 99, ['pages' => 1]);
+        self::assertSame(
+            $path,
+            $this->repository->jobByUuid((string)$job['uuid'], 42)['archive_path'],
+        );
         $this->uploads->deleteArchive($job);
 
         self::assertFileDoesNotExist($path);
         $completed = $this->repository->jobByUuid((string)$job['uuid'], 42);
         self::assertSame('completed', $completed['status']);
         self::assertSame('', $completed['archive_path']);
+    }
+
+    /** HR: Dokazuje ponovni cleanup dovršenog ZIP-a i staginga uz očuvanje privitaka. EN: Proves retry cleanup of a completed ZIP and staging while preserving attachments. */
+    public function testCompletedArtifactCleanupRetriesOnlyTransientArtifacts(): void
+    {
+        $job = $this->uploads->start('retry-cleanup.xml.zip', 6, 42);
+        $archivePath = (string)$job['archive_path'];
+        $this->repository->completeImport((int)$job['id'], 99, ['pages' => 1]);
+
+        $attachmentDirectory = $this->config->attachmentDirectory();
+        mkdir($attachmentDirectory, 0770, true);
+        $attachmentPath = $attachmentDirectory . '/unused.bin';
+        file_put_contents($attachmentPath, 'unused');
+        $stagingPath = $this->config->dataDirectory() . '/staging/' . $job['uuid'];
+        mkdir($stagingPath . '/bodies', 0770, true);
+        file_put_contents($stagingPath . '/bodies/page.html', 'staged');
+        $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS)->insert([
+            'uuid' => 'unused-attachment',
+            'job_id' => (int)$job['id'],
+            'source_attachment_id' => 'unused-attachment',
+            'logical_source_id' => 'unused-attachment',
+            'source_page_id' => 'draft-page',
+            'source_version' => 1,
+            'original_name' => 'unused.bin',
+            'storage_path' => $attachmentPath,
+            'target_workspace_id' => 99,
+            'target_node_id' => null,
+            'target_document_key' => null,
+            'status' => 'stored',
+        ]);
+
+        self::assertSame(2, $this->uploads->cleanupCompletedArtifacts());
+        self::assertFileDoesNotExist($archivePath);
+        self::assertDirectoryDoesNotExist($stagingPath);
+        self::assertFileExists($attachmentPath);
+        self::assertSame('', $this->repository->jobByUuid((string)$job['uuid'], 42)['archive_path']);
+        self::assertNotNull($this->database->table(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS)
+            ->where('uuid', '=', 'unused-attachment')->first());
+    }
+
+    /** HR: Dokazuje da cleanup dovršenih artefakata ne dira nastavivi posao. EN: Proves completed-artifact cleanup never touches a resumable job. */
+    public function testCompletedArtifactCleanupPreservesRunningImport(): void
+    {
+        $job = $this->uploads->start('running-cleanup.xml.zip', 6, 42);
+        $archivePath = (string)$job['archive_path'];
+        $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
+            ->where('id', '=', (int)$job['id'])
+            ->update([
+                'status' => 'running',
+                'stage' => 'attachments',
+                'options_json' => '{}',
+            ]);
+
+        $attachmentDirectory = $this->config->attachmentDirectory();
+        mkdir($attachmentDirectory, 0770, true);
+        $attachmentPath = $attachmentDirectory . '/running.bin';
+        file_put_contents($attachmentPath, 'running');
+        $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS)->insert([
+            'uuid' => 'running-attachment',
+            'job_id' => (int)$job['id'],
+            'source_attachment_id' => 'running-attachment',
+            'logical_source_id' => 'running-attachment',
+            'source_page_id' => 'page-in-progress',
+            'source_version' => 1,
+            'original_name' => 'running.bin',
+            'storage_path' => $attachmentPath,
+            'target_workspace_id' => 99,
+            'status' => 'stored',
+        ]);
+
+        self::assertSame(0, $this->uploads->cleanupCompletedArtifacts());
+        self::assertFileExists($archivePath);
+        self::assertFileExists($attachmentPath);
+        self::assertNotNull($this->database->table(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS)
+            ->where('uuid', '=', 'running-attachment')->first());
     }
 
     private function removeDirectory(string $directory): void

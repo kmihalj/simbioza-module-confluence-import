@@ -187,8 +187,10 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Dovršava posao i uklanja privremenu izvornu putanju.
-     * EN: Completes a job and removes its transient source path.
+     * HR: Dovršava posao, ali zadržava izvornu putanju dok storage servis ne
+     *     potvrdi da je arhiva stvarno uklonjena.
+     * EN: Completes a job while retaining its source path until the storage
+     *     service confirms that the archive was actually removed.
      *
      * @param array<string,mixed> $summary
      */
@@ -199,10 +201,43 @@ final readonly class ConfluenceImportRepository
             'stage' => 'completed',
             'workspace_id' => $workspaceId,
             'summary_json' => $this->json($summary),
-            'archive_path' => '',
             'expires_at' => null,
             'error_message' => null,
         ]);
+    }
+
+    /** HR: Zaboravlja putanju tek nakon potvrđenog brisanja arhive. EN: Forgets the path only after confirmed archive deletion. */
+    public function clearArchivePath(int $jobId): void
+    {
+        if ($jobId <= 0) {
+            return;
+        }
+
+        $this->updateJob($jobId, ['archive_path' => '']);
+    }
+
+    /**
+     * HR: Vraća dovršene poslove i njihove privremene artefakte za siguran
+     *     ponovni pokušaj čišćenja.
+     * EN: Returns completed jobs and their transient artifacts for a safe
+     *     cleanup retry.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function completedJobsForStorageCleanup(): array
+    {
+        $rows = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
+            ->where('status', '=', 'completed')
+            ->orderBy('id', 'ASC')
+            ->get();
+        $result = [];
+        foreach ($rows as $row) {
+            if (is_array($row)) {
+                $result[] = $this->normalizeRow($row);
+            }
+        }
+
+        return $result;
     }
 
     /** HR: Bilježi pogrešku bez gubitka preflight sažetka. EN: Records an error without losing the preflight summary. */

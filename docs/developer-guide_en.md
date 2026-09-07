@@ -69,6 +69,11 @@ partially executed import as safely cancelled.
 
 The optional site/component Backup providers export only completed jobs and their durable rows, including the structured per-page review report. A separate `simbioza-confluence-import-workspace` provider follows the `workspace-scope` provider and transfers only the selected Workspace's provenance. Registered attachment bytes belong to Editor and travel through Editor's normal backup provider, avoiding duplicate blobs. A copy restore reconnects source identities and document references through shared import state. Temporary uploads and staging files are not backup data.
 
+Completed-job cleanup retries remove only the source ZIP and the job's parser
+staging directory. A stored attachment is not deleted merely because its target
+node or document is not set yet: another Confluence space may reference it, so
+removal requires an explicit reference check.
+
 ## Permanent Workspace cleanup
 
 The module conditionally listens to Workspace's public permanent-deletion event.

@@ -14,11 +14,15 @@ use function array_filter;
 use function array_unique;
 use function array_values;
 use function is_array;
+use function is_dir;
 use function is_file;
+use function is_link;
 use function is_numeric;
 use function is_scalar;
 use function realpath;
+use function rmdir;
 use function rtrim;
+use function scandir;
 use function str_starts_with;
 use function unlink;
 
@@ -37,14 +41,18 @@ final readonly class PurgeConfluenceWorkspaceImport
     {
         $jobIds = [];
         $sourceSpaceKeys = [];
+        $managedDirectories = [];
         foreach (
             $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
-            ->select(['id'])
+            ->select(['id', 'uuid'])
             ->where('workspace_id', '=', $event->workspaceId)
             ->get() as $row
         ) {
             if (is_array($row) && is_numeric($row['id'] ?? null)) {
                 $jobIds[] = (int)$row['id'];
+            }
+            if (is_array($row) && is_scalar($row['uuid'] ?? null) && trim((string)$row['uuid']) !== '') {
+                $managedDirectories[] = $this->stagingDirectory((string)$row['uuid']);
             }
         }
         foreach (
@@ -79,6 +87,9 @@ final readonly class PurgeConfluenceWorkspaceImport
             ) {
                 if (is_array($row) && is_scalar($row['archive_path'] ?? null)) {
                     $managedFiles[] = (string)$row['archive_path'];
+                }
+                if (is_array($row) && is_scalar($row['uuid'] ?? null) && trim((string)$row['uuid']) !== '') {
+                    $managedDirectories[] = $this->stagingDirectory((string)$row['uuid']);
                 }
             }
             foreach (
@@ -141,6 +152,16 @@ final readonly class PurgeConfluenceWorkspaceImport
         foreach (array_unique($managedFiles) as $path) {
             $this->deleteManagedFile($path);
         }
+        foreach (array_unique($managedDirectories) as $path) {
+            $this->deleteManagedDirectory($path);
+        }
+    }
+
+    /** HR: Gradi isključivo izravni staging direktorij poznatog posla. EN: Builds only the direct staging directory of a known job. */
+    private function stagingDirectory(string $uuid): string
+    {
+        return rtrim($this->config->dataDirectory(), DIRECTORY_SEPARATOR)
+            . DIRECTORY_SEPARATOR . 'staging' . DIRECTORY_SEPARATOR . trim($uuid);
     }
 
     /** HR: Briše samo datoteku koja se stvarno nalazi ispod direktorija ovog modula. EN: Deletes only a file that actually resides below this module's data directory. */
@@ -158,6 +179,44 @@ final readonly class PurgeConfluenceWorkspaceImport
 
         if (!unlink($real)) {
             throw new RuntimeException('Confluence import file cannot be permanently deleted.');
+        }
+    }
+
+    /** HR: Rekurzivno briše samo staging direktorij ispod upravljanog korijena. EN: Recursively deletes only a staging directory below the managed root. */
+    private function deleteManagedDirectory(string $path): void
+    {
+        if (!is_dir($path)) {
+            return;
+        }
+
+        $root = realpath($this->config->dataDirectory());
+        $real = realpath($path);
+        if (
+            $root === false
+            || $real === false
+            || !str_starts_with($real, rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'staging' . DIRECTORY_SEPARATOR)
+        ) {
+            throw new RuntimeException('Confluence import staging directory is outside the managed directory.');
+        }
+
+        foreach (scandir($real) ?: [] as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $child = $real . DIRECTORY_SEPARATOR . $item;
+            if (is_link($child) || is_file($child)) {
+                if (!unlink($child)) {
+                    throw new RuntimeException('Confluence import staging file cannot be permanently deleted.');
+                }
+                continue;
+            }
+            if (is_dir($child)) {
+                $this->deleteManagedDirectory($child);
+            }
+        }
+
+        if (!rmdir($real)) {
+            throw new RuntimeException('Confluence import staging directory cannot be permanently deleted.');
         }
     }
 }
