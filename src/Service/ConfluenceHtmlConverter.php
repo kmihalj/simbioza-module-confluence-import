@@ -182,7 +182,11 @@ final readonly class ConfluenceHtmlConverter
             if ($alternative === '') {
                 $alternative = $this->attribute($image, self::AC_NAMESPACE, 'title');
             }
-            $replacement->setAttribute('alt', $alternative !== '' ? $alternative : $filename);
+            // HR: Naziv datoteke nije zamjenski opis slike. Prazan alt čuva
+            //     dekorativnu sliku bez stvaranja lažnog vidljivog captiona u Editoru.
+            // EN: A filename is not fallback alternative text. An empty alt keeps
+            //     decorative images from acquiring a fake visible caption in Editor.
+            $replacement->setAttribute('alt', $alternative);
             $classes = ['img-fluid'];
             if (strtolower($this->attribute($image, self::AC_NAMESPACE, 'align')) === 'center') {
                 $classes[] = 'd-block';
@@ -296,7 +300,7 @@ final readonly class ConfluenceHtmlConverter
             $attachments[] = $reference;
             $image->setAttribute('src', self::ATTACHMENT_PREFIX . $this->token($reference));
             if (!$image->hasAttribute('alt')) {
-                $image->setAttribute('alt', $reference['filename']);
+                $image->setAttribute('alt', '');
             }
             $image->setAttribute('class', trim($image->getAttribute('class') . ' img-fluid'));
         }

@@ -222,7 +222,8 @@ XML;
         self::assertSame('odjeljak-đ-日本語-😀', $result->links[0]['fragment']);
         self::assertSame('Čćđšž 日本語 😀', $result->links[1]['destination_page_title']);
         self::assertSame('izvještaj-Đ-日本語-😀.pdf', $result->attachments[0]['filename']);
-        self::assertStringContainsString('alt="slika-日本語-😀.png"', $result->html);
+        self::assertStringContainsString('alt=""', $result->html);
+        self::assertStringNotContainsString('alt="slika-日本語-😀.png"', $result->html);
         self::assertStringContainsString(
             'https://cdn.example/%C4%8D%C4%87%C4%91%C5%A1%C5%BE/slika-%E6%97%A5%E6%9C%AC%E8%AA%9E-%F0%9F%98%80.png',
             $result->html,
@@ -379,6 +380,20 @@ XML;
         self::assertSame('05_PDO_webinar.png', $result->attachments[0]['filename']);
         self::assertSame('133010769', $result->attachments[0]['source_page_id']);
         self::assertSame([], $result->unsupportedMacros);
+    }
+
+    /** HR: Slika bez izvornog opisa ne prikazuje naziv datoteke kao caption. EN: An image without source description does not expose its filename as a caption. */
+    public function testImageWithoutDescriptionKeepsEmptyAlternativeText(): void
+    {
+        $body = <<<'XML'
+<p><ac:image ac:thumbnail="true" ac:height="72"><ri:attachment ri:filename="racunalne.png" /></ac:image></p>
+XML;
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'DSU', '160792788');
+
+        self::assertStringContainsString('alt=""', $result->html);
+        self::assertStringNotContainsString('>racunalne.png<', $result->html);
+        self::assertStringNotContainsString('figure-caption', $result->html);
     }
 
     /** HR: Expand postaje nativni accordion i čuva izvornu vrstu liste. EN: Expand becomes a native accordion and keeps the original list type. */
