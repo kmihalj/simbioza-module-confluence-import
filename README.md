@@ -44,7 +44,7 @@ Internal packages use compatible `^0.1.0` releases; this module does not commit 
   replacing that Workspace and importing an isolated copy;
 - imports current pages by default and recreates their tree;
 - optionally imports history, drafts and soft-deleted pages;
-- rewrites same-space links and rechecks every cross-space link after each import or replacement; stable intermediary URLs allow a target imported later to become active without editing the source page;
+- rewrites relative Confluence links and absolute links on the source host selected by the administrator for each individual or batch import; every import or replacement rechecks cross-Workspace links, while other domains remain ordinary external links;
 - registers every imported file as a real private Editor page attachment and serves it through current Workspace/page ACL; a replacement preserves the same source page slugs and attachment UUIDs, while a separate copy receives isolated identities;
 - prepares cached web-sized copies of imported JPEG, PNG, and WebP attachments
   after they are registered; originals remain unchanged and available on click;

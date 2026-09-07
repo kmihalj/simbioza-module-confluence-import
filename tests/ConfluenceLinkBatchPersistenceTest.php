@@ -6,9 +6,12 @@ namespace AaiEduHr\SimbiozaModuleConfluenceImport\Tests;
 
 use AaiEduHr\HeartPhrameModuleOrm\Database\Database;
 use AaiEduHr\SimbiozaModuleConfluenceImport\ModuleSimbiozaConfluenceImport;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceHtmlConverter;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportRepository;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceReferenceResolver;
 use HeartPhrame\Config\Config;
 use HeartPhrame\Helper\Helper;
+use HeartPhrame\Routing\UrlGenerator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -135,6 +138,30 @@ final class ConfluenceLinkBatchPersistenceTest extends TestCase
         $links = $repository->unresolvedLinksForJob(5);
         self::assertCount(1, $links);
         self::assertSame('https://wiki.example/x/MgL7Aw', $links[0]['original_target']);
+    }
+
+    /** HR: Semantička XML poveznica sprema odredište, ali nikada ne izlaže interni pretvorbeni token kao URL. EN: A semantic XML link stores its destination without ever exposing the internal conversion token as a URL. */
+    public function testSemanticLinkDoesNotPersistInternalTokenAsOriginalUrl(): void
+    {
+        [$repository] = $this->environment();
+        $urls = $this->createMock(UrlGenerator::class);
+        $urls->method('namedRouteExists')->willReturn(false);
+        $urls->method('getBasePath')->willReturn('');
+        $resolver = new ConfluenceReferenceResolver($repository, $urls);
+        $converted = (new ConfluenceHtmlConverter())->convert(
+            '<p><ac:link><ri:page ri:space-key="TARGET" ri:content-title="Destination" /></ac:link></p>',
+            'SOURCE',
+            'source-page',
+        );
+
+        $html = $resolver->resolve($converted->html, 'source-page', 'SOURCE', 9);
+        $links = $repository->unresolvedLinksForJob(9);
+
+        self::assertCount(1, $links);
+        self::assertNull($links[0]['original_target']);
+        self::assertSame('TARGET', $links[0]['destination_space_key']);
+        self::assertSame('Destination', $links[0]['destination_page_title']);
+        self::assertStringNotContainsString('__SIMBIOZA_CONFLUENCE_LINK__', $html);
     }
 
     /** @return array{ConfluenceImportRepository,Database} */

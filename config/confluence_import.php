@@ -17,5 +17,8 @@ return [
     // EN: A real large-Workspace import may run for up to 15 minutes.
     'import_execution_time_limit' => 900,
     'default_language' => 'hr',
+    // HR: Samo početna vrijednost administratorskog odabira po importu.
+    // EN: Only the initial value of the administrator's per-import choice.
+    'source_base_url' => '',
     'attachment_policy' => 'download_only',
 ];

@@ -104,6 +104,7 @@ final readonly class ConfluenceImportController
             'chunkSize' => $this->config->chunkSize(),
             'maxArchiveSize' => $this->config->maxArchiveSize(),
             'defaultLanguage' => $this->config->defaultLanguage(),
+            'sourceBaseUrl' => $this->config->sourceBaseUrl(),
             'supportedLanguages' => $this->supportedLanguages(),
             'settingsMenuActiveSection' => 'simbioza-confluence-import.settings',
             'menuRenderer' => $this->menuRenderer,
@@ -336,6 +337,7 @@ final readonly class ConfluenceImportController
                 $this->text($job['uuid'] ?? ''),
                 $actor,
                 $createInactiveUsers,
+                $this->text($body['source_base_url'] ?? ''),
             );
 
             return $this->responses->json([
@@ -656,10 +658,16 @@ final readonly class ConfluenceImportController
         foreach ($this->repository->unresolvedLinksForJob($jobId) as $link) {
             $sourcePageId = $this->text($link['source_page_id'] ?? '');
             $target = $this->text($link['original_target'] ?? '');
-            if ($sourcePageId === '' || $target === '') {
+            if ($sourcePageId === '') {
                 continue;
             }
-            $uniqueKey = $sourcePageId . "\0" . $target;
+            $uniqueKey = implode("\0", [
+                $sourcePageId,
+                $target,
+                $this->text($link['destination_space_key'] ?? ''),
+                $this->text($link['destination_page_id'] ?? ''),
+                $this->text($link['destination_page_title'] ?? ''),
+            ]);
             if (isset($seen[$uniqueKey])) {
                 continue;
             }

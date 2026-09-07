@@ -141,7 +141,11 @@ $normalizeCalendarName = static function (string $name): string {
                                             </td>
                                             <td>
                                                 <div><?= $this->escape($link['destination']) ?></div>
-                                                <a class="small text-break" href="<?= $this->escape($link['target']) ?>" target="_blank" rel="noopener noreferrer"><?= $this->escape($link['target']) ?></a>
+                                                <?php if ($link['target'] !== '') : ?>
+                                                    <a class="small text-break" href="<?= $this->escape($link['target']) ?>" target="_blank" rel="noopener noreferrer"><?= $this->escape($link['target']) ?></a>
+                                                <?php else : ?>
+                                                    <div class="small text-body-secondary"><?= $this->escape(__('Interna Confluence referenca iz XML-a nema zaseban izvorni URL.')) ?></div>
+                                                <?php endif; ?>
                                             </td>
                                             <td class="text-end">
                                                 <?php if ($index === 0 && $page['url'] !== '') : ?>

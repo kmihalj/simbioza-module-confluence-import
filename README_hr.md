@@ -44,7 +44,7 @@ Interni paketi koriste kompatibilna izdanja `^0.1.0`; ovaj modul ne sprema `comp
   područja i uvoza izolirane kopije;
 - zadano uvozi aktualne stranice i ponovno gradi njihovo stablo;
 - opcionalno uvozi povijest, nacrte i soft-obrisane stranice;
-- prepisuje poveznice unutar spacea i nakon svakog importa ili zamjene ponovno provjerava sve međupodručne poveznice; stabilni posrednički URL omogućuje da cilj uvezen kasnije proradi bez uređivanja izvorne stranice;
+- prepisuje relativne Confluence poveznice i apsolutne poveznice s izvornog hosta koji administrator odabere za svaki pojedinačni ili batch import; nakon svakog importa ili zamjene ponovno provjerava sve međupodručne poveznice, dok vanjske domene ostaju obične web-poveznice;
 - svaku uvezenu datoteku registrira kao stvarni privatni Editor privitak stranice i isporučuje je uz aktualnu provjeru ACL-a područja i stranice; zamjena čuva slugove istih izvornih stranica i UUID-e privitaka, a zasebna kopija dobiva izolirane identitete;
 - nakon registracije uvezenih JPEG, PNG i WebP privitaka priprema njihove
   predmemorirane web-verzije; originali ostaju nepromijenjeni i dostupni klikom;

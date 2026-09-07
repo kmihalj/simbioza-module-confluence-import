@@ -42,6 +42,7 @@ use function error_get_last;
 use function explode;
 use function file_get_contents;
 use function file_put_contents;
+use function filter_var;
 use function fclose;
 use function finfo_file;
 use function finfo_open;
@@ -67,6 +68,7 @@ use function preg_split;
 use function rawurlencode;
 use function register_shutdown_function;
 use function rmdir;
+use function rtrim;
 use function ucfirst;
 use function set_time_limit;
 use function sort;
@@ -79,6 +81,7 @@ use function unlink;
 use function usort;
 
 use const FILEINFO_MIME_TYPE;
+use const FILTER_VALIDATE_URL;
 use const E_COMPILE_ERROR;
 use const E_CORE_ERROR;
 use const E_ERROR;
@@ -90,6 +93,8 @@ use const JSON_UNESCAPED_UNICODE;
 use const LOCK_EX;
 use const LOCK_NB;
 use const LOCK_UN;
+use const PHP_URL_HOST;
+use const PHP_URL_SCHEME;
 
 /**
  * HR: Orkestrira kontrolirani import područja, stranica, povijesti, ACL-a, privitaka i opcionalnih komentara.
@@ -274,8 +279,12 @@ final readonly class ConfluenceImportService
      * @param array<string,mixed> $actor
      * @return array<string,mixed>
      */
-    public function queueBatch(string $jobUuid, array $actor, bool $createInactiveUsers = false): array
-    {
+    public function queueBatch(
+        string $jobUuid,
+        array $actor,
+        bool $createInactiveUsers = false,
+        string $sourceBaseUrl = '',
+    ): array {
         $actorUserId = $this->positiveInt($actor['id'] ?? null, __('Prijavljeni administrator nije pronađen.'));
         $preparation = $this->preparation($jobUuid, $actorUserId);
         $scan = is_array($preparation['scan'] ?? null) ? $preparation['scan'] : [];
@@ -308,6 +317,7 @@ final readonly class ConfluenceImportService
             'workspace_slug' => $this->text($space['source_key'] ?? ''),
             'reimport_strategy' => 'new',
             'language' => $this->config->defaultLanguage(),
+            'source_base_url' => $sourceBaseUrl,
             'include_attachments' => true,
             'include_comments' => true,
             'include_history' => false,
@@ -1861,6 +1871,7 @@ final readonly class ConfluenceImportService
         $mappingSpaceKey = $this->text($options['mapping_space_key'] ?? $sourceSpaceKey);
         $homePageId = $this->homepageLogicalId($pages, $this->text($space['home_page_id'] ?? ''));
         $language = $this->text($options['language'] ?? $this->config->defaultLanguage());
+        $sourceBaseUrl = $this->text($options['source_base_url'] ?? '');
         $localById = [];
         $localByTitle = [];
         $macroPages = [];
@@ -1987,6 +1998,7 @@ final readonly class ConfluenceImportService
                         $macroCalendars,
                         $fallbackUser,
                     ),
+                    $sourceBaseUrl,
                 );
                 $warnings = [...$warnings, ...$converted['warnings']];
                 $this->recordPageReview($reviewPages, $converted['review_issues'], $first, $target);
@@ -2093,6 +2105,7 @@ final readonly class ConfluenceImportService
                             $macroCalendars,
                             $fallbackUser,
                         ),
+                        $sourceBaseUrl,
                     );
                     $warnings = [...$warnings, ...$converted['warnings']];
                     $this->recordPageReview($reviewPages, $converted['review_issues'], $version, $target);
@@ -2130,6 +2143,7 @@ final readonly class ConfluenceImportService
                             $macroCalendars,
                             $fallbackUser,
                         ),
+                        $sourceBaseUrl,
                     );
                     $warnings = [...$warnings, ...$converted['warnings']];
                     $this->recordPageReview($reviewPages, $converted['review_issues'], $draft, $target);
@@ -2357,6 +2371,7 @@ final readonly class ConfluenceImportService
         array $localById,
         array $localByTitle,
         ?ConfluenceMacroContext $macroContext = null,
+        string $sourceBaseUrl = '',
     ): array {
         $sourceId = $this->text($page['source_id'] ?? '');
         $path = $this->text($dataset['body_directory'] ?? '') . DIRECTORY_SEPARATOR . $this->safeSourceId($sourceId) . '.html';
@@ -2366,6 +2381,7 @@ final readonly class ConfluenceImportService
             $spaceKey,
             $sourceId,
             $macroContext,
+            $sourceBaseUrl,
         );
         $html = $this->references->resolve(
             $converted->html,
@@ -3086,6 +3102,7 @@ final readonly class ConfluenceImportService
             'workspace_slug' => $slug,
             'reimport_strategy' => $reimportStrategy,
             'language' => $this->language($options['language'] ?? $this->config->defaultLanguage()),
+            'source_base_url' => $this->sourceBaseUrl($options['source_base_url'] ?? ''),
             'include_history' => $this->boolean($options['include_history'] ?? false),
             'include_deleted' => $this->boolean($options['include_deleted'] ?? false),
             'include_drafts' => $this->boolean($options['include_drafts'] ?? false),
@@ -3101,6 +3118,23 @@ final readonly class ConfluenceImportService
             'group_map' => is_array($options['group_map'] ?? null) ? $options['group_map'] : [],
             'group_create' => is_array($options['group_create'] ?? null) ? $options['group_create'] : [],
         ];
+    }
+
+    /** HR: Potvrđuje administratorski odabrani URL izvornog Confluencea. EN: Validates the administrator-selected source Confluence URL. */
+    private function sourceBaseUrl(mixed $value): string
+    {
+        $url = rtrim($this->text($value), '/');
+        $scheme = strtolower((string)(parse_url($url, PHP_URL_SCHEME) ?? ''));
+        $host = trim((string)(parse_url($url, PHP_URL_HOST) ?? ''));
+        if (
+            filter_var($url, FILTER_VALIDATE_URL) === false
+            || !in_array($scheme, ['http', 'https'], true)
+            || $host === ''
+        ) {
+            throw new ConfluenceImportException(__('Osnovni URL izvornog Confluencea mora biti valjan HTTP(S) URL.'));
+        }
+
+        return $url;
     }
 
     /**

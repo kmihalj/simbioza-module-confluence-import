@@ -28,6 +28,7 @@ declare(strict_types=1);
  * @var int $chunkSize
  * @var int $maxArchiveSize
  * @var string $defaultLanguage
+ * @var string $sourceBaseUrl
  * @var list<string> $supportedLanguages
  * @var object|null $menuRenderer
  */
@@ -46,6 +47,9 @@ $currentActorName = (string)($currentActor['display_name'] ?? $currentActor['log
 $activeBatchOptions = is_array($activeBatchJob['options'] ?? null) ? $activeBatchJob['options'] : [];
 $batchCreateInactiveUsers = ($activeBatchOptions['batch_create_inactive_users'] ?? false) === true;
 $batchPolicyLocked = ($activeBatchJob['status'] ?? '') === 'running';
+$batchSourceBaseUrl = is_scalar($activeBatchOptions['source_base_url'] ?? null)
+    ? (string)$activeBatchOptions['source_base_url']
+    : $sourceBaseUrl;
 $batchArchiveNames = array_values(array_map(
     static fn(array $archive): string => (string)$archive['name'],
     $batchArchives,
@@ -138,6 +142,11 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                             $batchDirectory,
                         )) ?></p>
                         <p class="small text-body-secondary"><?= $this->escape(__('Postojeći korisnici mapiraju se automatski. Nove Confluence grupe izrađuju se kao obične lokalne grupe. Postojeće uvezeno područje batch import neće prepisati.')) ?></p>
+                        <div class="mb-3">
+                            <label class="form-label" for="confluence-import-batch-source-base-url"><?= $this->escape(__('Osnovni URL izvornog Confluencea')) ?></label>
+                            <input class="form-control" id="confluence-import-batch-source-base-url" type="url" value="<?= $this->escape($batchSourceBaseUrl) ?>" placeholder="https://wiki.example.org" required<?= $batchPolicyLocked ? ' disabled' : '' ?>>
+                            <div class="form-text"><?= $this->escape(__('Samo apsolutne poveznice s odabranog izvornog hosta pokušavaju se lokalno razriješiti i prikazuju u izvještaju. Relativne Confluence poveznice obrađuju se kao interne.')) ?></div>
+                        </div>
                         <div class="confluence-import-option mb-3">
                             <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" role="switch" id="confluence-import-batch-create-unmapped-users"<?= $batchCreateInactiveUsers ? ' checked' : '' ?><?= $batchPolicyLocked ? ' disabled' : '' ?>>
@@ -181,6 +190,11 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                         <form id="confluence-import-form">
                             <input type="hidden" name="uuid" value="<?= $this->escape((string)($job['uuid'] ?? '')) ?>">
                             <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label" for="confluence-import-source-base-url"><?= $this->escape(__('Osnovni URL izvornog Confluencea')) ?></label>
+                                    <input class="form-control" id="confluence-import-source-base-url" name="source_base_url" type="url" value="<?= $this->escape($sourceBaseUrl) ?>" placeholder="https://wiki.example.org" required>
+                                    <div class="form-text"><?= $this->escape(__('Samo apsolutne poveznice s odabranog izvornog hosta pokušavaju se lokalno razriješiti i prikazuju u izvještaju. Relativne Confluence poveznice obrađuju se kao interne.')) ?></div>
+                                </div>
                                 <div class="col-md-5">
                                     <label class="form-label" for="confluence-import-workspace-name"><?= $this->escape(__('Naziv ciljnog područja')) ?></label>
                                     <input class="form-control" id="confluence-import-workspace-name" name="workspace_name" value="<?= $this->escape((string)($existingImport['workspace_name'] ?? $space['name'] ?? '')) ?>" required>
@@ -623,6 +637,8 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
     });
 
     query('#confluence-import-batch-start')?.addEventListener('click', async (event) => {
+        const sourceBaseUrlInput = query('#confluence-import-batch-source-base-url');
+        if (!(sourceBaseUrlInput instanceof HTMLInputElement) || !sourceBaseUrlInput.reportValidity()) return;
         if (!window.confirm(config.confirmBatch)) return;
         const button = event.currentTarget;
         const status = query('#confluence-import-batch-status');
@@ -630,6 +646,8 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         const bar = progress?.querySelector('.progress-bar');
         if (!(button instanceof HTMLButtonElement) || !(status instanceof HTMLElement) || !(progress instanceof HTMLElement) || !(bar instanceof HTMLElement)) return;
         button.disabled = true;
+        sourceBaseUrlInput.disabled = true;
+        const sourceBaseUrl = sourceBaseUrlInput.value.trim();
         progress.classList.remove('d-none');
         const heartbeat = window.setInterval(() => {
             refreshCsrf().catch(() => {});
@@ -649,8 +667,8 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                     const createInactiveUsers = query('#confluence-import-batch-create-unmapped-users');
                     const batchPolicy = createInactiveUsers instanceof HTMLInputElement && createInactiveUsers.checked;
                     const started = await post(config.batchStart, item.uuid !== ''
-                        ? {uuid: item.uuid, create_inactive_users: batchPolicy}
-                        : {name: item.name, create_inactive_users: batchPolicy});
+                        ? {uuid: item.uuid, create_inactive_users: batchPolicy, source_base_url: sourceBaseUrl}
+                        : {name: item.name, create_inactive_users: batchPolicy, source_base_url: sourceBaseUrl});
                     config.activeBatchUuid = String(started.uuid || item.uuid || '');
                     config.activeBatchName = item.name;
                     await finishQueuedImport(started, started.uuid, (data) => {
@@ -675,6 +693,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
             window.clearInterval(heartbeat);
             progress.classList.add('d-none');
             button.disabled = false;
+            sourceBaseUrlInput.disabled = false;
         }
     });
 
@@ -692,6 +711,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
             workspace_slug: form.elements.workspace_slug.value,
             reimport_strategy: form.elements.reimport_strategy?.value || 'new',
             language: form.elements.language.value,
+            source_base_url: form.elements.source_base_url.value,
             include_attachments: form.elements.include_attachments.checked,
             include_comments: form.elements.include_comments.checked,
             include_history: form.elements.include_history.checked,

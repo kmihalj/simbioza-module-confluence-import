@@ -39,7 +39,13 @@ XML;
 <ac:structured-macro ac:name="code"><ac:plain-text-body><![CDATA[echo "ok";]]></ac:plain-text-body></ac:structured-macro>
 XML;
 
-        $result = (new ConfluenceHtmlConverter())->convert($body, 'DEMO', '10');
+        $result = (new ConfluenceHtmlConverter())->convert(
+            $body,
+            'DEMO',
+            '10',
+            null,
+            'https://wiki.example',
+        );
 
         self::assertStringContainsString('__SIMBIOZA_CONFLUENCE_LINK__', $result->html);
         self::assertStringContainsString('__SIMBIOZA_CONFLUENCE_ATTACHMENT__', $result->html);
@@ -215,7 +221,13 @@ XML;
 <p><ac:image><ri:url ri:value="https://cdn.example/čćđšž/slika-日本語-😀.png" /></ac:image></p>
 XML;
 
-        $result = (new ConfluenceHtmlConverter())->convert($body, 'HR', '10');
+        $result = (new ConfluenceHtmlConverter())->convert(
+            $body,
+            'HR',
+            '10',
+            null,
+            'https://wiki.example',
+        );
 
         self::assertTrue(mb_check_encoding($result->html, 'UTF-8'));
         self::assertSame('Uređivanje-ČĆĐŠŽ-日本語-😀', $result->links[0]['destination_page_title']);
@@ -237,23 +249,49 @@ XML;
 <p><a href="https://wiki.example/display/DEMO">Legacy root</a></p>
 <p><a href="https://wiki.example/spaces/DEMO/overview">Modern root</a></p>
 <p><a href="https://wiki.example/x/MgL7Aw">Short page</a></p>
+<p><a href="/display/RELATIVE/Local+page">Relative source link</a></p>
 <p><a href="https://wiki.example/plugins/servlet/resumedraft.action?draftId=42">Unknown Wiki link</a></p>
 <p><a href="https://outside.example/plugins/servlet/view">External</a></p>
+<p><a href="https://hko.srce.hr/upute/pages/viewpage.action?pageId=1769759">Other Confluence</a></p>
+<p><a href="https://www.isvu.hr/upute/display/TUT/External+page">Other legacy Confluence</a></p>
+<p><a href="https://en.wikipedia.org/wiki/Computer_cluster">Wikipedia</a></p>
 <ac:structured-macro ac:name="html"><ac:plain-text-body><![CDATA[<table><tbody><tr><td><a href="https://wiki.example/display/TARGET/Generated+page">Generated</a></td></tr></tbody></table>]]></ac:plain-text-body></ac:structured-macro>
 XML;
 
-        $result = (new ConfluenceHtmlConverter())->convert($body, 'DEMO', '10');
+        $result = (new ConfluenceHtmlConverter())->convert(
+            $body,
+            'DEMO',
+            '10',
+            null,
+            'https://wiki.example',
+        );
 
-        self::assertCount(5, $result->links);
+        self::assertCount(6, $result->links);
         self::assertSame('space_home', $result->links[0]['reference_type']);
         self::assertSame('DEMO', $result->links[0]['destination_space_key']);
         self::assertSame('space_home', $result->links[1]['reference_type']);
         self::assertSame('66781746', $result->links[2]['destination_page_id']);
-        self::assertSame('unknown', $result->links[3]['reference_type']);
-        self::assertSame('TARGET', $result->links[4]['destination_space_key']);
-        self::assertSame('Generated page', $result->links[4]['destination_page_title']);
-        self::assertSame(5, substr_count($result->html, '__SIMBIOZA_CONFLUENCE_LINK__'));
+        self::assertSame('RELATIVE', $result->links[3]['destination_space_key']);
+        self::assertSame('Local page', $result->links[3]['destination_page_title']);
+        self::assertSame('unknown', $result->links[4]['reference_type']);
+        self::assertSame('TARGET', $result->links[5]['destination_space_key']);
+        self::assertSame('Generated page', $result->links[5]['destination_page_title']);
+        self::assertSame(6, substr_count($result->html, '__SIMBIOZA_CONFLUENCE_LINK__'));
         self::assertStringContainsString('https://outside.example/plugins/servlet/view', $result->html);
+        self::assertStringContainsString('https://hko.srce.hr/upute/pages/viewpage.action?pageId=1769759', $result->html);
+        self::assertStringContainsString('https://www.isvu.hr/upute/display/TUT/External+page', $result->html);
+        self::assertStringContainsString('https://en.wikipedia.org/wiki/Computer_cluster', $result->html);
+    }
+
+    /** HR: Bez administratorski odabranog izvornog hosta apsolutni URL ne nagađa se kao Confluence poveznica. EN: Without an administrator-selected source host, an absolute URL is not guessed to be a Confluence link. */
+    public function testAbsoluteConfluenceShapedUrlRequiresSelectedSourceHost(): void
+    {
+        $body = '<p><a href="https://wiki.example/display/DEMO/Page">Page</a></p>';
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'DEMO', '10');
+
+        self::assertSame([], $result->links);
+        self::assertStringContainsString('https://wiki.example/display/DEMO/Page', $result->html);
     }
 
     /** HR: Normalizira nestandardni CDATA završetak i HTML entitete iz stvarnih Atlassian XML izvoza. EN: Normalizes the non-standard CDATA terminator and HTML entities found in real Atlassian XML exports. */
@@ -268,7 +306,13 @@ XML;
 <p>Nepoznati entitet ostaje vidljiv: &unknown;</p>
 XML;
 
-        $result = (new ConfluenceHtmlConverter())->convert($body, 'DEMO', '10');
+        $result = (new ConfluenceHtmlConverter())->convert(
+            $body,
+            'DEMO',
+            '10',
+            null,
+            'https://wiki.example',
+        );
 
         self::assertStringContainsString('Prvi redak', $result->html);
         self::assertStringContainsString('Otvori stranicu', $result->html);
@@ -316,7 +360,13 @@ XML;
 <ac:structured-macro ac:name="chart"><ac:parameter ac:name="title">Results</ac:parameter><ac:rich-text-body><table><tr><td>42</td></tr></table></ac:rich-text-body></ac:structured-macro>
 XML;
 
-        $result = (new ConfluenceHtmlConverter())->convert($body, 'DEMO', '10');
+        $result = (new ConfluenceHtmlConverter())->convert(
+            $body,
+            'DEMO',
+            '10',
+            null,
+            'https://wiki.example',
+        );
 
         self::assertStringContainsString('data-simbioza-confluence-include-token', $result->html);
         self::assertSame('Restricted page', $result->includes[0]['destination_page_title']);
@@ -368,7 +418,13 @@ XML;
 <ac:structured-macro ac:name="code"><ac:parameter ac:name="language">php</ac:parameter><ac:parameter ac:name="title">Example</ac:parameter><ac:plain-text-body><![CDATA[echo 'ok';]]></ac:plain-text-body></ac:structured-macro>
 XML;
 
-        $result = (new ConfluenceHtmlConverter())->convert($body, 'DEMO', '10');
+        $result = (new ConfluenceHtmlConverter())->convert(
+            $body,
+            'DEMO',
+            '10',
+            null,
+            'https://wiki.example',
+        );
 
         self::assertStringContainsString('<div class="w-100"><div class="row g-3">', $result->html);
         self::assertStringContainsString('col-12 col-lg-4', $result->html);

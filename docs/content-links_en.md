@@ -18,12 +18,17 @@ turning the rest of the page into escaped Confluence markup.
 
 In the final HTML, the converter recognises modern `/spaces/SPACE/pages/ID/title`, legacy `/display/SPACE/title`, short `/x/TOKEN`, `viewpage.action?pageId=ID`, Workspace-homepage links, and attachment URLs. This final pass runs after every macro conversion so links materialized by safe HTML macros are included.
 
+Before an individual or batch import, the administrator supplies the source
+Confluence base URL. Recognised relative Confluence paths are treated as
+internal. An absolute link is considered for local resolution and reporting
+only when its host exactly matches the selected source URL host.
+
 - Same-space links are replaced with the new Workspace route.
 - Page fragments are retained.
 - Links to an already imported space are resolved through source-ID mappings.
 - Links to a space not imported yet use a stable resolver URL and keep the original destination.
 - A later successful import runs reconciliation in both directions.
-- An unrecognized URL on a Confluence/Wiki host remains a clickable external link and is recorded as unresolved.
+- An unrecognized URL on the selected source Confluence host remains clickable and is recorded as unresolved.
 - External web links are preserved.
 
 ## Macros and tasks

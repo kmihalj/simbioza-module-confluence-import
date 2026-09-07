@@ -12,7 +12,10 @@ Izradite XML izvoz točno jednog Confluence spacea. ZIP nemojte raspakirati ni m
 2. Odaberite `.xml.zip` datoteku i pokrenite prijenos.
 3. Preglednik je prenosi u dijelovima. Povratkom u istu sesiju preglednika i ponovnim odabirom iste datoteke prijenos se nastavlja od položaja koji potvrdi poslužitelj.
 4. Početna provjera čita samo metapodatke i prikazuje space, količine sadržaja, korisnike, grupe, ovlasti, makroe i privitke.
-5. Potvrdite naziv, slug i jezik ciljnog područja. Ako je isti Confluence izvor
+5. Upišite osnovni URL izvornog Confluencea te potvrdite naziv, slug i jezik
+   ciljnog područja. Taj administratorski odabir određuje koji se apsolutni
+   linkovi smiju pokušati lokalno razriješiti; vanjski hostovi ostaju obične
+   poveznice. Ako je isti Confluence izvor
    već uvezen, odaberite i **Zamijeni postojeće područje** ili **Uvezi zasebnu
    kopiju**. Zamjena trajno uklanja ranije uvezeno područje prije prvog novog
    zapisa. Kopija ostavlja postojeće područje netaknuto i koristi izolirane
@@ -45,7 +48,8 @@ Za veći broj spaceova administrator može SFTP/FileZilla prijenosom postaviti
 `.xml.zip` arhive u `data/confluence-import/batch-import`. Sučelje tada nudi
 sekvencijalni batch. Prije pokretanja odaberite hoće li se nemapirani autori i
 urednici pripisati trenutnom administratoru ili će se za njih izraditi neaktivni
-korisnici. Postojeći korisnici mapiraju se automatski, a nedostajuće Confluence
+korisnici te upišite osnovni URL izvornog Confluencea za taj batch. Postojeći
+korisnici mapiraju se automatski, a nedostajuće Confluence
 grupe izrađuju se kao obične lokalne grupe. Batch nikada automatski ne prepisuje
 ranije uvezen izvor.
 

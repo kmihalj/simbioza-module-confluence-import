@@ -38,6 +38,7 @@ Aplikacijske vrijednosti pod `confluence_import.*` nadjačavaju zadane vrijednos
 | `max_compression_ratio` | 250 | Zaštita od ZIP bombi |
 | `import_execution_time_limit` | 900 sekundi | Gornja granica provjere velike arhive ili jednog procesnog koraka importa |
 | `default_language` | `hr` | Jezik sadržaja kada ga izvoz ne navodi |
+| `source_base_url` | prazno | Početna vrijednost URL-a izvornog Confluencea; administrator ga potvrđuje ili mijenja za svaki pojedinačni ili batch import |
 
 Primjer konfiguracije host aplikacije:
 
@@ -47,8 +48,12 @@ Primjer konfiguracije host aplikacije:
     'max_archive_size' => 8 * 1024 * 1024 * 1024,
     'import_execution_time_limit' => 1200,
     'default_language' => 'hr',
+    'source_base_url' => 'https://wiki.example.org',
 ],
 ```
+
+`source_base_url` nije fiksna postavka instalacije. Ona samo unaprijed popunjava
+administratorsko polje, a stvarni se URL sprema uz svaki pokrenuti import.
 
 Prijenos i sadržajni import rade u nastavivim fazama. Nakon potvrde mapiranja
 poslužitelj pripremi stabilan plan, zatim svaki zahtjev obrađuje ograničen broj

@@ -111,6 +111,7 @@ final readonly class ConfluenceHtmlConverter
         string $sourceSpaceKey,
         string $sourcePageId,
         ?ConfluenceMacroContext $macroContext = null,
+        string $sourceBaseUrl = '',
     ): ConvertedConfluenceBody {
         if (trim($storageFormat) === '') {
             return new ConvertedConfluenceBody('<p></p>', [], [], []);
@@ -153,6 +154,7 @@ final readonly class ConfluenceHtmlConverter
         $includes = [];
         $properties = [];
         $hasTableOfContents = false;
+        $sourceHost = strtolower(Utf8Url::component($sourceBaseUrl, PHP_URL_HOST) ?? '');
 
         $this->removeConfluencePlaceholders($xpath);
 
@@ -173,7 +175,7 @@ final readonly class ConfluenceHtmlConverter
                 $source = $url instanceof DOMElement
                     ? $this->attribute($url, self::RI_NAMESPACE, 'value')
                     : '';
-                $reference = $this->plainAttachmentReference($source);
+                $reference = $this->plainAttachmentReference($source, $sourceHost);
                 if ($reference !== null) {
                     $reference['kind'] = 'image';
                     $filename = $reference['filename'];
@@ -358,19 +360,23 @@ final readonly class ConfluenceHtmlConverter
         //     miss it. Every remaining Confluence URL is recorded for reporting.
         foreach ($this->elements($xpath->query('//a[@href]')) as $anchor) {
             $href = trim($anchor->getAttribute('href'));
-            if ($href === '' || str_starts_with($href, self::LINK_PREFIX)) {
+            if (
+                $href === ''
+                || str_starts_with($href, self::LINK_PREFIX)
+                || str_starts_with($href, self::ATTACHMENT_PREFIX)
+            ) {
                 continue;
             }
 
-            $attachmentReference = $this->plainAttachmentReference($href);
+            $attachmentReference = $this->plainAttachmentReference($href, $sourceHost);
             if ($attachmentReference !== null) {
                 $attachments[] = $attachmentReference;
                 $anchor->setAttribute('href', self::ATTACHMENT_PREFIX . $this->token($attachmentReference));
                 continue;
             }
 
-            $reference = $this->plainPageReference($href, $sourceSpaceKey, $sourcePageId)
-                ?? $this->unresolvedConfluenceReference($href, $sourceSpaceKey, $sourcePageId);
+            $reference = $this->plainPageReference($href, $sourceSpaceKey, $sourcePageId, $sourceHost)
+                ?? $this->unresolvedConfluenceReference($href, $sourceSpaceKey, $sourcePageId, $sourceHost);
             if ($reference !== null) {
                 $links[] = $reference;
                 $anchor->setAttribute('href', self::LINK_PREFIX . $this->token($reference));
@@ -382,7 +388,7 @@ final readonly class ConfluenceHtmlConverter
             if ($source === '' || str_starts_with($source, self::ATTACHMENT_PREFIX)) {
                 continue;
             }
-            $reference = $this->plainAttachmentReference($source);
+            $reference = $this->plainAttachmentReference($source, $sourceHost);
             if ($reference === null) {
                 continue;
             }
@@ -3133,8 +3139,16 @@ final readonly class ConfluenceHtmlConverter
      *
      * @return array<string,string>|null
      */
-    private function plainPageReference(string $href, string $sourceSpaceKey, string $sourcePageId): ?array
-    {
+    private function plainPageReference(
+        string $href,
+        string $sourceSpaceKey,
+        string $sourcePageId,
+        string $sourceHost,
+    ): ?array {
+        if (!$this->isSourceReferenceTarget($href, $sourceHost)) {
+            return null;
+        }
+
         $path = Utf8Url::component($href, PHP_URL_PATH);
         if (!is_string($path) || $path === '') {
             return null;
@@ -3201,14 +3215,10 @@ final readonly class ConfluenceHtmlConverter
         string $href,
         string $sourceSpaceKey,
         string $sourcePageId,
+        string $sourceHost,
     ): ?array {
-        $scheme = strtolower(Utf8Url::component($href, PHP_URL_SCHEME) ?? '');
         $host = strtolower(Utf8Url::component($href, PHP_URL_HOST) ?? '');
-        if (
-            !in_array($scheme, ['http', 'https'], true)
-            || $host === ''
-            || (!str_contains($host, 'wiki') && !str_contains($host, 'confluence'))
-        ) {
+        if ($host === '' || !$this->isSourceReferenceTarget($href, $sourceHost)) {
             return null;
         }
 
@@ -3251,8 +3261,12 @@ final readonly class ConfluenceHtmlConverter
      *
      * @return array<string,string>|null
      */
-    private function plainAttachmentReference(string $href): ?array
+    private function plainAttachmentReference(string $href, string $sourceHost): ?array
     {
+        if (!$this->isSourceReferenceTarget($href, $sourceHost)) {
+            return null;
+        }
+
         $path = Utf8Url::component($href, PHP_URL_PATH);
         if (
             !is_string($path) || preg_match(
@@ -3274,6 +3288,29 @@ final readonly class ConfluenceHtmlConverter
             'filename' => $filename,
             'kind' => 'file',
         ];
+    }
+
+    /** HR: Relativne ciljeve smatra internima, a apsolutne samo kada odgovaraju administratorovu izvornom hostu. EN: Treats relative targets as internal and absolute targets only when they match the administrator-selected source host. */
+    private function isSourceReferenceTarget(string $target, string $sourceHost): bool
+    {
+        $target = trim($target);
+        if (
+            $target === ''
+            || str_starts_with($target, self::LINK_PREFIX)
+            || str_starts_with($target, self::ATTACHMENT_PREFIX)
+        ) {
+            return false;
+        }
+
+        $scheme = strtolower(Utf8Url::component($target, PHP_URL_SCHEME) ?? '');
+        $host = strtolower(Utf8Url::component($target, PHP_URL_HOST) ?? '');
+        if ($host === '') {
+            return $scheme === '';
+        }
+
+        return ($scheme === '' || in_array($scheme, ['http', 'https'], true))
+            && $sourceHost !== ''
+            && $host === $sourceHost;
     }
 
     /** HR: Dopušta samo udaljene HTTP(S) slike. EN: Allows only remote HTTP(S) images. */

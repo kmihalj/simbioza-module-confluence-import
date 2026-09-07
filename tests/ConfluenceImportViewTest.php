@@ -103,6 +103,10 @@ final class ConfluenceImportViewTest extends TestCase
         self::assertIsString($service);
         self::assertStringContainsString('id="confluence-import-batch-create-unmapped-users"', $view);
         self::assertStringContainsString('create_inactive_users: batchPolicy', $view);
+        self::assertStringContainsString('id="confluence-import-batch-source-base-url"', $view);
+        self::assertStringContainsString('source_base_url: sourceBaseUrl', $view);
+        self::assertStringContainsString('name="source_base_url"', $view);
+        self::assertStringContainsString('source_base_url: form.elements.source_base_url.value', $view);
         self::assertStringContainsString('240000', $view);
         self::assertStringContainsString('simbioza_confluence_import_activity', $controller);
         self::assertStringContainsString('$this->session->close();', $controller);

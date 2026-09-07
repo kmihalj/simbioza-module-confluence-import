@@ -12,7 +12,10 @@ Create an XML export of exactly one Confluence space. Do not unpack or change th
 2. Select the `.xml.zip` file and start the upload.
 3. The browser uploads it in resumable chunks. Returning to the same browser session and selecting the same file continues from the server-confirmed offset.
 4. The preflight reads metadata only and reports the space, content counts, users, groups, permissions, macros and attachment inventory.
-5. Confirm the target Workspace name, slug and language. If this Confluence
+5. Enter the source Confluence base URL, then confirm the target Workspace
+   name, slug and language. This administrator choice determines which absolute
+   links may be resolved locally; other hosts remain ordinary external links.
+   If this Confluence
    source was imported before, also choose **Replace the existing Workspace**
    or **Import a separate copy**. Replacement permanently removes the earlier
    imported Workspace before any new page is written. A copy keeps the
@@ -45,7 +48,8 @@ For multiple spaces, an administrator may place `.xml.zip` archives in
 `data/confluence-import/batch-import` through SFTP/FileZilla. The UI then offers
 a sequential batch. Before starting, choose whether unmapped authors and
 editors fall back to the current administrator or become newly created inactive
-users. Existing users are mapped automatically, and missing Confluence groups
+users, and enter the source Confluence base URL for that batch. Existing users
+are mapped automatically, and missing Confluence groups
 are created as regular local groups. A batch never automatically overwrites an
 earlier import of the same source.
 

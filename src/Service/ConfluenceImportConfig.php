@@ -7,10 +7,16 @@ namespace AaiEduHr\SimbiozaModuleConfluenceImport\Service;
 use HeartPhrame\Config\ConfigInterface;
 
 use function is_array;
+use function in_array;
 use function is_numeric;
 use function is_scalar;
+use function parse_url;
 use function rtrim;
+use function strtolower;
 use function trim;
+
+use const PHP_URL_HOST;
+use const PHP_URL_SCHEME;
 
 /** HR: Čita prenosive sigurnosne i storage postavke importa. EN: Reads portable import security and storage settings. */
 final readonly class ConfluenceImportConfig
@@ -106,6 +112,16 @@ final readonly class ConfluenceImportConfig
         $language = strtolower($this->string('default_language', 'hr'));
 
         return preg_match('/^[a-z]{2}(?:-[a-z0-9]{2,8})?$/', $language) === 1 ? $language : 'hr';
+    }
+
+    /** HR: Vraća samo početnu vrijednost URL-a koji administrator može promijeniti po importu. EN: Returns only the initial source URL value that an administrator may change per import. */
+    public function sourceBaseUrl(): string
+    {
+        $url = rtrim($this->string('source_base_url', ''), '/');
+        $scheme = strtolower((string)(parse_url($url, PHP_URL_SCHEME) ?? ''));
+        $host = trim((string)(parse_url($url, PHP_URL_HOST) ?? ''));
+
+        return in_array($scheme, ['http', 'https'], true) && $host !== '' ? $url : '';
     }
 
     /** HR: Čita cijeli broj iz aplikacijske postavke ili modulske zadane vrijednosti. EN: Reads an integer from application config or module defaults. */

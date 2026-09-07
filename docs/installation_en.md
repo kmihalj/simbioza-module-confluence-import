@@ -38,6 +38,7 @@ Application values under `confluence_import.*` override module defaults:
 | `max_compression_ratio` | 250 | ZIP-bomb protection |
 | `import_execution_time_limit` | 900 seconds | Upper bound for a large-archive preflight or one import processing step |
 | `default_language` | `hr` | Content language when the export has no locale |
+| `source_base_url` | empty | Initial source Confluence URL; the administrator confirms or changes it for each individual or batch import |
 
 Example host configuration:
 
@@ -47,8 +48,12 @@ Example host configuration:
     'max_archive_size' => 8 * 1024 * 1024 * 1024,
     'import_execution_time_limit' => 1200,
     'default_language' => 'hr',
+    'source_base_url' => 'https://wiki.example.org',
 ],
 ```
+
+`source_base_url` is not a fixed installation setting. It only pre-fills the
+administrator field, while the actual value is stored with every started import.
 
 Upload and content import both run in resumable phases. After mappings are
 confirmed, the server prepares a stable plan and each subsequent request

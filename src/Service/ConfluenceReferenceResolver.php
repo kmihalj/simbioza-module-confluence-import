@@ -103,7 +103,11 @@ final readonly class ConfluenceReferenceResolver
                     'destination_space_key' => $destinationSpace,
                     'destination_page_id' => $destinationId,
                     'destination_page_title' => $destinationTitle,
-                    'original_target' => $originalTarget !== '' ? $originalTarget : $match[0],
+                    // HR: Semantička ac:link referenca nema izvorni URL. Interni
+                    //     pretvorbeni token nije korisnički URL i ne smije u izvještaj.
+                    // EN: A semantic ac:link reference has no source URL. The
+                    //     internal conversion token is not user-facing report data.
+                    'original_target' => $originalTarget,
                     'resolved_target' => $target !== '#' ? $target : '',
                     'status' => $target !== '#' ? 'resolved' : 'unresolved',
                 ];

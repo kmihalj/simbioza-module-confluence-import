@@ -18,12 +18,17 @@ postane escapirani Confluence zapis.
 
 Pretvornik u završnom HTML-u prepoznaje moderne `/spaces/SPACE/pages/ID/title`, stare `/display/SPACE/title`, kratke `/x/TOKEN`, `viewpage.action?pageId=ID`, poveznice na naslovnicu područja i URL-ove privitaka. Završni prolaz izvodi se nakon pretvorbe svih makroa kako bi obuhvatio i poveznice koje su proizveli sigurni HTML makroi.
 
+Administrator prije pojedinačnog ili batch importa zadaje osnovni URL izvornog
+Confluencea. Relativne prepoznate Confluence putanje smatraju se internima.
+Apsolutna se poveznica pokušava lokalno razriješiti i ulazi u izvještaj samo ako
+joj host točno odgovara hostu odabranog izvornog URL-a.
+
 - Poveznice unutar istog spacea zamjenjuju se novom rutom područja.
 - Fragmenti stranice ostaju sačuvani.
 - Poveznice na već uvezeni space rješavaju se kroz mapiranja izvornih ID-eva.
 - Poveznice na space koji još nije uvezen koriste stabilni resolver URL i čuvaju izvorno odredište.
 - Svaki kasniji uspješni import pokreće usklađivanje u oba smjera.
-- Neprepoznati URL s Confluence/Wiki hosta ostaje vanjska klikabilna poveznica i bilježi se kao nerazriješen.
+- Neprepoznati URL s odabranog izvornog Confluence hosta ostaje klikabilan i bilježi se kao nerazriješen.
 - Vanjske web-poveznice ostaju nepromijenjene.
 
 ## Makroi i zadaci
