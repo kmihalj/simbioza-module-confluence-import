@@ -359,6 +359,31 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
+    /** HR: Confluence TOC uključuje nativni sadržaj, a njegov prazan panel ne ostaje u HTML-u. EN: A Confluence TOC enables native contents without leaving its empty panel in HTML. */
+    public function testPromotesPanelWrappedTocToNativePageContents(): void
+    {
+        $body = <<<'XML'
+<h2>Prvo poglavlje</h2>
+<ac:structured-macro ac:name="panel">
+<ac:parameter ac:name="title">Sadržaj</ac:parameter>
+<ac:rich-text-body><p><ac:structured-macro ac:name="toc" /></p></ac:rich-text-body>
+</ac:structured-macro>
+<ac:structured-macro ac:name="panel">
+<ac:parameter ac:name="title">Panel s dodatkom</ac:parameter>
+<ac:rich-text-body><p><ac:structured-macro ac:name="toc" /></p><p>Važna napomena.</p></ac:rich-text-body>
+</ac:structured-macro>
+XML;
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'PKUSIRSJ', '10');
+
+        self::assertTrue($result->hasTableOfContents);
+        self::assertStringNotContainsString('>Sadržaj<', $result->html);
+        self::assertStringContainsString('Panel s dodatkom', $result->html);
+        self::assertStringContainsString('Važna napomena.', $result->html);
+        self::assertSame(1, substr_count($result->html, 'class="card mb-3"'));
+        self::assertSame([], $result->unsupportedMacros);
+    }
+
     /** HR: Slika unutar Confluence poveznice ostaje vidljiva i klikabilna. EN: An image inside a Confluence link remains visible and clickable. */
     public function testPreservesLinkedAttachmentImage(): void
     {

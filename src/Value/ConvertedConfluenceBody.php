@@ -26,6 +26,7 @@ final readonly class ConvertedConfluenceBody
         public array $includes = [],
         public array $properties = [],
         public array $reviewIssues = [],
+        public bool $hasTableOfContents = false,
     ) {
     }
 }

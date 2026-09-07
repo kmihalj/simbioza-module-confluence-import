@@ -1878,6 +1878,8 @@ final readonly class ConfluenceImportService
                     unset($pending[$logicalId]);
                     continue;
                 }
+                $currentSourceId = $this->text($this->currentPage($versions)['source_id'] ?? '');
+                $firstSourceId = $this->text($first['source_id'] ?? '');
 
                 $converted = $this->convertedBody(
                     $dataset,
@@ -1927,6 +1929,10 @@ final readonly class ConfluenceImportService
                     'parent_id' => $parentNodeId,
                     'sort_order' => (int)($target['sort_order'] ?? 100),
                     'is_homepage' => $this->text($logicalId) === $homePageId,
+                    'contents_visibility' => $firstSourceId === $currentSourceId
+                        && $converted['has_table_of_contents']
+                        ? 'shown'
+                        : 'inherit',
                 ], $actorUserId);
                 $nodeId = (int)($node['id'] ?? 0);
                 $sourceLabels = [];
@@ -2004,6 +2010,13 @@ final readonly class ConfluenceImportService
                     $this->mapImportedVersion($version, $mappingSpaceKey, $workspaceId, $node, $jobId);
                     if ($this->text($version['original_version_id'] ?? '') !== '') {
                         ++$history;
+                    }
+                    if ($this->text($version['source_id'] ?? '') === $currentSourceId) {
+                        $this->workspaces->updateNodeContentsVisibility(
+                            $nodeId,
+                            $converted['has_table_of_contents'] ? 'shown' : 'inherit',
+                            $actorUserId,
+                        );
                     }
                 }
 
@@ -2240,7 +2253,7 @@ final readonly class ConfluenceImportService
      * @param array<string,string> $attachmentUrls
      * @param array<string,string> $localById
      * @param array<string,string> $localByTitle
-     * @return array{html:string,warnings:list<string>,review_issues:list<array<string,mixed>>,properties:list<array{key:string,label:string,type:string,value:string,sort_order:int}>}
+     * @return array{html:string,warnings:list<string>,review_issues:list<array<string,mixed>>,properties:list<array{key:string,label:string,type:string,value:string,sort_order:int}>,has_table_of_contents:bool}
      */
     private function convertedBody(
         array $dataset,
@@ -2329,6 +2342,7 @@ final readonly class ConfluenceImportService
                 ),
             ],
             'properties' => $converted->properties,
+            'has_table_of_contents' => $converted->hasTableOfContents,
         ];
     }
 

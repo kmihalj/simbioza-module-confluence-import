@@ -146,6 +146,7 @@ final readonly class ConfluenceHtmlConverter
         $reviewIssues = [];
         $includes = [];
         $properties = [];
+        $hasTableOfContents = false;
 
         $this->removeConfluencePlaceholders($xpath);
 
@@ -323,6 +324,10 @@ final readonly class ConfluenceHtmlConverter
             $this->macroDepth($right) <=> $this->macroDepth($left));
         foreach ($macros as $macro) {
             $name = strtolower($this->attribute($macro, self::AC_NAMESPACE, 'name'));
+            if ($name === 'toc') {
+                $hasTableOfContents = true;
+                $this->markContainingTocPanel($macro);
+            }
             $replacement = $this->macroReplacement(
                 $document,
                 $xpath,
@@ -382,6 +387,7 @@ final readonly class ConfluenceHtmlConverter
             array_values($includes),
             $properties,
             $reviewIssues,
+            $hasTableOfContents,
         );
     }
 
@@ -759,6 +765,17 @@ final readonly class ConfluenceHtmlConverter
         }
 
         if ($name === 'panel') {
+            if (
+                $macro->getAttribute('data-simbioza-native-toc-panel') === '1'
+                && !$this->hasMeaningfulRichBody($rich)
+            ) {
+                // HR: Panel koji je služio samo kao okvir Confluence sadržaja ne
+                //     smije ostati kao prazna kartica uz nativni sadržaj stranice.
+                // EN: A panel used solely as the Confluence TOC container must
+                //     not remain as an empty card beside the native page contents.
+                return $document->createDocumentFragment();
+            }
+
             $card = $document->createElement('section');
             $card->setAttribute('class', 'card mb-3');
             $titleText = $this->macroParameter($xpath, $macro, 'title');
@@ -1547,6 +1564,40 @@ final readonly class ConfluenceHtmlConverter
         }
 
         return $depth;
+    }
+
+    /** HR: Označava najbliži panel koji je samo spremnik TOC makroa. EN: Marks the nearest panel containing a TOC macro. */
+    private function markContainingTocPanel(DOMElement $macro): void
+    {
+        $parent = $macro->parentNode;
+        while ($parent instanceof DOMElement) {
+            if (
+                $parent->localName === 'structured-macro'
+                && strtolower($this->attribute($parent, self::AC_NAMESPACE, 'name')) === 'panel'
+            ) {
+                $parent->setAttribute('data-simbioza-native-toc-panel', '1');
+                return;
+            }
+            $parent = $parent->parentNode;
+        }
+    }
+
+    /** HR: Razlikuje prazan TOC okvir od panela s dodatnim sadržajem. EN: Distinguishes an empty TOC wrapper from a panel with additional content. */
+    private function hasMeaningfulRichBody(?DOMElement $rich): bool
+    {
+        if (!$rich instanceof DOMElement) {
+            return false;
+        }
+        if (trim($rich->textContent) !== '') {
+            return true;
+        }
+        foreach ($rich->getElementsByTagName('*') as $element) {
+            if (!in_array(strtolower($element->localName), ['p', 'br'], true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** HR: Čita izravni parametar strukturiranog makroa. EN: Reads a structured macro's direct parameter. */
