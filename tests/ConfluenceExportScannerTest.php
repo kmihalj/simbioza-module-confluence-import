@@ -49,6 +49,11 @@ final class ConfluenceExportScannerTest extends TestCase
         self::assertSame('100', $scan['spaces'][0]['home_page_id']);
         self::assertSame(1, $scan['statuses']['current']);
         self::assertSame(1, $scan['statuses']['history']);
+        self::assertSame(3, $scan['counts']['Attachment']);
+        self::assertSame([
+            'current' => 2,
+            'source_records' => 3,
+        ], $scan['attachment_counts']);
         self::assertSame('team-demo', $scan['groups'][0]['source_name']);
         self::assertSame(1, $scan['macros']['info']);
         self::assertSame(1, $scan['macros']['jira']);
@@ -74,6 +79,9 @@ final class ConfluenceExportScannerTest extends TestCase
   <object class="ConfluenceUserImpl" package="com.atlassian.confluence.user"><id name="id">u1</id><property name="username">demo@example.test</property><property name="displayName">Demo User</property><property name="emailAddress">demo@example.test</property></object>
   <object class="Page" package="com.atlassian.confluence.pages"><id name="id">100</id><property name="space"><id>1</id></property><property name="title">Home</property><property name="version">2</property><property name="contentStatus">current</property></object>
   <object class="Page" package="com.atlassian.confluence.pages"><id name="id">90</id><property name="originalVersion"><id>100</id></property><property name="space"><id>1</id></property><property name="title">Home</property><property name="version">1</property><property name="contentStatus">current</property></object>
+  <object class="Attachment" package="com.atlassian.confluence.pages"><id name="id">a1</id><property name="containerContent"><id>100</id></property><property name="space"><id>1</id></property><property name="title">guide.pdf</property><property name="version">2</property><property name="contentStatus">current</property></object>
+  <object class="Attachment" package="com.atlassian.confluence.pages"><id name="id">a1-v1</id><property name="originalVersion"><id>a1</id></property><property name="containerContent"><id>100</id></property><property name="space"><id>1</id></property><property name="title">guide.pdf</property><property name="version">1</property><property name="contentStatus">current</property></object>
+  <object class="Attachment" package="com.atlassian.confluence.pages"><id name="id">a2</id><property name="containerContent"><id>100</id></property><property name="space"><id>1</id></property><property name="title">logo.png</property><property name="version">1</property><property name="contentStatus">current</property></object>
   <object class="BodyContent" package="com.atlassian.confluence.core"><id name="id">b1</id><property name="content"><id>100</id></property><property name="body">&lt;ac:structured-macro ac:name="info"/&gt;&lt;ac:structured-macro ac:name="jira"/&gt;&lt;ac:structured-macro ac:name="calendar"&gt;&lt;ac:parameter ac:name="id"&gt;3c1a6576-55e6-4776-9296-b95a00f980b7&lt;/ac:parameter&gt;&lt;/ac:structured-macro&gt;</property></object>
   <object class="CustomContentEntityObject" package="com.atlassian.confluence.content"><id name="id">c1</id><property name="title">Demo team calendar</property><property name="pluginModuleKey">com.atlassian.confluence.extra.team-calendars:calendar-content-type</property></object>
   <object class="ContentProperty" package="com.atlassian.confluence.core"><id name="id">cp1</id><property name="content"><id>c1</id></property><property name="name">subCalendarId</property><property name="stringValue">3c1a6576-55e6-4776-9296-b95a00f980b7</property></object>

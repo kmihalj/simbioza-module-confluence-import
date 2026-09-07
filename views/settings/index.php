@@ -44,6 +44,7 @@ $existingImport = is_array($preparation['existing_import'] ?? null)
     : null;
 $ownerSourceKey = is_scalar($space['owner_source_key'] ?? null) ? (string)$space['owner_source_key'] : '';
 $counts = is_array($scan['counts'] ?? null) ? $scan['counts'] : [];
+$attachmentCounts = is_array($scan['attachment_counts'] ?? null) ? $scan['attachment_counts'] : [];
 $statuses = is_array($scan['statuses'] ?? null) ? $scan['statuses'] : [];
 $warnings = is_array($scan['warnings'] ?? null) ? $scan['warnings'] : [];
 $settingsMenuHtml = null;
@@ -108,7 +109,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                         <div class="row g-3 mb-3">
                             <div class="col-md-6 col-xl-3"><div class="confluence-import-option h-100"><small class="text-body-secondary d-block"><?= $this->escape(__('Izvorno područje')) ?></small><strong><?= $this->escape((string)($space['name'] ?? '')) ?></strong><div class="confluence-import-source-key"><?= $this->escape((string)($space['source_key'] ?? '')) ?></div></div></div>
                             <div class="col-md-6 col-xl-3"><div class="confluence-import-option h-100"><small class="text-body-secondary d-block"><?= $this->escape(__('Stranice')) ?></small><strong><?= $this->escape((string)($statuses['current'] ?? 0)) ?></strong><div class="small text-body-secondary"><?= $this->escape(sprintf(__('Aktualne: %1$d; povijesne: %2$d; nacrti: %3$d; obrisane: %4$d'), (int)($statuses['current'] ?? 0), (int)($statuses['history'] ?? 0), (int)($statuses['draft'] ?? 0), (int)($statuses['deleted'] ?? 0))) ?></div></div></div>
-                            <div class="col-md-6 col-xl-3"><div class="confluence-import-option h-100"><small class="text-body-secondary d-block"><?= $this->escape(__('Privitci')) ?></small><strong><?= $this->escape((string)($counts['Attachment'] ?? 0)) ?></strong><div class="small text-body-secondary"><?= $this->escape(__('Spremaju se privatno i uvijek se preuzimaju kao datoteke.')) ?></div></div></div>
+                            <div class="col-md-6 col-xl-3"><div class="confluence-import-option h-100"><small class="text-body-secondary d-block"><?= $this->escape(__('Privitci')) ?></small><strong><?= $this->escape((string)($attachmentCounts['current'] ?? $counts['Attachment'] ?? 0)) ?></strong><div class="small text-body-secondary"><?= $this->escape(__('Spremaju se privatno i uvijek se preuzimaju kao datoteke.')) ?></div></div></div>
                             <div class="col-md-6 col-xl-3"><div class="confluence-import-option h-100"><small class="text-body-secondary d-block"><?= $this->escape(__('Vrsta područja')) ?></small><strong><?= $this->escape(($space['type'] ?? '') === 'personal' ? __('Osobno područje') : __('Opće područje')) ?></strong><div class="small text-body-secondary"><?= $this->escape(__('Confluence verzija:')) ?> <?= $this->escape((string)($scan['source']['confluence_version'] ?? '')) ?></div></div></div>
                         </div>
 

@@ -59,7 +59,6 @@ use function is_scalar;
 use function is_string;
 use function json_decode;
 use function json_encode;
-use function ksort;
 use function max;
 use function mkdir;
 use function parse_url;
@@ -1640,25 +1639,15 @@ final readonly class ConfluenceImportService
         int $limit = PHP_INT_MAX,
         array $preferredUuids = [],
     ): array {
-        $latest = [];
-        foreach ($this->rows($dataset['attachments'] ?? []) as $attachment) {
-            if (($attachment['status'] ?? 'current') !== 'current') {
-                continue;
-            }
-            $logicalId = $this->text($attachment['logical_source_id'] ?? '');
-            if (!isset($latest[$logicalId]) || (int)$attachment['version'] > (int)$latest[$logicalId]['version']) {
-                $latest[$logicalId] = $attachment;
-            }
-        }
-
         $urls = [];
         $imported = 0;
         $failed = 0;
         $warnings = [];
         $workspaceId = (int)($workspace['id'] ?? 0);
         $properties = is_array($dataset['properties'] ?? null) ? $dataset['properties'] : [];
-        ksort($latest);
-        $all = array_values($latest);
+        $all = array_values(ConfluenceAttachmentSelector::latestCurrent(
+            $this->rows($dataset['attachments'] ?? []),
+        ));
         $total = count($all);
         $slice = array_slice($all, max(0, $offset), max(1, $limit));
         foreach ($slice as $attachment) {

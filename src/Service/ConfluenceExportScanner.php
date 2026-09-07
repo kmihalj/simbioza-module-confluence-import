@@ -178,6 +178,11 @@ final readonly class ConfluenceExportScanner
         ksort($users);
         ksort($groups);
 
+        $attachmentCounts = [
+            'current' => count(ConfluenceAttachmentSelector::latestCurrent($attachments)),
+            'source_records' => count($attachments),
+        ];
+
         if (count($spaces) !== 1) {
             throw new ConfluenceImportException(__('Arhiva mora sadržavati točno jedno Confluence područje.'));
         }
@@ -212,6 +217,7 @@ final readonly class ConfluenceExportScanner
             'users' => array_values($users),
             'groups' => array_values($groups),
             'attachments' => $attachments,
+            'attachment_counts' => $attachmentCounts,
             'space_permissions' => $spacePermissions,
             'content_permission_sets' => $contentPermissionSets,
             'content_permissions' => $contentPermissions,
