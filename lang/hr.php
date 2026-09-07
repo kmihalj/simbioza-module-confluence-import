@@ -325,5 +325,54 @@ return [
         'Ovlasti kalendara vrijede i nakon ugradnje u stranicu; ovlasti stranice ne daju dodatni pristup kalendaru.',
     'Detaljne korisničke i grupne ovlasti uredite u postavkama kalendara.' =>
         'Detaljne korisničke i grupne ovlasti uredite u postavkama kalendara.',
+    'Nerazriješene poveznice' => 'Nerazriješene poveznice',
+    'Nerazriješene Confluence poveznice' => 'Nerazriješene Confluence poveznice',
+    'Popis se automatski osvježava nakon svakog importa područja. Uspješno lokalno razriješene poveznice više se ne prikazuju.' =>
+        'Popis se automatski osvježava nakon svakog importa područja. Uspješno lokalno razriješene poveznice više se ne prikazuju.',
+    'Sve prepoznate Confluence poveznice trenutačno su lokalno razriješene.' =>
+        'Sve prepoznate Confluence poveznice trenutačno su lokalno razriješene.',
+    'Izvorna stranica' => 'Izvorna stranica',
+    'Nerazriješeno odredište' => 'Nerazriješeno odredište',
+    'Confluence stranica ID %s' => 'Confluence stranica ID %s',
+    'Naslovnica područja %s' => 'Naslovnica područja %s',
+    'Neprepoznata Confluence poveznica' => 'Neprepoznata Confluence poveznica',
+    'Prethodni batch import još nije dovršen.' => 'Prethodni batch import još nije dovršen.',
+    'Odaberite Confluence XML ZIP arhivu iz batch direktorija.' =>
+        'Odaberite Confluence XML ZIP arhivu iz batch direktorija.',
+    'Batch Confluence arhiva nije pronađena.' => 'Batch Confluence arhiva nije pronađena.',
+    'Batch arhivu nije moguće sigurno pripremiti bez udvostručavanja datoteke.' =>
+        'Batch arhivu nije moguće sigurno pripremiti bez udvostručavanja datoteke.',
+    'Batch Confluence import je pokrenut.' => 'Batch Confluence import je pokrenut.',
+    'Batch import arhiva s poslužitelja' => 'Batch import arhiva s poslužitelja',
+    'Pronađeno je %d XML ZIP arhiva u direktoriju %s. Obrađuju se redom, svaka kao zaseban import i izvještaj.' =>
+        'Pronađeno je %d XML ZIP arhiva u direktoriju %s. Obrađuju se redom, svaka kao zaseban import i izvještaj.',
+    'Postojeći korisnici mapiraju se automatski. Nove Confluence grupe izrađuju se kao obične lokalne grupe. Postojeće uvezeno područje batch import neće prepisati.' =>
+        'Postojeći korisnici mapiraju se automatski. Nove Confluence grupe izrađuju se kao obične lokalne grupe. Postojeće uvezeno područje batch import neće prepisati.',
+    'Za nemapirane identitete izradi neaktivne korisnike' =>
+        'Za nemapirane identitete izradi neaktivne korisnike',
+    'Ako je isključeno, nemapirani autori i urednici pripisuju se trenutnom administratoru (%s). Ako je uključeno, izrađuju se neaktivni korisnici bez mogućnosti prijave.' =>
+        'Ako je isključeno, nemapirani autori i urednici pripisuju se trenutnom administratoru (%s). Ako je uključeno, izrađuju se neaktivni korisnici bez mogućnosti prijave.',
+    'Nastavi batch import' => 'Nastavi batch import',
+    'Uvezi sve batch arhive' => 'Uvezi sve batch arhive',
+    'Nemapirani autori pripisuju se trenutnom administratoru koji pokreće import, dok njihove izvorne ovlasti ostaju nemapirane. Pretražite i odaberite lokalnog korisnika samo kada ste sigurni da predstavlja istu osobu.' =>
+        'Nemapirani autori pripisuju se trenutnom administratoru koji pokreće import, dok njihove izvorne ovlasti ostaju nemapirane. Pretražite i odaberite lokalnog korisnika samo kada ste sigurni da predstavlja istu osobu.',
+    'Kada je uključeno, izrađeni neaktivni korisnici postaju autori umjesto trenutnog administratora. Računi nemaju mogućnost prijave dok ih administrator ne konfigurira i aktivira.' =>
+        'Kada je uključeno, izrađeni neaktivni korisnici postaju autori umjesto trenutnog administratora. Računi nemaju mogućnost prijave dok ih administrator ne konfigurira i aktivira.',
+    'Trenutni administrator' => 'Trenutni administrator',
+    'Trenutni administrator (%s)' => 'Trenutni administrator (%s)',
+    'Samo autorstvo; izvorne ovlasti ostaju nemapirane.' =>
+        'Samo autorstvo; izvorne ovlasti ostaju nemapirane.',
+    'Upišite najmanje 2 znaka za pretragu korisnika' =>
+        'Upišite najmanje 2 znaka za pretragu korisnika',
+    'Pokrenuti sekvencijalni import svih pronađenih batch arhiva?' =>
+        'Pokrenuti sekvencijalni import svih pronađenih batch arhiva?',
+    'Batch import: {name} ({current} / {total})' => 'Batch import: {name} ({current} / {total})',
+    'Batch import je dovršen. Uspješno: {success}; neuspjelo: {failed}.' =>
+        'Batch import je dovršen. Uspješno: {success}; neuspjelo: {failed}.',
+    'Batch import je zaustavljen na arhivi {name}. Osvježite stranicu kako biste sigurno nastavili isti posao.' =>
+        'Batch import je zaustavljen na arhivi {name}. Osvježite stranicu kako biste sigurno nastavili isti posao.',
+    'Nema pronađenih korisnika.' => 'Nema pronađenih korisnika.',
+    'Pretraživanje korisnika nije uspjelo.' => 'Pretraživanje korisnika nije uspjelo.',
+    'Administrator importa' => 'Administrator importa',
     'kopija' => 'kopija',
 ];

@@ -22,6 +22,7 @@ use function array_shift;
 use function array_slice;
 use function array_unique;
 use function array_values;
+use function base64_decode;
 use function base64_encode;
 use function basename;
 use function ceil;
@@ -39,6 +40,7 @@ use function is_array;
 use function is_numeric;
 use function is_string;
 use function json_encode;
+use function ord;
 use function parse_str;
 use function parse_url;
 use function preg_match;
@@ -49,8 +51,12 @@ use function preg_split;
 use function range;
 use function rawurldecode;
 use function str_replace;
+use function str_contains;
 use function str_starts_with;
 use function str_ends_with;
+use function str_repeat;
+use function strlen;
+use function strtr;
 use function substr;
 use function strtolower;
 use function trim;
@@ -221,14 +227,14 @@ final readonly class ConfluenceHtmlConverter
 
             if ($user instanceof DOMElement) {
                 // HR: Confluence korisničke reference nemaju vidljiv tekst. Uvoz
-                //     zato koristi mapirano ime, a izvorni identitet samo kao
-                //     sigurni zamjenski prikaz kada korisnik još nije mapiran.
+                //     zato koristi mapirano ime, a za nemapirane identitete
+                //     prikaz administratora koji je pokrenuo import.
                 // EN: Confluence user references have no visible text. The import
-                //     therefore uses the mapped name, falling back to the source
-                //     identity only when the user has not yet been mapped.
+                //     therefore uses the mapped name, falling back to the
+                //     administrator who started the import.
                 $identity = $this->confluenceUserIdentity($user);
                 $label = $macroContext instanceof ConfluenceMacroContext
-                    ? ($macroContext->users[$identity] ?? $identity)
+                    ? ($macroContext->users[$identity] ?? $macroContext->fallbackUser)
                     : $identity;
                 $replacement = $document->createElement('span');
                 $replacement->appendChild($document->createTextNode(
@@ -269,43 +275,6 @@ final readonly class ConfluenceHtmlConverter
             }
 
             $link->parentNode?->replaceChild($replacement, $link);
-        }
-
-        // HR: Confluence često sprema interne poveznice kao obične apsolutne
-        // URL-ove umjesto ac:link/ri:page elemenata. Pretvaramo samo poznate
-        // Confluence obrasce; ostale vanjske URL-ove ostavljamo netaknutima.
-        // EN: Confluence often stores internal links as ordinary absolute URLs
-        // rather than ac:link/ri:page elements. Only known Confluence patterns
-        // are converted; unrelated external URLs remain untouched.
-        foreach ($this->elements($xpath->query('//a[@href]')) as $anchor) {
-            $href = trim($anchor->getAttribute('href'));
-            $attachmentReference = $this->plainAttachmentReference($href);
-            if ($attachmentReference !== null) {
-                $attachments[] = $attachmentReference;
-                $anchor->setAttribute('href', self::ATTACHMENT_PREFIX . $this->token($attachmentReference));
-                continue;
-            }
-
-            $reference = $this->plainPageReference($href, $sourceSpaceKey, $sourcePageId);
-            if ($reference !== null) {
-                $links[] = $reference;
-                $anchor->setAttribute('href', self::LINK_PREFIX . $this->token($reference));
-            }
-        }
-
-        foreach ($this->elements($xpath->query('//img[@src]')) as $image) {
-            $reference = $this->plainAttachmentReference(trim($image->getAttribute('src')));
-            if ($reference === null) {
-                continue;
-            }
-
-            $reference['kind'] = 'image';
-            $attachments[] = $reference;
-            $image->setAttribute('src', self::ATTACHMENT_PREFIX . $this->token($reference));
-            if (!$image->hasAttribute('alt')) {
-                $image->setAttribute('alt', '');
-            }
-            $image->setAttribute('class', trim($image->getAttribute('class') . ' img-fluid'));
         }
 
         foreach ($this->elements($xpath->query('//ac:task-list[not(ancestor::ac:task-list)]')) as $index => $taskList) {
@@ -378,6 +347,54 @@ final readonly class ConfluenceHtmlConverter
         //     module control headers, rows, borders, and hover state while wide
         //     tables stay inside the content area with horizontal scrolling.
         $this->normalizeTables($document, $document->documentElement);
+
+        // HR: Obične poveznice obrađujemo tek kada su svi makroi pretvoreni.
+        //     HTML makro, tablica ili gumb mogu tek tijekom pretvorbe proizvesti
+        //     završni <a href>, pa bi ih raniji prolaz propustio. Svaki još
+        //     nerazriješeni Confluence URL bilježimo za trajni izvještaj.
+        // EN: Plain links are processed only after every macro has been
+        //     converted. An HTML macro, table, or button may materialize its
+        //     final <a href> only during conversion, so an earlier pass would
+        //     miss it. Every remaining Confluence URL is recorded for reporting.
+        foreach ($this->elements($xpath->query('//a[@href]')) as $anchor) {
+            $href = trim($anchor->getAttribute('href'));
+            if ($href === '' || str_starts_with($href, self::LINK_PREFIX)) {
+                continue;
+            }
+
+            $attachmentReference = $this->plainAttachmentReference($href);
+            if ($attachmentReference !== null) {
+                $attachments[] = $attachmentReference;
+                $anchor->setAttribute('href', self::ATTACHMENT_PREFIX . $this->token($attachmentReference));
+                continue;
+            }
+
+            $reference = $this->plainPageReference($href, $sourceSpaceKey, $sourcePageId)
+                ?? $this->unresolvedConfluenceReference($href, $sourceSpaceKey, $sourcePageId);
+            if ($reference !== null) {
+                $links[] = $reference;
+                $anchor->setAttribute('href', self::LINK_PREFIX . $this->token($reference));
+            }
+        }
+
+        foreach ($this->elements($xpath->query('//img[@src]')) as $image) {
+            $source = trim($image->getAttribute('src'));
+            if ($source === '' || str_starts_with($source, self::ATTACHMENT_PREFIX)) {
+                continue;
+            }
+            $reference = $this->plainAttachmentReference($source);
+            if ($reference === null) {
+                continue;
+            }
+
+            $reference['kind'] = 'image';
+            $attachments[] = $reference;
+            $image->setAttribute('src', self::ATTACHMENT_PREFIX . $this->token($reference));
+            if (!$image->hasAttribute('alt')) {
+                $image->setAttribute('alt', '');
+            }
+            $image->setAttribute('class', trim($image->getAttribute('class') . ' img-fluid'));
+        }
 
         return new ConvertedConfluenceBody(
             $this->innerHtml($document, $document->documentElement),
@@ -795,7 +812,7 @@ final readonly class ConfluenceHtmlConverter
         if ($name === 'profile') {
             $user = $this->macroUser($xpath, $macro);
             $displayName = $context instanceof ConfluenceMacroContext
-                ? ($context->users[$user] ?? '')
+                ? ($context->users[$user] ?? $context->fallbackUser)
                 : '';
             $profile = $document->createElement('div');
             $profile->setAttribute('class', 'card card-body py-2');
@@ -2565,7 +2582,7 @@ final readonly class ConfluenceHtmlConverter
             $assignee = (string)($task['assignee'] ?? '');
             $assigneeCell = $document->createElement('td');
             $assigneeCell->appendChild($document->createTextNode(
-                $assignee !== '' ? ($context->users[$assignee] ?? $assignee) : '',
+                $assignee !== '' ? ($context->users[$assignee] ?? $context->fallbackUser) : '',
             ));
             $row->appendChild($assigneeCell);
             $sourceCell = $document->createElement('td');
@@ -3111,8 +3128,8 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Prepoznaje moderne, legacy i pageId Confluence URL-ove.
-     * EN: Recognizes modern, legacy, and pageId Confluence URLs.
+     * HR: Prepoznaje moderne, legacy, kratke i pageId Confluence URL-ove.
+     * EN: Recognizes modern, legacy, short, and pageId Confluence URLs.
      *
      * @return array<string,string>|null
      */
@@ -3126,13 +3143,25 @@ final readonly class ConfluenceHtmlConverter
         $destinationSpace = '';
         $destinationId = '';
         $destinationTitle = '';
-        if (preg_match('~/spaces/([^/]+)/pages/([0-9]+)(?:/([^/?#]+))?~iu', $path, $match) === 1) {
+        $referenceType = 'page';
+        if (preg_match('~/x/([^/?#]+)/?$~iu', $path, $match) === 1) {
+            $destinationId = $this->decodedShortPageId($match[1]);
+            if ($destinationId === '') {
+                return null;
+            }
+        } elseif (preg_match('~/spaces/([^/]+)/pages/([0-9]+)(?:/([^/?#]+))?~iu', $path, $match) === 1) {
             $destinationSpace = rawurldecode($match[1]);
             $destinationId = $match[2];
             $destinationTitle = $this->decodedUrlTitle($match[3] ?? '');
+        } elseif (preg_match('~/spaces/([^/]+)(?:/overview)?/?$~iu', $path, $match) === 1) {
+            $destinationSpace = rawurldecode($match[1]);
+            $referenceType = 'space_home';
         } elseif (preg_match('~/display/([^/]+)/(.+)$~iu', $path, $match) === 1) {
             $destinationSpace = rawurldecode($match[1]);
             $destinationTitle = $this->decodedUrlTitle($match[2]);
+        } elseif (preg_match('~/display/([^/]+)/?$~iu', $path, $match) === 1) {
+            $destinationSpace = rawurldecode($match[1]);
+            $referenceType = 'space_home';
         } elseif (preg_match('~/pages/viewpage\.action$~iu', $path) === 1) {
             $query = Utf8Url::component($href, PHP_URL_QUERY);
             $parameters = [];
@@ -3144,7 +3173,7 @@ final readonly class ConfluenceHtmlConverter
             return null;
         }
 
-        if ($destinationId === '' && $destinationTitle === '') {
+        if ($destinationId === '' && $destinationTitle === '' && $referenceType !== 'space_home') {
             return null;
         }
 
@@ -3158,7 +3187,62 @@ final readonly class ConfluenceHtmlConverter
             'destination_page_title' => $destinationTitle,
             'fragment' => is_string($fragment) ? trim($fragment) : '',
             'original_target' => $href,
+            'reference_type' => $referenceType,
         ];
+    }
+
+    /**
+     * HR: Bilježi nepoznat URL s Confluence/Wiki hosta bez nagađanja cilja.
+     * EN: Records an unknown URL from a Confluence/Wiki host without guessing its target.
+     *
+     * @return array<string,string>|null
+     */
+    private function unresolvedConfluenceReference(
+        string $href,
+        string $sourceSpaceKey,
+        string $sourcePageId,
+    ): ?array {
+        $scheme = strtolower(Utf8Url::component($href, PHP_URL_SCHEME) ?? '');
+        $host = strtolower(Utf8Url::component($href, PHP_URL_HOST) ?? '');
+        if (
+            !in_array($scheme, ['http', 'https'], true)
+            || $host === ''
+            || (!str_contains($host, 'wiki') && !str_contains($host, 'confluence'))
+        ) {
+            return null;
+        }
+
+        return [
+            'source_page_id' => $sourcePageId,
+            'source_space_key' => $sourceSpaceKey,
+            'destination_space_key' => '',
+            'destination_page_id' => '',
+            'destination_page_title' => '',
+            'fragment' => '',
+            'original_target' => $href,
+            'reference_type' => 'unknown',
+        ];
+    }
+
+    /** HR: Dekodira Confluence /x/ oznaku kao little-endian ID stranice. EN: Decodes a Confluence /x/ token as a little-endian page ID. */
+    private function decodedShortPageId(string $token): string
+    {
+        $normalized = strtr(rawurldecode(trim($token)), '-_', '+/');
+        $padding = strlen($normalized) % 4;
+        if ($padding !== 0) {
+            $normalized .= str_repeat('=', 4 - $padding);
+        }
+        $bytes = base64_decode($normalized, true);
+        if (!is_string($bytes) || $bytes === '' || strlen($bytes) > 8) {
+            return '';
+        }
+
+        $id = 0;
+        for ($index = strlen($bytes) - 1; $index >= 0; --$index) {
+            $id = ($id * 256) + ord($bytes[$index]);
+        }
+
+        return $id > 0 ? (string)$id : '';
     }
 
     /**

@@ -20,10 +20,13 @@ Izradite XML izvoz točno jednog Confluence spacea. ZIP nemojte raspakirati ni m
    privitke te u završnoj fazi ponovno provjerava reference iz drugih uvezenih
    područja.
 6. Ostavite zadani aktualni sadržaj ili izričito uključite povijest, nacrte ili obrisane stranice.
-7. Pregledajte svako predloženo mapiranje korisnika i grupa. Za nemapiranog
-   korisnika možete ostaviti blokiran pristup ili izričito izraditi neaktivan
-   predračun bez lozinke i providera. Za više nemapiranih korisnika dostupna je
-   i zajednička opcija, nakon koje i dalje možete promijeniti pojedini redak.
+7. Pregledajte svako predloženo mapiranje korisnika i grupa. Pretraživi
+   korisnički izbornik dohvaća samo mali broj podudaranja pa ostaje upotrebljiv
+   i s velikim Auth imenikom. Za nemapiranog korisnika zadano se autorstvo i
+   uređivanje pripisuju trenutnom administratoru, dok izvorne ovlasti ostaju
+   zatvorene. Možete izričito izraditi neaktivan predračun bez lozinke i
+   providera. Za više nemapiranih korisnika dostupna je i zajednička opcija,
+   nakon koje i dalje možete promijeniti pojedini redak.
 8. Pokrenite potvrđeni import. Stranica prikazuje fazu, postotak te broj
    obrađenih privitaka i stranica. Možete je zatvoriti; ponovnim otvaranjem
    istog posla nastavlja se od zadnjeg potvrđenog koraka.
@@ -35,6 +38,23 @@ Izradite XML izvoz točno jednog Confluence spacea. ZIP nemojte raspakirati ni m
    kalendar preuzima naziv iz ICS-a, a XML naziv koristi kao rezervu. Ugradnja u
    stranicu ne zaobilazi ACL kalendara.
 10. Otvorite novo područje i provjerite prijavljene stranice.
+
+## Batch import
+
+Za veći broj spaceova administrator može SFTP/FileZilla prijenosom postaviti
+`.xml.zip` arhive u `data/confluence-import/batch-import`. Sučelje tada nudi
+sekvencijalni batch. Prije pokretanja odaberite hoće li se nemapirani autori i
+urednici pripisati trenutnom administratoru ili će se za njih izraditi neaktivni
+korisnici. Postojeći korisnici mapiraju se automatski, a nedostajuće Confluence
+grupe izrađuju se kao obične lokalne grupe. Batch nikada automatski ne prepisuje
+ranije uvezen izvor.
+
+Svaka arhiva ostaje zaseban posao i izvještaj. Uspješno obrađena datoteka briše
+se iz batch direktorija; neuspjela ostaje za provjeru i ponovni pokušaj. Dok
+batch radi, aplikacija svake četiri minute izričito osvježava lokalnu sesiju.
+Preglednički tab i računalo moraju ostati aktivni. Apsolutni rok vanjske
+SAML/OIDC sesije nije moguće produljiti iz aplikacije; u tom slučaju obrada staje
+na potvrđenom koraku i preostale arhive ostaju sačuvane.
 
 Provjereni prijenos i mapiranja ostaju dostupni nakon napuštanja stranice. Dok
 stvarni import još nije počeo, gumb **Odustani od importa** odmah briše prenesenu

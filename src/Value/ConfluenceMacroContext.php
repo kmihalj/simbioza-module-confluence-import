@@ -27,6 +27,7 @@ final readonly class ConfluenceMacroContext
         public array $attachments,
         public array $users = [],
         public array $calendars = [],
+        public string $fallbackUser = '',
     ) {
         // HR: PHP brojčane XML identifikatore pretvara u cjelobrojne ključeve polja; lokalno ih uvijek čuvamo kao tekst.
         // EN: PHP converts numeric XML identifiers into integer array keys; locally we always retain them as strings.

@@ -7,16 +7,22 @@ namespace AaiEduHr\SimbiozaModuleConfluenceImport\Service;
 use HeartPhrame\Routing\UrlGenerator;
 
 use function base64_decode;
+use function in_array;
 use function is_array;
 use function is_string;
 use function json_decode;
 use function ltrim;
+use function parse_url;
 use function preg_replace_callback;
 use function rawurldecode;
 use function rawurlencode;
 use function str_contains;
 use function strcasecmp;
+use function strtolower;
 use function trim;
+
+use const PHP_URL_HOST;
+use const PHP_URL_SCHEME;
 
 /** HR: Razrješava Confluence reference nakon što su sve ciljne stranice poznate. EN: Resolves Confluence references after all target pages are known. */
 final readonly class ConfluenceReferenceResolver
@@ -60,22 +66,31 @@ final readonly class ConfluenceReferenceResolver
                 $destinationId = trim((string)($reference['destination_page_id'] ?? ''));
                 $destinationTitle = trim((string)($reference['destination_page_title'] ?? ''));
                 $fragment = trim((string)($reference['fragment'] ?? ''));
+                $referenceType = trim((string)($reference['reference_type'] ?? 'page'));
+                $originalTarget = trim((string)($reference['original_target'] ?? ''));
                 $target = '#';
-                if ($destinationSpace === '' || $destinationSpace === $sourceSpaceKey) {
+                if (
+                    $referenceType !== 'unknown'
+                    && ($destinationSpace === '' || strcasecmp($destinationSpace, $sourceSpaceKey) === 0)
+                ) {
                     $target = $destinationId !== ''
                         ? ($localTargetsById[$destinationId] ?? '#')
-                        : ($localTargetsByTitle[$destinationTitle] ?? '#');
+                        : ($destinationTitle !== '' ? ($localTargetsByTitle[$destinationTitle] ?? '#') : '#');
                 }
-                if ($target === '#') {
+                if ($target === '#' && $referenceType !== 'unknown') {
                     if ($destinationId !== '') {
                         $mapping = $destinationSpace !== ''
                             ? $this->repository->contentBySource($destinationSpace, $destinationId)
                             : $this->repository->contentByAnySourceId($destinationId);
-                    } else {
+                    } elseif ($destinationTitle !== '') {
                         $mapping = $this->repository->contentByTitle(
                             $destinationSpace !== '' ? $destinationSpace : $sourceSpaceKey,
                             $destinationTitle,
                         );
+                    } else {
+                        $mapping = $destinationSpace !== ''
+                            ? $this->repository->homepageContentBySpaceKey($destinationSpace)
+                            : null;
                     }
                     $target = is_array($mapping) ? $this->workspaceNodePath($mapping) : '#';
                 }
@@ -88,14 +103,17 @@ final readonly class ConfluenceReferenceResolver
                     'destination_space_key' => $destinationSpace,
                     'destination_page_id' => $destinationId,
                     'destination_page_title' => $destinationTitle,
-                    'original_target' => trim((string)($reference['original_target'] ?? ''))
-                        ?: $match[0],
+                    'original_target' => $originalTarget !== '' ? $originalTarget : $match[0],
                     'resolved_target' => $target !== '#' ? $target : '',
                     'status' => $target !== '#' ? 'resolved' : 'unresolved',
                 ];
 
                 $crossSpace = $destinationSpace !== ''
                     && strcasecmp($destinationSpace, $sourceSpaceKey) !== 0;
+
+                if ($referenceType === 'unknown' && $this->safeExternalTarget($originalTarget)) {
+                    return $originalTarget;
+                }
 
                 return $crossSpace || $target === '#'
                     ? $this->unresolvedPath($linkUuid)
@@ -187,6 +205,15 @@ final readonly class ConfluenceReferenceResolver
         ) ?? '';
 
         return $fragment !== '' ? $target . '#' . $fragment : $target;
+    }
+
+    /** HR: Nepoznatu Confluence poveznicu ostavlja uporabljivom samo kao siguran HTTP(S) URL. EN: Keeps an unknown Confluence link usable only as a safe HTTP(S) URL. */
+    private function safeExternalTarget(string $target): bool
+    {
+        $scheme = strtolower((string)(parse_url($target, PHP_URL_SCHEME) ?? ''));
+        $host = trim((string)(parse_url($target, PHP_URL_HOST) ?? ''));
+
+        return in_array($scheme, ['http', 'https'], true) && $host !== '';
     }
 
     /** HR: Gradi stabilnu posredničku poveznicu koja može proraditi nakon kasnijeg importa prostora. EN: Builds a stable intermediary link that can resolve after a later space import. */

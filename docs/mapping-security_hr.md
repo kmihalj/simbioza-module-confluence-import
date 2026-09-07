@@ -8,7 +8,15 @@ Confluence zapisi korisnika izvorni su identiteti, a ne računi za prijavu. Poč
 
 Potvrđeno mapiranje izvornog računa globalno je za ovaj importer i ponovno se koristi kada se isti Confluence račun pojavi u arhivi drugog spacea. Kasniji import ne može ga poništiti ni preusmjeriti na drugi račun. Ponovna uporaba ne mijenja ciljni račun, providere prijave, aktivnost, članstva u grupama, administratorski status ni ovlasti iz ranijih područja.
 
-Za identitet bez ciljnog računa administrator može ostaviti zatvoreni pristup ili izričito izraditi neaktivan Auth predračun. Takav zapis nema lozinku, nema dopušten provider i ne može se prijaviti. Auth modul je jedini vlasnik kasnije aktivacije: aktivni račun mora imati provider, aktivni local-only račun mora dobiti administratorsku privremenu lozinku, a ta se lozinka obavezno mijenja pri prvoj lokalnoj prijavi. Korisnik s vanjskim providerom može dobiti local pristup bez lokalne lozinke i zatim je sam privatno postaviti.
+Za identitet bez ciljnog računa izvorni ACL ostaje zatvoren. Autorstvo i zadnje
+uređivanje sadržaja zadano se pripisuju administratoru koji je pokrenuo import,
+bez izrade lažnog lokalnog identiteta. Administrator umjesto toga može izričito
+izraditi neaktivan Auth predračun. Takav zapis nema lozinku, nema dopušten
+provider i ne može se prijaviti. Auth modul je jedini vlasnik kasnije aktivacije:
+aktivni račun mora imati provider, aktivni local-only račun mora dobiti
+administratorsku privremenu lozinku, a ta se lozinka obavezno mijenja pri prvoj
+lokalnoj prijavi. Korisnik s vanjskim providerom može dobiti local pristup bez
+lokalne lozinke i zatim je sam privatno postaviti.
 
 Kod SAML/OIDC/OAuth/CAS instalacije stvarna osoba najprije treba dobiti ili povezati račun kroz podešeni provider, a zatim se Confluence identitet mapira na taj postojeći račun.
 

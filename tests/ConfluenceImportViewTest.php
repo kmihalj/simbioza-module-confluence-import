@@ -76,4 +76,41 @@ final class ConfluenceImportViewTest extends TestCase
             strpos($controller, '$this->session->close();'),
         );
     }
+
+    /** HR: Trajni izvještaj prikazuje živu listu samo nerazriješenih Confluence veza. EN: The durable report shows a live list of unresolved Confluence links only. */
+    public function testReportShowsDynamicUnresolvedLinks(): void
+    {
+        $view = file_get_contents(dirname(__DIR__) . '/views/settings/report.php');
+        $controller = file_get_contents(dirname(__DIR__) . '/src/Controller/ConfluenceImportController.php');
+
+        self::assertIsString($view);
+        self::assertIsString($controller);
+        self::assertStringContainsString("__('Nerazriješene Confluence poveznice')", $view);
+        self::assertStringContainsString('$unresolvedLinkPages', $view);
+        self::assertStringContainsString('unresolvedLinksForJob', $controller);
+        self::assertStringContainsString('Uspješno lokalno razriješene poveznice više se ne prikazuju.', $view);
+    }
+
+    /** HR: Batch nudi izbor pravila za nemapirane korisnike i održava sesiju bez učitavanja cijelog imenika. EN: Batch exposes the unmapped-user policy and keeps the session alive without loading the full directory. */
+    public function testBatchImportHasUserPolicyHeartbeatAndRemoteUserPicker(): void
+    {
+        $view = file_get_contents(dirname(__DIR__) . '/views/settings/index.php');
+        $controller = file_get_contents(dirname(__DIR__) . '/src/Controller/ConfluenceImportController.php');
+        $service = file_get_contents(dirname(__DIR__) . '/src/Service/ConfluenceImportService.php');
+
+        self::assertIsString($view);
+        self::assertIsString($controller);
+        self::assertIsString($service);
+        self::assertStringContainsString('id="confluence-import-batch-create-unmapped-users"', $view);
+        self::assertStringContainsString('create_inactive_users: batchPolicy', $view);
+        self::assertStringContainsString('240000', $view);
+        self::assertStringContainsString('simbioza_confluence_import_activity', $controller);
+        self::assertStringContainsString('$this->session->close();', $controller);
+        self::assertStringContainsString('data-identity-picker-search', $view);
+        self::assertStringContainsString("url.searchParams.set('q', term)", $view);
+        self::assertStringContainsString('const positionPanel = () =>', $view);
+        self::assertStringContainsString('$batchArchiveCount', $view);
+        self::assertStringContainsString('stoppedName = item.name', $view);
+        self::assertStringNotContainsString('listUsersForSetup()', substr($service, 0, (int)strpos($service, 'public function queue(')));
+    }
 }

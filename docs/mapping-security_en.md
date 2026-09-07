@@ -8,7 +8,15 @@ Confluence user records are source identities, not authentication accounts. Pref
 
 A confirmed source-account mapping is global to this importer and is reused when the same Confluence account appears in another space archive. A later import cannot clear it or redirect it to a different account. Reuse does not modify the target account, authentication providers, activation state, group memberships, administrator flag, or permissions from earlier Workspaces.
 
-For an identity without a target account, the administrator may keep access blocked or explicitly create an inactive Auth staged account. That record has no password, no allowed provider, and cannot sign in. Auth remains the sole owner of later activation: an active account needs a provider, an active local-only account needs an administrator-set temporary password, and that password must be changed at the first local sign-in. An external-provider user may receive local access without a local password and then set one privately.
+For an identity without a target account, source ACL remains closed. Content
+creator and last-editor attribution defaults to the administrator who started
+the import, without creating a fake local identity. The administrator may
+instead explicitly create an inactive Auth staged account. That record has no
+password, no allowed provider, and cannot sign in. Auth remains the sole owner
+of later activation: an active account needs a provider, an active local-only
+account needs an administrator-set temporary password, and that password must
+be changed at the first local sign-in. An external-provider user may receive
+local access without a local password and then set one privately.
 
 For a SAML/OIDC/OAuth/CAS deployment, first let the real person obtain or link their account through the configured provider, then map the Confluence identity to that existing account.
 

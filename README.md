@@ -31,6 +31,9 @@ Internal packages use compatible `^0.1.0` releases; this module does not commit 
 ## What the importer does
 
 - accepts large `.xml.zip` exports through resumable chunked upload;
+- discovers `.xml.zip` files placed in `data/confluence-import/batch-import`
+  and processes them sequentially as independent jobs; successful source files
+  are removed, while failed files remain available for diagnosis and retry;
 - performs a read-only preflight before changes are allowed;
 - proposes the Confluence space name and key as Workspace name and slug;
 - assigns the Confluence home page as the Workspace homepage, with the first
@@ -45,13 +48,17 @@ Internal packages use compatible `^0.1.0` releases; this module does not commit 
 - registers every imported file as a real private Editor page attachment and serves it through current Workspace/page ACL; a replacement preserves the same source page slugs and attachment UUIDs, while a separate copy receives isolated identities;
 - prepares cached web-sized copies of imported JPEG, PNG, and WebP attachments
   after they are registered; originals remain unchanged and available on click;
-- safely suggests exact existing user and group matches for mapping;
+- safely suggests exact existing user and group matches for mapping; the user
+  picker searches a bounded server-side result instead of embedding the full
+  Auth directory in the page;
 - lets an administrator explicitly create an inactive Auth staged account
   without a password or provider for an otherwise unmapped identity;
 - reuses a previously confirmed account mapping across later space imports
   without changing that account, its groups, providers, or rights;
 - preserves mapped Confluence creators and last modifiers as document/version
   authors while the importing administrator remains the operational actor;
+  when an identity is unmapped, creator/editor attribution falls back to that
+  administrator unless inactive-user creation was explicitly enabled;
 - applies unresolved ACL identities fail-closed;
 - maps a personal Confluence space to the confirmed owner's Personal Workspace;
 - records unsupported macros and other decisions in a durable per-import report linked from **Recent Confluence imports**;
@@ -125,7 +132,7 @@ vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```
 
-Enable the package after all required modules, then open **Settings → Workspaces → Confluence import**. Upload one Confluence XML ZIP space export, review the preflight, confirm user/group mappings or explicitly select inactive staged-account creation, and start the import.
+Enable the package after all required modules, then open **Settings → Workspaces → Confluence import**. Upload one Confluence XML ZIP space export, review the preflight, confirm user/group mappings or explicitly select inactive staged-account creation, and start the import. For unattended sequential import, place multiple `.xml.zip` files in `data/confluence-import/batch-import`, choose how unmapped users should be attributed, keep the browser tab and computer active, and start the batch from the same screen. The page refreshes the local session every four minutes while the batch is running.
 
 Read-only CLI inspection:
 

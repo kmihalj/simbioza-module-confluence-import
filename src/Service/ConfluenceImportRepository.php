@@ -144,6 +144,24 @@ final readonly class ConfluenceImportRepository
             ->update($values);
     }
 
+    /**
+     * HR: Vraća nedovršeni batch posao administratora kako dva zahtjeva ne bi paralelno pokrenula dva područja.
+     * EN: Returns an administrator's unfinished batch job so two requests cannot start two Workspaces in parallel.
+     *
+     * @return array<string,mixed>|null
+     */
+    public function activeBatchJob(int $actorUserId): ?array
+    {
+        $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
+            ->where('operation', '=', 'batch_import')
+            ->where('actor_user_id', '=', $actorUserId)
+            ->whereRaw("status IN ('uploading', 'scanning', 'ready', 'running')")
+            ->orderBy('id', 'DESC')
+            ->first();
+
+        return is_array($row) ? $this->normalizeRow($row) : null;
+    }
+
     /** HR: Ažurira javno čitljivu fazu dugotrajnog importa. EN: Updates the publicly readable stage of a long-running import. */
     public function setStage(int $jobId, string $stage): void
     {
@@ -387,7 +405,7 @@ final readonly class ConfluenceImportRepository
 
         $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_SPACES)
             ->where('source_instance', '=', 'archive')
-            ->where('source_space_key', '=', $sourceKey)
+            ->whereRaw('LOWER(source_space_key) = LOWER(?)', [$sourceKey])
             ->orderBy('updated_at', 'DESC')
             ->first();
 
@@ -596,9 +614,42 @@ final readonly class ConfluenceImportRepository
     public function contentBySource(string $spaceKey, string $sourceId): ?array
     {
         $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_CONTENT)
-            ->where('source_space_key', '=', trim($spaceKey))
+            ->whereRaw('LOWER(source_space_key) = LOWER(?)', [trim($spaceKey)])
             ->where('logical_source_id', '=', trim($sourceId))
             ->where('import_status', '=', 'imported')
+            ->orderBy('source_version', 'DESC')
+            ->first();
+
+        return is_array($row) ? $this->normalizeRow($row) : null;
+    }
+
+    /**
+     * HR: Razrješava korijensku poveznicu područja u njegovu uvezenu naslovnicu.
+     * EN: Resolves a Workspace-root reference to its imported homepage.
+     *
+     * @return array<string,mixed>|null
+     */
+    public function homepageContentBySpaceKey(string $spaceKey): ?array
+    {
+        $space = $this->spaceBySourceKey($spaceKey);
+        if (!is_array($space)) {
+            return null;
+        }
+
+        $canonicalKey = $this->string($space['source_space_key'] ?? $spaceKey);
+        $metadata = is_array($space['source_metadata'] ?? null) ? $space['source_metadata'] : [];
+        $homePageId = $this->string($metadata['home_page_id'] ?? $metadata['homepage_id'] ?? '');
+        if ($homePageId !== '') {
+            $mapping = $this->contentBySource($canonicalKey, $homePageId);
+            if (is_array($mapping)) {
+                return $mapping;
+            }
+        }
+
+        $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_CONTENT)
+            ->whereRaw('LOWER(source_space_key) = LOWER(?)', [$canonicalKey])
+            ->where('import_status', '=', 'imported')
+            ->whereNull('source_parent_id')
             ->orderBy('source_version', 'DESC')
             ->first();
 
@@ -679,7 +730,7 @@ final readonly class ConfluenceImportRepository
     public function contentByTitle(string $spaceKey, string $title): ?array
     {
         $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_CONTENT)
-            ->where('source_space_key', '=', trim($spaceKey))
+            ->whereRaw('LOWER(source_space_key) = LOWER(?)', [trim($spaceKey)])
             ->where('source_title', '=', trim($title))
             ->where('import_status', '=', 'imported')
             ->orderBy('source_version', 'DESC')
@@ -836,7 +887,7 @@ final readonly class ConfluenceImportRepository
             $rows = [
                 ...$rows,
                 ...$this->database->table(ModuleSimbiozaConfluenceImport::TABLE_LINKS)
-                    ->where('destination_space_key', '=', trim($destinationSpaceKey))
+                    ->whereRaw('LOWER(destination_space_key) = LOWER(?)', [trim($destinationSpaceKey)])
                     ->orderBy('id', 'ASC')
                     ->get(),
             ];
@@ -850,6 +901,35 @@ final readonly class ConfluenceImportRepository
         }
 
         return array_values($result);
+    }
+
+    /**
+     * HR: Vraća samo trenutačno nerazriješene poveznice jednog izvještaja.
+     * EN: Returns only the currently unresolved links for one report.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function unresolvedLinksForJob(int $jobId): array
+    {
+        if ($jobId <= 0) {
+            return [];
+        }
+
+        $result = [];
+        foreach (
+            $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_LINKS)
+                ->where('job_id', '=', $jobId)
+                ->where('status', '=', 'unresolved')
+                ->orderBy('source_page_id', 'ASC')
+                ->orderBy('id', 'ASC')
+                ->get() as $row
+        ) {
+            if (is_array($row)) {
+                $result[] = $this->normalizeRow($row);
+            }
+        }
+
+        return $result;
     }
 
     /** HR: Sprema aktualno razrješenje poveznice ili je ponovno označava neriješenom. EN: Stores the current link resolution or marks it unresolved again. */
@@ -1069,7 +1149,7 @@ final readonly class ConfluenceImportRepository
      *
      * @return list<array<string,mixed>>
      */
-    public function recentJobs(int $limit = 20): array
+    public function recentJobs(int $limit = 100): array
     {
         $rows = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
             ->orderBy('id', 'DESC')

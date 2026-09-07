@@ -122,6 +122,49 @@
     box-shadow: inset .25rem 0 0 var(--bs-warning);
 }
 
+.confluence-import-shell .confluence-import-batch-files {
+    max-height: 12rem;
+    overflow: auto;
+    overflow-wrap: anywhere;
+}
+
+.confluence-import-shell .confluence-import-user-picker {
+    min-width: min(22rem, 70vw);
+    position: relative;
+}
+
+.confluence-import-shell .confluence-import-user-picker-panel {
+    background: var(--confluence-import-surface-bg);
+    border: 1px solid var(--hph-border, var(--bs-border-color, #dee2e6));
+    border-radius: var(--bs-border-radius);
+    color: var(--confluence-import-surface-text);
+    inset: auto;
+    max-height: 20rem;
+    overflow: auto;
+    position: fixed;
+    width: min(30rem, calc(100vw - 1rem));
+    z-index: 1080;
+}
+
+.confluence-import-shell .confluence-import-user-picker-panel[hidden] {
+    display: none !important;
+}
+
+.confluence-import-shell .confluence-import-user-picker-panel .list-group-item {
+    background: var(--confluence-import-surface-bg);
+    border-color: var(--hph-border, var(--bs-border-color, #dee2e6));
+    color: var(--confluence-import-surface-text);
+}
+
+.confluence-import-shell .confluence-import-user-picker-panel .list-group-item:hover,
+.confluence-import-shell .confluence-import-user-picker-panel .list-group-item:focus {
+    background: color-mix(
+        in srgb,
+        var(--bs-primary, #0d6efd) 12%,
+        var(--confluence-import-surface-bg)
+    );
+}
+
 /*
  * HR: Dinamički toast koristi iste površine i semantičke boje kao ostatak aktivne teme.
  * EN: The dynamic toast uses the same surfaces and semantic colours as the active theme.
@@ -197,5 +240,9 @@
 
     .confluence-import-shell .confluence-import-actions .btn {
         width: 100%;
+    }
+
+    .confluence-import-shell .confluence-import-user-picker {
+        min-width: 16rem;
     }
 }

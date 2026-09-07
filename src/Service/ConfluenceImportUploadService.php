@@ -20,6 +20,7 @@ use function fread;
 use function fseek;
 use function fwrite;
 use function hash_file;
+use function hash_equals;
 use function is_dir;
 use function is_file;
 use function is_link;
@@ -27,12 +28,14 @@ use function gmdate;
 use function is_int;
 use function is_resource;
 use function is_string;
+use function link;
 use function max;
 use function mkdir;
 use function rename;
 use function rmdir;
 use function scandir;
 use function set_time_limit;
+use function sort;
 use function strtolower;
 use function str_ends_with;
 use function time;
@@ -48,6 +51,115 @@ final readonly class ConfluenceImportUploadService
         private ConfluenceImportConfig $config,
         private ConfluenceExportScanner $scanner,
     ) {
+    }
+
+    /**
+     * HR: Vraća izravne XML ZIP datoteke koje je administrator postavio za batch import.
+     * EN: Returns direct XML ZIP files placed by an administrator for batch import.
+     *
+     * @return list<array{name:string,size:int}>
+     */
+    public function batchArchives(): array
+    {
+        $directory = $this->config->batchDirectory();
+        $this->ensureDirectory($directory);
+        $names = [];
+        foreach (scandir($directory) ?: [] as $name) {
+            if (
+                $name === '.'
+                || $name === '..'
+                || basename($name) !== $name
+                || !str_ends_with(strtolower($name), '.xml.zip')
+            ) {
+                continue;
+            }
+            $path = $directory . DIRECTORY_SEPARATOR . $name;
+            if (is_link($path) || !is_file($path)) {
+                continue;
+            }
+            $size = filesize($path);
+            if (is_int($size) && $size > 0 && $size <= $this->config->maxArchiveSize()) {
+                $names[] = $name;
+            }
+        }
+        sort($names, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return array_map(
+            static fn(string $name): array => [
+                'name' => $name,
+                'size' => (int)filesize($directory . DIRECTORY_SEPARATOR . $name),
+            ],
+            $names,
+        );
+    }
+
+    /**
+     * HR: Priprema jednu serversku batch arhivu istim preflight putem kao ručni upload.
+     * Izvor ostaje u batch direktoriju do uspješnog završetka, a tvrda poveznica
+     * izbjegava privremeno udvostručavanje velikih arhiva.
+     * EN: Prepares one server-side batch archive through the same preflight path as
+     * a manual upload. The source remains in the batch directory until completion,
+     * while a hard link avoids temporarily duplicating large archives.
+     *
+     * @return array<string,mixed>
+     */
+    public function adoptBatchArchive(string $name, int $actorUserId): array
+    {
+        $this->cleanupExpired();
+        $active = $this->repository->activeBatchJob($actorUserId);
+        if (is_array($active)) {
+            throw new ConfluenceImportException(__('Prethodni batch import još nije dovršen.'));
+        }
+
+        $directory = $this->config->batchDirectory();
+        $this->ensureDirectory($directory);
+        $name = trim($name);
+        if (
+            $name === ''
+            || basename($name) !== $name
+            || !str_ends_with(strtolower($name), '.xml.zip')
+        ) {
+            throw new ConfluenceImportException(__('Odaberite Confluence XML ZIP arhivu iz batch direktorija.'));
+        }
+
+        $candidate = $directory . DIRECTORY_SEPARATOR . $name;
+        $root = realpath($directory);
+        $source = realpath($candidate);
+        if (
+            !is_string($root)
+            || !is_string($source)
+            || is_link($candidate)
+            || !is_file($source)
+            || dirname($source) !== $root
+        ) {
+            throw new ConfluenceImportException(__('Batch Confluence arhiva nije pronađena.'));
+        }
+        $size = filesize($source);
+        if (!is_int($size) || $size < 1 || $size > $this->config->maxArchiveSize()) {
+            throw new ConfluenceImportException(__('Veličina Confluence arhive nije dopuštena.'));
+        }
+
+        $job = $this->start($name, $size, $actorUserId);
+        $temporaryPath = (string)($job['archive_path'] ?? '');
+        try {
+            if (!unlink($temporaryPath) || !link($source, $temporaryPath)) {
+                throw new ConfluenceImportException(
+                    __('Batch arhivu nije moguće sigurno pripremiti bez udvostručavanja datoteke.'),
+                );
+            }
+            $this->repository->updateJob((int)$job['id'], [
+                'operation' => 'batch_import',
+                'next_offset' => $size,
+            ]);
+
+            return $this->finish((string)$job['uuid'], $actorUserId);
+        } catch (\Throwable $throwable) {
+            $current = $this->repository->jobByUuid((string)$job['uuid'], $actorUserId);
+            if ($this->canCancel($current)) {
+                $this->cancel((string)$job['uuid'], $actorUserId);
+            }
+            throw $throwable;
+        }
     }
 
     /**
@@ -397,11 +509,24 @@ final readonly class ConfluenceImportUploadService
     {
         $path = is_scalar($job['archive_path'] ?? null) ? trim((string)$job['archive_path']) : '';
         $jobId = is_numeric($job['id'] ?? null) ? (int)$job['id'] : 0;
+        $batchPath = $this->config->batchDirectory() . DIRECTORY_SEPARATOR
+            . basename(is_scalar($job['original_name'] ?? null) ? (string)$job['original_name'] : '');
+        $batchHash = ($job['operation'] ?? '') === 'batch_import' && is_file($batchPath)
+            ? hash_file('sha256', $batchPath)
+            : false;
+        $expectedHash = is_scalar($job['sha256'] ?? null) ? trim((string)$job['sha256']) : '';
         if (
             $jobId > 0
             && $this->deleteManagedFile($path, $this->config->uploadDirectory())
         ) {
             $this->repository->clearArchivePath($jobId);
+            if (
+                is_string($batchHash)
+                && $expectedHash !== ''
+                && hash_equals($expectedHash, $batchHash)
+            ) {
+                $this->deleteManagedFile($batchPath, $this->config->batchDirectory());
+            }
         }
     }
 

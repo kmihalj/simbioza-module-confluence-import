@@ -144,22 +144,30 @@ final readonly class ConfluenceImportService
     {
         $job = $this->repository->jobByUuid($jobUuid, $actorUserId);
         $scan = is_array($job['summary'] ?? null) ? $job['summary'] : [];
-        $targetUsers = array_values($this->users->listUsersForSetup());
         $targetUsersById = [];
-        foreach ($targetUsers as $targetUser) {
-            if (is_array($targetUser) && is_numeric($targetUser['id'] ?? null)) {
-                $targetUsersById[(int)$targetUser['id']] = $targetUser;
-            }
+        $actor = $this->users->findByIdIncludingInactive($actorUserId);
+        if (is_array($actor)) {
+            $targetUsersById[$actorUserId] = $actor;
         }
         $suggestions = [];
         foreach ($this->rows($scan['users'] ?? []) as $sourceUser) {
             $sourceKey = $this->text($sourceUser['source_key'] ?? '');
             $mappedUserId = $sourceKey !== '' ? $this->repository->mappedUserId($sourceKey) : null;
-            $candidateId = $mappedUserId !== null && isset($targetUsersById[$mappedUserId])
+            $mappedUser = $mappedUserId !== null
+                ? $this->users->findByIdIncludingInactive($mappedUserId)
+                : null;
+            $candidates = is_array($mappedUser) ? [$mappedUser] : $this->userCandidates($sourceUser);
+            $candidateId = is_array($mappedUser)
                 ? $mappedUserId
-                : $this->principalMatcher->suggestUserId($sourceUser, $targetUsers);
+                : $this->principalMatcher->suggestUserId($sourceUser, $candidates);
             if ($sourceKey !== '' && $candidateId !== null) {
                 $suggestions[$sourceKey] = $candidateId;
+                foreach ($candidates as $candidate) {
+                    if (is_array($candidate) && (int)($candidate['id'] ?? 0) === $candidateId) {
+                        $targetUsersById[$candidateId] = $candidate;
+                        break;
+                    }
+                }
             }
         }
 
@@ -185,12 +193,40 @@ final readonly class ConfluenceImportService
         return [
             'job' => $job,
             'scan' => $scan,
-            'target_users' => $targetUsers,
+            'target_users' => array_values($targetUsersById),
             'target_groups' => $targetGroups,
             'identity_suggestions' => $suggestions,
             'group_suggestions' => $this->groupSuggestions($scan, $targetGroups),
             'existing_import' => $existingImport,
+            'current_actor' => is_array($actor) ? $actor : ['id' => $actorUserId],
         ];
+    }
+
+    /**
+     * HR: Dohvaća mali skup mogućih lokalnih korisnika za automatski prijedlog,
+     * bez učitavanja cijelog Auth imenika u memoriju.
+     * EN: Fetches a small set of possible local users for automatic suggestion
+     * without loading the complete Auth directory into memory.
+     *
+     * @param array<string,mixed> $sourceUser
+     * @return list<array<string,mixed>>
+     */
+    private function userCandidates(array $sourceUser): array
+    {
+        $result = [];
+        foreach (['email', 'username', 'display_name'] as $field) {
+            $search = $this->text($sourceUser[$field] ?? '');
+            if ($search === '') {
+                continue;
+            }
+            foreach ($this->users->searchActiveUsers($search, 25) as $candidate) {
+                if (is_array($candidate) && is_numeric($candidate['id'] ?? null)) {
+                    $result[(int)$candidate['id']] = $candidate;
+                }
+            }
+        }
+
+        return array_values($result);
     }
 
     /**
@@ -221,6 +257,68 @@ final readonly class ConfluenceImportService
         }
 
         return $suggestions;
+    }
+
+    /**
+     * HR: Pokreće serverski batch posao sa sigurnim zadanim opcijama. Postojeće
+     * korisnike automatski mapira, a nemapirane prema administratorovu izboru
+     * pripisuje administratoru ili za njih izrađuje neaktivne korisnike. Nove
+     * grupe izrađuje kao obične grupe, a postojeće uvezeno područje nikada ne
+     * prepisuje bez ručne odluke.
+     * EN: Starts a server-side batch job with safe defaults. Existing users are
+     * mapped automatically, while unmapped users are either attributed to the
+     * administrator or created as inactive users according to the administrator's
+     * choice. Missing groups are created as regular groups, and an existing
+     * imported Workspace is never overwritten without a manual decision.
+     *
+     * @param array<string,mixed> $actor
+     * @return array<string,mixed>
+     */
+    public function queueBatch(string $jobUuid, array $actor, bool $createInactiveUsers = false): array
+    {
+        $actorUserId = $this->positiveInt($actor['id'] ?? null, __('Prijavljeni administrator nije pronađen.'));
+        $preparation = $this->preparation($jobUuid, $actorUserId);
+        $scan = is_array($preparation['scan'] ?? null) ? $preparation['scan'] : [];
+        $space = is_array($scan['spaces'][0] ?? null) ? $scan['spaces'][0] : [];
+        $groupMap = is_array($preparation['group_suggestions'] ?? null)
+            ? $preparation['group_suggestions']
+            : [];
+        $groupCreate = [];
+        foreach ($this->rows($scan['groups'] ?? []) as $sourceGroup) {
+            $name = $this->text($sourceGroup['source_name'] ?? '');
+            if ($name !== '' && !isset($groupMap[$name])) {
+                $groupCreate[$name] = true;
+            }
+        }
+        $identityMap = is_array($preparation['identity_suggestions'] ?? null)
+            ? $preparation['identity_suggestions']
+            : [];
+        $identityCreate = [];
+        if ($createInactiveUsers) {
+            foreach ($this->rows($scan['users'] ?? []) as $sourceUser) {
+                $sourceKey = $this->text($sourceUser['source_key'] ?? '');
+                if ($sourceKey !== '' && !isset($identityMap[$sourceKey])) {
+                    $identityCreate[$sourceKey] = true;
+                }
+            }
+        }
+
+        return $this->queue($jobUuid, [
+            'workspace_name' => $this->text($space['name'] ?? ''),
+            'workspace_slug' => $this->text($space['source_key'] ?? ''),
+            'reimport_strategy' => 'new',
+            'language' => $this->config->defaultLanguage(),
+            'include_attachments' => true,
+            'include_comments' => true,
+            'include_history' => false,
+            'include_deleted' => false,
+            'include_drafts' => false,
+            'identity_map' => $identityMap,
+            'identity_create' => $identityCreate,
+            'batch_create_inactive_users' => $createInactiveUsers,
+            'group_map' => $groupMap,
+            'group_create' => $groupCreate,
+        ], $actor);
     }
 
     /**
@@ -1768,6 +1866,7 @@ final readonly class ConfluenceImportService
         $macroPages = [];
         $macroUsers = [];
         $macroCalendars = [];
+        $fallbackUser = $this->importingAdministratorDisplayName($actorUserId);
         foreach ($this->rows($dataset['calendars'] ?? []) as $calendar) {
             $sourceUuid = $this->text($calendar['source_uuid'] ?? '');
             if ($sourceUuid !== '') {
@@ -1787,6 +1886,8 @@ final readonly class ConfluenceImportService
                     ?? $mappedUser['login_identifier']
                     ?? $displayName,
                 );
+            } else {
+                $displayName = $fallbackUser;
             }
             foreach (['source_key', 'username', 'email'] as $identityField) {
                 $identity = $this->text($sourceUser[$identityField] ?? '');
@@ -1820,7 +1921,7 @@ final readonly class ConfluenceImportService
                 'workspace_slug' => $this->text($workspace['slug'] ?? ''),
                 'node_slug' => $this->text($target['slug'] ?? ''),
                 'labels' => array_values(array_unique($sourceLabels)),
-                'creator' => $macroUsers[$creatorSourceKey] ?? $creatorSourceKey,
+                'creator' => $macroUsers[$creatorSourceKey] ?? $fallbackUser,
                 'updated_at' => $this->text($current['updated_at'] ?? ''),
                 'tasks' => is_string($sourceBody) && str_contains($sourceBody, '<ac:task')
                     ? $this->converter->taskSummaries($sourceBody, (string)$logicalId)
@@ -1884,6 +1985,7 @@ final readonly class ConfluenceImportService
                         $attachments[$logicalId] ?? [],
                         $macroUsers,
                         $macroCalendars,
+                        $fallbackUser,
                     ),
                 );
                 $warnings = [...$warnings, ...$converted['warnings']];
@@ -1989,6 +2091,7 @@ final readonly class ConfluenceImportService
                             $attachments[$logicalId] ?? [],
                             $macroUsers,
                             $macroCalendars,
+                            $fallbackUser,
                         ),
                     );
                     $warnings = [...$warnings, ...$converted['warnings']];
@@ -2025,6 +2128,7 @@ final readonly class ConfluenceImportService
                             $attachments[$logicalId] ?? [],
                             $macroUsers,
                             $macroCalendars,
+                            $fallbackUser,
                         ),
                     );
                     $warnings = [...$warnings, ...$converted['warnings']];
@@ -2433,6 +2537,22 @@ final readonly class ConfluenceImportService
         return $fallbackUserId;
     }
 
+    /** HR: Vraća prikazno ime lokalnog administratora koji je pokrenuo import. EN: Returns the display name of the local administrator who started the import. */
+    private function importingAdministratorDisplayName(int $actorUserId): string
+    {
+        $actor = $this->users->findByIdIncludingInactive($actorUserId);
+        if (is_array($actor)) {
+            foreach (['display_name', 'login_identifier'] as $field) {
+                $value = $this->text($actor[$field] ?? '');
+                if ($value !== '') {
+                    return $value;
+                }
+            }
+        }
+
+        return __('Administrator importa');
+    }
+
     /**
      * HR: Vraća najranijeg mapiranog autora dokumenta bez promjene vlasnika i ACL-a.
      * EN: Returns the earliest mapped document creator without changing ownership or ACL.
@@ -2746,8 +2866,14 @@ final readonly class ConfluenceImportService
                 $mapping = $spaceKey !== ''
                     ? $this->repository->contentBySource($spaceKey, $pageId)
                     : $this->repository->contentByAnySourceId($pageId);
+            } elseif ($title !== '') {
+                $mapping = $spaceKey !== ''
+                    ? $this->repository->contentByTitle($spaceKey, $title)
+                    : null;
             } else {
-                $mapping = $spaceKey !== '' ? $this->repository->contentByTitle($spaceKey, $title) : null;
+                $mapping = $spaceKey !== ''
+                    ? $this->repository->homepageContentBySpaceKey($spaceKey)
+                    : null;
             }
             if (!is_array($mapping)) {
                 $this->repository->updateLinkResolution((int)$link['id'], null);
@@ -2971,6 +3097,7 @@ final readonly class ConfluenceImportService
             'identity_create' => is_array($options['identity_create'] ?? null)
                 ? $options['identity_create']
                 : [],
+            'batch_create_inactive_users' => $this->boolean($options['batch_create_inactive_users'] ?? false),
             'group_map' => is_array($options['group_map'] ?? null) ? $options['group_map'] : [],
             'group_create' => is_array($options['group_create'] ?? null) ? $options['group_create'] : [],
         ];

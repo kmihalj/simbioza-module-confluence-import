@@ -13,10 +13,16 @@ declare(strict_types=1);
  * @var string $uploadStartPath
  * @var string $uploadChunkPath
  * @var string $uploadFinishPath
+ * @var string $batchStartPath
  * @var string $cancelPath
  * @var string $importPath
  * @var string $processPath
  * @var string $stylesPath
+ * @var string $userSearchPath
+ * @var list<array{name:string,size:int}> $batchArchives
+ * @var array<string,mixed>|null $activeBatchJob
+ * @var array<string,mixed> $currentAdministrator
+ * @var string $batchDirectory
  * @var string $csrfName
  * @var string $csrfToken
  * @var int $chunkSize
@@ -33,6 +39,26 @@ $sourceUsers = is_array($scan['users'] ?? null) ? $scan['users'] : [];
 $sourceGroups = is_array($scan['groups'] ?? null) ? $scan['groups'] : [];
 $targetUsers = is_array($preparation['target_users'] ?? null) ? $preparation['target_users'] : [];
 $targetGroups = is_array($preparation['target_groups'] ?? null) ? $preparation['target_groups'] : [];
+$currentActor = is_array($preparation['current_actor'] ?? null)
+    ? $preparation['current_actor']
+    : $currentAdministrator;
+$currentActorName = (string)($currentActor['display_name'] ?? $currentActor['login_identifier'] ?? __('Trenutni administrator'));
+$activeBatchOptions = is_array($activeBatchJob['options'] ?? null) ? $activeBatchJob['options'] : [];
+$batchCreateInactiveUsers = ($activeBatchOptions['batch_create_inactive_users'] ?? false) === true;
+$batchPolicyLocked = ($activeBatchJob['status'] ?? '') === 'running';
+$batchArchiveNames = array_values(array_map(
+    static fn(array $archive): string => (string)$archive['name'],
+    $batchArchives,
+));
+$activeBatchName = is_array($activeBatchJob) ? (string)($activeBatchJob['original_name'] ?? '') : '';
+$batchArchiveCount = count($batchArchiveNames)
+    + ($activeBatchName !== '' && !in_array($activeBatchName, $batchArchiveNames, true) ? 1 : 0);
+$targetUsersById = [];
+foreach ($targetUsers as $targetUser) {
+    if (is_array($targetUser) && is_numeric($targetUser['id'] ?? null)) {
+        $targetUsersById[(int)$targetUser['id']] = $targetUser;
+    }
+}
 $suggestions = is_array($preparation['identity_suggestions'] ?? null)
     ? $preparation['identity_suggestions']
     : [];
@@ -101,6 +127,39 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                     </div>
                 </div>
             </details>
+
+            <?php if ($batchArchives !== [] || is_array($activeBatchJob)) : ?>
+                <details class="confluence-import-panel mt-3" open>
+                    <summary><?= $this->escape(__('Batch import arhiva s poslužitelja')) ?></summary>
+                    <div class="confluence-import-body">
+                        <p class="mb-2"><?= $this->escape(sprintf(
+                            __('Pronađeno je %d XML ZIP arhiva u direktoriju %s. Obrađuju se redom, svaka kao zaseban import i izvještaj.'),
+                            $batchArchiveCount,
+                            $batchDirectory,
+                        )) ?></p>
+                        <p class="small text-body-secondary"><?= $this->escape(__('Postojeći korisnici mapiraju se automatski. Nove Confluence grupe izrađuju se kao obične lokalne grupe. Postojeće uvezeno područje batch import neće prepisati.')) ?></p>
+                        <div class="confluence-import-option mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" id="confluence-import-batch-create-unmapped-users"<?= $batchCreateInactiveUsers ? ' checked' : '' ?><?= $batchPolicyLocked ? ' disabled' : '' ?>>
+                                <label class="form-check-label" for="confluence-import-batch-create-unmapped-users"><?= $this->escape(__('Za nemapirane identitete izradi neaktivne korisnike')) ?></label>
+                            </div>
+                            <div class="form-text"><?= $this->escape(sprintf(__('Ako je isključeno, nemapirani autori i urednici pripisuju se trenutnom administratoru (%s). Ako je uključeno, izrađuju se neaktivni korisnici bez mogućnosti prijave.'), $currentActorName)) ?></div>
+                        </div>
+                        <?php if ($batchArchives !== []) : ?>
+                            <ul class="small confluence-import-batch-files">
+                                <?php foreach ($batchArchives as $batchArchive) : ?>
+                                    <li><code><?= $this->escape((string)$batchArchive['name']) ?></code> <span class="text-body-secondary">(<?= $this->escape(number_format((int)$batchArchive['size'] / 1048576, 1, ',', '.')) ?> MB)</span></li>
+                                <?php endforeach; ?>
+                            </ul>
+                        <?php endif; ?>
+                        <div class="progress confluence-import-progress mb-2 d-none" id="confluence-import-batch-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width:0"></div></div>
+                        <div class="d-flex flex-wrap gap-2 align-items-center confluence-import-actions">
+                            <button class="btn btn-primary" type="button" id="confluence-import-batch-start"><?= $this->escape(is_array($activeBatchJob) ? __('Nastavi batch import') : __('Uvezi sve batch arhive')) ?></button>
+                            <span class="text-body-secondary" id="confluence-import-batch-status" aria-live="polite"></span>
+                        </div>
+                    </div>
+                </details>
+            <?php endif; ?>
 
             <?php if ($preparation !== null) : ?>
                 <details class="confluence-import-panel mt-3" open>
@@ -194,11 +253,11 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                             <details class="confluence-import-mapping mt-4">
                                 <summary><?= $this->escape(sprintf(__('Korisnici i identiteti (%d)'), count($sourceUsers))) ?></summary>
                                 <div class="confluence-import-body">
-                                    <p class="text-body-secondary"><?= $this->escape(__('Postojeći račun odaberite samo kada ste sigurni da predstavlja istu osobu. Za nemapirani identitet možete izričito izraditi neaktivan račun bez lozinke i providera.')) ?></p>
+                                    <p class="text-body-secondary"><?= $this->escape(__('Nemapirani autori pripisuju se trenutnom administratoru koji pokreće import, dok njihove izvorne ovlasti ostaju nemapirane. Pretražite i odaberite lokalnog korisnika samo kada ste sigurni da predstavlja istu osobu.')) ?></p>
                                     <div class="form-check form-switch mb-3">
                                         <input class="form-check-input" type="checkbox" role="switch" id="confluence-import-create-unmapped-users">
                                         <label class="form-check-label" for="confluence-import-create-unmapped-users"><?= $this->escape(__('Za sve trenutačno nemapirane identitete izradi neaktivne korisnike')) ?></label>
-                                        <div class="form-text"><?= $this->escape(__('Računi ostaju bez mogućnosti prijave dok administrator u Auth postavkama ne odabere provider, po potrebi postavi privremenu lozinku i aktivira korisnika.')) ?></div>
+                                        <div class="form-text"><?= $this->escape(__('Kada je uključeno, izrađeni neaktivni korisnici postaju autori umjesto trenutnog administratora. Računi nemaju mogućnost prijave dok ih administrator ne konfigurira i aktivira.')) ?></div>
                                     </div>
                                     <input class="form-control mb-3" type="search" data-filter-table="identity" placeholder="<?= $this->escape(__('Pretraži Confluence korisnike')) ?>">
                                     <div class="table-responsive confluence-import-table-wrap">
@@ -207,16 +266,28 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                                             <?php if (!is_array($sourceUser)) {
                                                 continue;
                                             } $sourceKey = (string)($sourceUser['source_key'] ?? '');
-                                            $suggested = is_numeric($suggestions[$sourceKey] ?? null) ? (int)$suggestions[$sourceKey] : 0; ?>
+                                            $suggested = is_numeric($suggestions[$sourceKey] ?? null) ? (int)$suggestions[$sourceKey] : 0;
+                                            $suggestedUser = $targetUsersById[$suggested] ?? null;
+                                            $suggestedLabel = is_array($suggestedUser)
+                                                ? (string)($suggestedUser['display_name'] ?? $suggestedUser['login_identifier'] ?? $suggested)
+                                                : '';
+                                            $administratorLabel = sprintf(__('Trenutni administrator (%s)'), $currentActorName); ?>
                                             <tr data-filter-row class="<?= $sourceKey !== '' && $sourceKey === $ownerSourceKey ? 'confluence-import-owner-row' : '' ?>">
                                                 <td><strong><?= $this->escape((string)($sourceUser['display_name'] ?? $sourceUser['username'] ?? $sourceKey)) ?></strong><?php if ($sourceKey === $ownerSourceKey) :
                                                     ?> <span class="badge text-bg-warning"><?= $this->escape(__('Vlasnik')) ?></span><?php
                                                             endif; ?><div class="small text-body-secondary"><?= $this->escape((string)($sourceUser['email'] ?? '')) ?></div><div class="confluence-import-source-key"><?= $this->escape($sourceKey) ?></div></td>
-                                                <td><select class="form-select form-select-sm" data-identity-map="<?= $this->escape($sourceKey) ?>"><option value=""><?= $this->escape(__('Nije mapirano — pristup ostaje blokiran')) ?></option><option value="__create_inactive__"><?= $this->escape(__('Izradi neaktivnog korisnika bez prijave')) ?></option><?php foreach ($targetUsers as $targetUser) :
-                                                    ?><?php if (!is_array($targetUser) || !is_numeric($targetUser['id'] ?? null)) {
-                                                    continue;
-                                                    } $targetId = (int)$targetUser['id']; ?><option value="<?= $targetId ?>"<?= $targetId === $suggested ? ' selected' : '' ?>><?= $this->escape((string)($targetUser['display_name'] ?? $targetUser['login_identifier'] ?? $targetId)) ?><?= ($targetUser['email'] ?? '') !== '' ? ' — ' . $this->escape((string)$targetUser['email']) : '' ?><?= !(bool)($targetUser['is_active'] ?? false) ? ' (' . $this->escape(__('neaktivan')) . ')' : '' ?></option><?php
-                                                                                                                  endforeach; ?></select></td>
+                                                <td>
+                                                    <div class="confluence-import-user-picker" data-identity-picker>
+                                                        <input type="hidden" data-identity-map="<?= $this->escape($sourceKey) ?>" value="<?= $suggested > 0 ? $suggested : '' ?>">
+                                                        <button class="form-select form-select-sm text-start" type="button" data-identity-picker-toggle data-current-administrator-label="<?= $this->escape($administratorLabel) ?>" data-create-user-label="<?= $this->escape(__('Izradi neaktivnog korisnika bez prijave')) ?>" aria-expanded="false"><?= $this->escape($suggestedLabel !== '' ? $suggestedLabel : $administratorLabel) ?></button>
+                                                        <div class="confluence-import-user-picker-panel shadow" data-identity-picker-panel hidden>
+                                                            <button class="list-group-item list-group-item-action" type="button" data-identity-picker-choice="" data-identity-picker-label="<?= $this->escape($administratorLabel) ?>"><?= $this->escape($administratorLabel) ?><span class="d-block small text-body-secondary"><?= $this->escape(__('Samo autorstvo; izvorne ovlasti ostaju nemapirane.')) ?></span></button>
+                                                            <button class="list-group-item list-group-item-action" type="button" data-identity-picker-choice="__create_inactive__" data-identity-picker-label="<?= $this->escape(__('Izradi neaktivnog korisnika bez prijave')) ?>"><?= $this->escape(__('Izradi neaktivnog korisnika bez prijave')) ?></button>
+                                                            <div class="p-2"><input class="form-control form-control-sm" type="search" autocomplete="off" role="combobox" aria-autocomplete="list" placeholder="<?= $this->escape(__('Upišite najmanje 2 znaka za pretragu korisnika')) ?>" data-identity-picker-search></div>
+                                                            <div class="list-group list-group-flush" data-identity-picker-results></div>
+                                                        </div>
+                                                    </div>
+                                                </td>
                                             </tr>
                                         <?php endforeach; ?>
                                         </tbody></table>
@@ -300,9 +371,14 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         'start' => $uploadStartPath,
         'chunk' => $uploadChunkPath,
         'finish' => $uploadFinishPath,
+        'batchStart' => $batchStartPath,
         'cancel' => $cancelPath,
         'run' => $importPath,
         'process' => $processPath,
+        'userSearch' => $userSearchPath,
+        'batchArchives' => $batchArchiveNames,
+        'activeBatchUuid' => is_array($activeBatchJob) ? (string)($activeBatchJob['uuid'] ?? '') : '',
+        'activeBatchName' => $activeBatchName,
         'csrfHeader' => 'X-' . str_replace('_', '-', strtoupper($csrfName)),
         'csrfToken' => $csrfToken,
         'chunkSize' => $chunkSize,
@@ -317,6 +393,12 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         'confirmCancel' => __('Odustati od importa? Prenesena arhiva i podaci pripreme ovog nedovršenog posla bit će trajno obrisani.'),
         'cancelled' => __('Confluence import je otkazan, a prenesena arhiva obrisana.'),
         'importing' => __('Import je u tijeku. Velika područja mogu potrajati nekoliko minuta.'),
+        'confirmBatch' => __('Pokrenuti sekvencijalni import svih pronađenih batch arhiva?'),
+        'batchRunning' => __('Batch import: {name} ({current} / {total})'),
+        'batchFinished' => __('Batch import je dovršen. Uspješno: {success}; neuspjelo: {failed}.'),
+        'batchStopped' => __('Batch import je zaustavljen na arhivi {name}. Osvježite stranicu kako biste sigurno nastavili isti posao.'),
+        'userSearchEmpty' => __('Nema pronađenih korisnika.'),
+        'userSearchFailed' => __('Pretraživanje korisnika nije uspjelo.'),
         'processingAttachments' => __('Uvoz privitaka: {done} / {total}'),
         'processingPages' => __('Uvoz stranica: {done} / {total}'),
         'finalizing' => __('Završavam ovlasti, komentare, poveznice i indeks pretrage…'),
@@ -364,11 +446,20 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         if (window.bootstrap?.Toast) window.bootstrap.Toast.getOrCreateInstance(element, {delay: 7000}).show();
         else { element.classList.add('show'); window.setTimeout(() => element.classList.remove('show'), 7000); }
     };
+    let csrfRefreshPromise = null;
     const refreshCsrf = async () => {
-        const response = await fetch(config.csrf, {headers: {Accept: 'application/json'}, cache: 'no-store'});
-        const data = await responsePayload(response);
-        if (!response.ok || typeof data.csrf_token !== 'string' || data.csrf_token === '') throw new Error(data.error || config.failed);
-        config.csrfToken = data.csrf_token;
+        if (csrfRefreshPromise instanceof Promise) return csrfRefreshPromise;
+        csrfRefreshPromise = (async () => {
+            const response = await fetch(config.csrf, {headers: {Accept: 'application/json'}, cache: 'no-store', credentials: 'same-origin'});
+            const data = await responsePayload(response);
+            if (!response.ok || typeof data.csrf_token !== 'string' || data.csrf_token === '') throw new Error(data.error || config.failed);
+            config.csrfToken = data.csrf_token;
+        })();
+        try {
+            await csrfRefreshPromise;
+        } finally {
+            csrfRefreshPromise = null;
+        }
     };
     const post = async (url, data) => {
         await refreshCsrf();
@@ -376,6 +467,100 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         const payload = await responsePayload(response);
         if (!response.ok) throw new Error(payload.error || config.failed);
         return payload;
+    };
+
+    document.querySelectorAll('[data-identity-picker]').forEach((picker) => {
+        const toggle = picker.querySelector('[data-identity-picker-toggle]');
+        const panel = picker.querySelector('[data-identity-picker-panel]');
+        const search = picker.querySelector('[data-identity-picker-search]');
+        const results = picker.querySelector('[data-identity-picker-results]');
+        const value = picker.querySelector('[data-identity-map]');
+        if (!(toggle instanceof HTMLButtonElement) || !(panel instanceof HTMLElement) || !(search instanceof HTMLInputElement) || !(results instanceof HTMLElement) || !(value instanceof HTMLInputElement)) return;
+
+        let timer = 0;
+        let controller = null;
+        const close = () => { panel.hidden = true; toggle.setAttribute('aria-expanded', 'false'); };
+        const positionPanel = () => {
+            const padding = 8;
+            const gap = 4;
+            const rect = toggle.getBoundingClientRect();
+            const width = Math.min(480, Math.max(rect.width, window.innerWidth - (padding * 2)));
+            const left = Math.max(padding, Math.min(rect.left, window.innerWidth - width - padding));
+            panel.style.left = `${left}px`;
+            panel.style.width = `${width}px`;
+            panel.style.right = 'auto';
+            panel.style.maxHeight = `${Math.max(160, Math.min(320, window.innerHeight - (padding * 2)))}px`;
+            const height = Math.min(panel.scrollHeight, 320);
+            const below = rect.bottom + gap;
+            const top = below + height <= window.innerHeight - padding
+                ? below
+                : Math.max(padding, rect.top - gap - height);
+            panel.style.top = `${top}px`;
+        };
+        const choose = (id, label) => { value.value = String(id || ''); toggle.textContent = String(label || ''); close(); };
+        toggle.addEventListener('click', () => {
+            document.querySelectorAll('[data-identity-picker-panel]').forEach((other) => { if (other !== panel) other.hidden = true; });
+            panel.hidden = !panel.hidden;
+            toggle.setAttribute('aria-expanded', panel.hidden ? 'false' : 'true');
+            if (!panel.hidden) {
+                positionPanel();
+                search.focus();
+            }
+        });
+        panel.addEventListener('click', (event) => {
+            const choice = event.target instanceof Element ? event.target.closest('[data-identity-picker-choice]') : null;
+            if (!(choice instanceof HTMLButtonElement)) return;
+            choose(choice.dataset.identityPickerChoice || '', choice.dataset.identityPickerLabel || choice.textContent || '');
+        });
+        search.addEventListener('input', () => {
+            window.clearTimeout(timer);
+            if (controller instanceof AbortController) controller.abort();
+            const term = search.value.trim();
+            results.replaceChildren();
+            if (term.length < 2) return;
+            timer = window.setTimeout(async () => {
+                controller = new AbortController();
+                const url = new URL(config.userSearch, window.location.href);
+                url.searchParams.set('type', 'user');
+                url.searchParams.set('mode', 'creator');
+                url.searchParams.set('q', term);
+                try {
+                    const response = await fetch(url, {headers: {Accept: 'application/json'}, credentials: 'same-origin', signal: controller.signal});
+                    const data = await responsePayload(response);
+                    if (!response.ok || data.ok !== true || !Array.isArray(data.results)) throw new Error(config.userSearchFailed);
+                    if (data.results.length === 0) {
+                        const empty = document.createElement('div'); empty.className = 'list-group-item text-body-secondary'; empty.textContent = config.userSearchEmpty; results.appendChild(empty); return;
+                    }
+                    data.results.forEach((user) => {
+                        const button = document.createElement('button'); button.className = 'list-group-item list-group-item-action'; button.type = 'button'; button.dataset.identityPickerChoice = String(user.id || ''); button.dataset.identityPickerLabel = String(user.label || ''); button.textContent = String(user.label || ''); results.appendChild(button);
+                    });
+                } catch (error) {
+                    if (error instanceof DOMException && error.name === 'AbortError') return;
+                    const failed = document.createElement('div'); failed.className = 'list-group-item text-danger'; failed.textContent = config.userSearchFailed; results.replaceChildren(failed);
+                }
+            }, 180);
+        });
+        document.addEventListener('click', (event) => { if (event.target instanceof Node && !picker.contains(event.target)) close(); });
+    });
+
+    const updateImportProgress = (data, status, progress) => {
+        const percent = Math.max(0, Math.min(100, Number(data.progress || 0)));
+        progress.style.width = `${percent}%`;
+        progress.parentElement?.setAttribute('aria-valuenow', String(percent));
+        if (data.phase === 'attachments') return config.processingAttachments.replace('{done}', String(data.attachments_done || 0)).replace('{total}', String(data.attachments_total || 0));
+        if (data.phase === 'pages') return config.processingPages.replace('{done}', String(data.pages_done || 0)).replace('{total}', String(data.pages_total || 0));
+        if (data.phase === 'finalizing') return config.finalizing;
+        return status;
+    };
+
+    const finishQueuedImport = async (data, uuid, onProgress) => {
+        let current = data;
+        while (current.completed !== true) {
+            onProgress(current);
+            current = await post(config.process, {uuid});
+        }
+        onProgress(current);
+        return current;
     };
     const synchronizeUpload = async (file) => {
         if (!upload?.uuid || upload.name !== file.name || Number(upload.archive_size) !== file.size) {
@@ -434,6 +619,62 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
             status.textContent = message;
             toast(message, 'danger');
             uploadButton.disabled = false;
+        }
+    });
+
+    query('#confluence-import-batch-start')?.addEventListener('click', async (event) => {
+        if (!window.confirm(config.confirmBatch)) return;
+        const button = event.currentTarget;
+        const status = query('#confluence-import-batch-status');
+        const progress = query('#confluence-import-batch-progress');
+        const bar = progress?.querySelector('.progress-bar');
+        if (!(button instanceof HTMLButtonElement) || !(status instanceof HTMLElement) || !(progress instanceof HTMLElement) || !(bar instanceof HTMLElement)) return;
+        button.disabled = true;
+        progress.classList.remove('d-none');
+        const heartbeat = window.setInterval(() => {
+            refreshCsrf().catch(() => {});
+        }, 240000);
+        let success = 0;
+        let failed = 0;
+        const files = [...config.batchArchives].filter((name) => name !== config.activeBatchName);
+        const queue = config.activeBatchUuid !== ''
+            ? [{uuid: config.activeBatchUuid, name: config.activeBatchName}, ...files.map((name) => ({uuid: '', name}))]
+            : files.map((name) => ({uuid: '', name}));
+        let stoppedName = '';
+        try {
+            for (let index = 0; index < queue.length; index += 1) {
+                const item = queue[index];
+                status.textContent = config.batchRunning.replace('{name}', item.name).replace('{current}', String(index + 1)).replace('{total}', String(queue.length));
+                try {
+                    const createInactiveUsers = query('#confluence-import-batch-create-unmapped-users');
+                    const batchPolicy = createInactiveUsers instanceof HTMLInputElement && createInactiveUsers.checked;
+                    const started = await post(config.batchStart, item.uuid !== ''
+                        ? {uuid: item.uuid, create_inactive_users: batchPolicy}
+                        : {name: item.name, create_inactive_users: batchPolicy});
+                    config.activeBatchUuid = String(started.uuid || item.uuid || '');
+                    config.activeBatchName = item.name;
+                    await finishQueuedImport(started, started.uuid, (data) => {
+                        status.textContent = `${config.batchRunning.replace('{name}', item.name).replace('{current}', String(index + 1)).replace('{total}', String(queue.length))} — ${updateImportProgress(data, status.textContent, bar)}`;
+                    });
+                    success += 1;
+                    config.activeBatchUuid = '';
+                    config.activeBatchName = '';
+                    await refreshJobs();
+                } catch (error) {
+                    failed += 1;
+                    stoppedName = item.name;
+                    toast(`${item.name}: ${error instanceof Error ? error.message : config.failed}`, 'danger');
+                    break;
+                }
+            }
+            status.textContent = stoppedName !== ''
+                ? config.batchStopped.replace('{name}', stoppedName)
+                : config.batchFinished.replace('{success}', String(success)).replace('{failed}', String(failed));
+            toast(status.textContent, failed > 0 ? 'danger' : 'success');
+        } finally {
+            window.clearInterval(heartbeat);
+            progress.classList.add('d-none');
+            button.disabled = false;
         }
     });
 
@@ -511,10 +752,17 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
     const createUnmappedUsers = query('#confluence-import-create-unmapped-users');
     if (createUnmappedUsers instanceof HTMLInputElement) {
         createUnmappedUsers.addEventListener('change', function () {
-            document.querySelectorAll('[data-identity-map]').forEach(function (select) {
-                if (!(select instanceof HTMLSelectElement)) return;
-                if (createUnmappedUsers.checked && select.value === '') select.value = '__create_inactive__';
-                else if (!createUnmappedUsers.checked && select.value === '__create_inactive__') select.value = '';
+            document.querySelectorAll('[data-identity-map]').forEach(function (input) {
+                if (!(input instanceof HTMLInputElement)) return;
+                const toggle = input.closest('[data-identity-picker]')?.querySelector('[data-identity-picker-toggle]');
+                if (!(toggle instanceof HTMLButtonElement)) return;
+                if (createUnmappedUsers.checked && input.value === '') {
+                    input.value = '__create_inactive__';
+                    toggle.textContent = toggle.dataset.createUserLabel || '';
+                } else if (!createUnmappedUsers.checked && input.value === '__create_inactive__') {
+                    input.value = '';
+                    toggle.textContent = toggle.dataset.currentAdministratorLabel || '';
+                }
             });
         });
     }

@@ -20,10 +20,13 @@ Create an XML export of exactly one Confluence space. Do not unpack or change th
    identities. Replacement preserves public page and attachment links and
    rechecks references from other imported Workspaces during finalization.
 6. Keep the default current-content selection or explicitly enable history, drafts or deleted pages.
-7. Review every proposed user and group mapping. For an unmapped user, keep
-   access blocked or explicitly create an inactive staged account without a
-   password or provider. A bulk option is available for multiple unmapped
-   users, and each row can still be adjusted afterwards.
+7. Review every proposed user and group mapping. The searchable user picker
+   retrieves only a small result set and remains usable with a large Auth
+   directory. For an unmapped user, creator/editor attribution defaults to the
+   current administrator while source permissions remain closed. You may
+   explicitly create an inactive staged account without a password or provider.
+   A bulk option is available for multiple unmapped users, and each row can
+   still be adjusted afterwards.
 8. Start the confirmed import. The page shows the phase, percentage, and
    processed attachment/page counts. You may close it; reopening the same job
    continues from the last confirmed step.
@@ -35,6 +38,24 @@ Create an XML export of exactly one Confluence space. Do not unpack or change th
    takes its name from the ICS file, with the XML name as a fallback. Embedding
    never bypasses the calendar ACL.
 10. Open the new Workspace and verify the reported pages.
+
+## Batch import
+
+For multiple spaces, an administrator may place `.xml.zip` archives in
+`data/confluence-import/batch-import` through SFTP/FileZilla. The UI then offers
+a sequential batch. Before starting, choose whether unmapped authors and
+editors fall back to the current administrator or become newly created inactive
+users. Existing users are mapped automatically, and missing Confluence groups
+are created as regular local groups. A batch never automatically overwrites an
+earlier import of the same source.
+
+Each archive remains a separate job and report. A successfully processed file
+is deleted from the batch directory; a failed file remains for inspection and
+retry. While the batch runs, the application explicitly refreshes the local
+session every four minutes. The browser tab and computer must remain active.
+An absolute external SAML/OIDC session limit cannot be extended by the
+application; in that case processing stops at a confirmed step and the
+remaining archives stay available.
 
 A verified upload and its mappings remain available after leaving the page.
 Before the real import starts, **Cancel import** immediately deletes the uploaded

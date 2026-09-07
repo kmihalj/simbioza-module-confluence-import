@@ -230,6 +230,32 @@ XML;
         );
     }
 
+    /** HR: Završni prolaz prepoznaje korijene područja, kratke URL-ove i veze koje proizvede HTML makro. EN: The final pass recognizes Workspace roots, short URLs, and links materialized by an HTML macro. */
+    public function testFinalLinkPassRecognizesAllConfluenceUrlShapes(): void
+    {
+        $body = <<<'XML'
+<p><a href="https://wiki.example/display/DEMO">Legacy root</a></p>
+<p><a href="https://wiki.example/spaces/DEMO/overview">Modern root</a></p>
+<p><a href="https://wiki.example/x/MgL7Aw">Short page</a></p>
+<p><a href="https://wiki.example/plugins/servlet/resumedraft.action?draftId=42">Unknown Wiki link</a></p>
+<p><a href="https://outside.example/plugins/servlet/view">External</a></p>
+<ac:structured-macro ac:name="html"><ac:plain-text-body><![CDATA[<table><tbody><tr><td><a href="https://wiki.example/display/TARGET/Generated+page">Generated</a></td></tr></tbody></table>]]></ac:plain-text-body></ac:structured-macro>
+XML;
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'DEMO', '10');
+
+        self::assertCount(5, $result->links);
+        self::assertSame('space_home', $result->links[0]['reference_type']);
+        self::assertSame('DEMO', $result->links[0]['destination_space_key']);
+        self::assertSame('space_home', $result->links[1]['reference_type']);
+        self::assertSame('66781746', $result->links[2]['destination_page_id']);
+        self::assertSame('unknown', $result->links[3]['reference_type']);
+        self::assertSame('TARGET', $result->links[4]['destination_space_key']);
+        self::assertSame('Generated page', $result->links[4]['destination_page_title']);
+        self::assertSame(5, substr_count($result->html, '__SIMBIOZA_CONFLUENCE_LINK__'));
+        self::assertStringContainsString('https://outside.example/plugins/servlet/view', $result->html);
+    }
+
     /** HR: Normalizira nestandardni CDATA završetak i HTML entitete iz stvarnih Atlassian XML izvoza. EN: Normalizes the non-standard CDATA terminator and HTML entities found in real Atlassian XML exports. */
     public function testNormalizesAtlassianExportStorageQuirks(): void
     {
@@ -897,6 +923,28 @@ XML;
             array_column($result->properties, 'value'),
         );
         self::assertStringNotContainsString('Poveznica', implode(' ', array_column($result->properties, 'value')));
+    }
+
+    /** HR: Nema li mapiranja, vidljive korisničke reference koriste administratora importa umjesto bezvrijednog izvornog ključa. EN: Without a mapping, visible user references use the importing administrator instead of a meaningless source key. */
+    public function testUnmappedVisibleUserReferencesUseImportAdministrator(): void
+    {
+        $body = <<<'XML'
+<p><ac:link><ri:user ri:userkey="opaque-source-user" /></ac:link></p>
+<ac:structured-macro ac:name="profile"><ac:parameter ac:name="user"><ri:user ri:userkey="opaque-source-user" /></ac:parameter></ac:structured-macro>
+XML;
+        $context = new ConfluenceMacroContext(
+            '10',
+            [],
+            [],
+            [],
+            [],
+            'Krešimir Mihalj',
+        );
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'DEMO', '10', $context);
+
+        self::assertSame(2, substr_count($result->html, 'Krešimir Mihalj'));
+        self::assertStringNotContainsString('opaque-source-user', $result->html);
     }
 
     /** HR: Poslužiteljski dodaci bez posebne lokalne logike postaju običan HTML. EN: Server-side add-ons without distinct local logic become ordinary HTML. */

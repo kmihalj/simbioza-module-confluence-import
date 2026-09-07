@@ -150,6 +150,13 @@ return new class extends AbstractModuleManifest {
             ],
             [
                 'POST',
+                '/settings/confluence-import/batch/start',
+                ConfluenceImportController::class . '@batchStart',
+                'simbioza-confluence-import.batch.start',
+                $authenticated,
+            ],
+            [
+                'POST',
                 '/settings/confluence-import/cancel',
                 ConfluenceImportController::class . '@cancel',
                 'simbioza-confluence-import.cancel',

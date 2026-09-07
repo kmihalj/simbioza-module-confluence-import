@@ -40,6 +40,12 @@ final readonly class ConfluenceImportConfig
         return $this->dataDirectory() . DIRECTORY_SEPARATOR . 'uploads';
     }
 
+    /** HR: Vraća administratorski direktorij za sekvencijalni batch import. EN: Returns the administrator-managed sequential batch-import directory. */
+    public function batchDirectory(): string
+    {
+        return $this->dataDirectory() . DIRECTORY_SEPARATOR . 'batch-import';
+    }
+
     /** HR: Vraća privatni direktorij uvezenih privitaka. EN: Returns the private imported-attachment directory. */
     public function attachmentDirectory(): string
     {

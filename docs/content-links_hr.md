@@ -16,13 +16,14 @@ postane escapirani Confluence zapis.
 
 ## Poveznice
 
-Pretvornik prepoznaje moderne `/spaces/SPACE/pages/ID/title`, stare `/display/SPACE/title`, `viewpage.action?pageId=ID` i URL-ove privitaka.
+Pretvornik u završnom HTML-u prepoznaje moderne `/spaces/SPACE/pages/ID/title`, stare `/display/SPACE/title`, kratke `/x/TOKEN`, `viewpage.action?pageId=ID`, poveznice na naslovnicu područja i URL-ove privitaka. Završni prolaz izvodi se nakon pretvorbe svih makroa kako bi obuhvatio i poveznice koje su proizveli sigurni HTML makroi.
 
 - Poveznice unutar istog spacea zamjenjuju se novom rutom područja.
 - Fragmenti stranice ostaju sačuvani.
 - Poveznice na već uvezeni space rješavaju se kroz mapiranja izvornih ID-eva.
 - Poveznice na space koji još nije uvezen koriste stabilni resolver URL i čuvaju izvorno odredište.
 - Svaki kasniji uspješni import pokreće usklađivanje u oba smjera.
+- Neprepoznati URL s Confluence/Wiki hosta ostaje vanjska klikabilna poveznica i bilježi se kao nerazriješen.
 - Vanjske web-poveznice ostaju nepromijenjene.
 
 ## Makroi i zadaci
@@ -145,4 +146,4 @@ izvorni metapodaci ostaju dostupni administratoru importa.
 
 Importer odabire traženu verziju privitka ili najvišu fizičku verziju prisutnu u ZIP-u. Provjerenu binarnu datoteku privremeno čuva samo do izrade ciljnog dokumenta, zatim je s istim stabilnim UUID-om registrira kao nativni Editor privitak i uklanja privremenu kopiju. Sadržaj stranice i spajalica zato upućuju na isti ACL-zaštićeni asset. Nedostajuće ili neispravne datoteke prijavljuju se bez dopuštanja izlaska iz arhive.
 
-Svaki dovršeni posao čuva izvještaj u popisu **Nedavni Confluence importi**. Nepodržani makroi grupirani su po ciljnoj stranici, a svaki red izvještaja vodi izravno na tu stranicu u Simbiozi. Prazan izvještaj izričito potvrđuje da sadržaj ne zahtijeva ručnu provjeru.
+Svaki dovršeni posao čuva izvještaj u popisu **Nedavni Confluence importi**. Izvještaj dinamički prikazuje samo trenutačno nerazriješene Confluence poveznice, grupirane po izvornoj stranici. Nakon svakog uspješnog importa ponovno se provjeravaju sva postojeća mapiranja, a razriješene poveznice automatski nestaju s popisa. Nepodržani makroi grupirani su po ciljnoj stranici, a svaki red izvještaja vodi izravno na tu stranicu u Simbiozi. Prazan izvještaj izričito potvrđuje da sadržaj ne zahtijeva ručnu provjeru.

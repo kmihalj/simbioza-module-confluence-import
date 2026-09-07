@@ -31,6 +31,9 @@ Interni paketi koriste kompatibilna izdanja `^0.1.0`; ovaj modul ne sprema `comp
 ## Što importer radi
 
 - prima velike `.xml.zip` izvoze prijenosom u dijelovima koji se nakon prekida može nastaviti;
+- pronalazi `.xml.zip` datoteke postavljene u `data/confluence-import/batch-import`
+  i obrađuje ih redom kao zasebne poslove; uspješne izvore briše, a neuspjele
+  zadržava za dijagnostiku i ponovni pokušaj;
 - prije dopuštanja izmjena izvodi read-only provjeru;
 - predlaže naziv i ključ Confluence spacea kao naziv i slug područja;
 - Confluence početnu stranicu postavlja kao naslovnicu područja, a kada je izvoz
@@ -46,12 +49,16 @@ Interni paketi koriste kompatibilna izdanja `^0.1.0`; ovaj modul ne sprema `comp
 - nakon registracije uvezenih JPEG, PNG i WebP privitaka priprema njihove
   predmemorirane web-verzije; originali ostaju nepromijenjeni i dostupni klikom;
 - točno podudarne postojeće korisnike i grupe sigurno predlaže za mapiranje;
+  pretraživi korisnički izbornik s poslužitelja učitava samo ograničen skup
+  rezultata umjesto cijelog Auth imenika;
 - administrator za nemapirani identitet može izričito izraditi neaktivan Auth
   predračun bez lozinke i providera, koji nema mogućnost prijave;
 - ranije potvrđeno mapiranje računa ponovno koristi u kasnijim importima
   spaceova bez promjene tog računa, grupa, providera ili prava;
 - čuva mapirane Confluence autore i zadnje urednike kao autore dokumenata i
-  verzija, dok administrator importa ostaje operativni izvršitelj;
+  verzija, dok administrator importa ostaje operativni izvršitelj; nemapiranog
+  autora i urednika pripisuje tom administratoru, osim kada je izričito
+  uključena izrada neaktivnih korisnika;
 - neriješene ACL identitete obrađuje zatvoreno, bez proširenja pristupa;
 - osobni Confluence space mapira u osobno područje potvrđenog vlasnika;
 - nepodržane makroe i druge odluke bilježi u trajnom izvještaju importa povezanom iz popisa **Nedavni Confluence importi**;

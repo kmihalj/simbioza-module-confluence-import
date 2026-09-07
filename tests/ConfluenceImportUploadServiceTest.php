@@ -17,6 +17,7 @@ use HeartPhrame\Config\Config;
 use HeartPhrame\Helper\Helper;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use ZipArchive;
 
 #[CoversClass(ConfluenceImportUploadService::class)]
 final class ConfluenceImportUploadServiceTest extends TestCase
@@ -247,6 +248,72 @@ final class ConfluenceImportUploadServiceTest extends TestCase
         self::assertFileExists($attachmentPath);
         self::assertNotNull($this->database->table(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS)
             ->where('uuid', '=', 'running-attachment')->first());
+    }
+
+    /** HR: Batch popis prihvaća samo izravne XML ZIP datoteke, a uspjeh briše i upload poveznicu i izvor. EN: The batch inventory accepts direct XML ZIP files only, and success removes both the upload link and its source. */
+    public function testBatchArchiveIsAdoptedWithoutCopyAndDeletedOnlyAfterSuccess(): void
+    {
+        $batchDirectory = $this->config->batchDirectory();
+        mkdir($batchDirectory, 0770, true);
+        $sourcePath = $batchDirectory . '/demo.xml.zip';
+        $this->createSpaceArchive($sourcePath);
+        file_put_contents($batchDirectory . '/ignored.zip', 'ignored');
+        self::assertTrue(symlink($sourcePath, $batchDirectory . '/linked.xml.zip'));
+
+        self::assertSame([[
+            'name' => 'demo.xml.zip',
+            'size' => filesize($sourcePath),
+        ]], $this->uploads->batchArchives());
+
+        $job = $this->uploads->adoptBatchArchive('demo.xml.zip', 42);
+        $uploadPath = (string)$job['archive_path'];
+        self::assertSame('batch_import', $job['operation']);
+        self::assertSame('ready', $job['status']);
+        self::assertFileExists($sourcePath);
+        self::assertFileExists($uploadPath);
+        self::assertSame(fileinode($sourcePath), fileinode($uploadPath));
+
+        $this->repository->completeImport((int)$job['id'], 99, ['pages' => 1]);
+        $this->uploads->deleteArchive($job);
+
+        self::assertFileDoesNotExist($sourcePath);
+        self::assertFileDoesNotExist($uploadPath);
+        self::assertSame('', $this->repository->jobByUuid((string)$job['uuid'], 42)['archive_path']);
+    }
+
+    /** HR: Neispravna batch arhiva ostaje u ulaznom direktoriju za dijagnostiku i ponovni pokušaj. EN: An invalid batch archive remains in the input directory for diagnosis and retry. */
+    public function testFailedBatchPreflightPreservesSourceArchive(): void
+    {
+        $batchDirectory = $this->config->batchDirectory();
+        mkdir($batchDirectory, 0770, true);
+        $sourcePath = $batchDirectory . '/broken.xml.zip';
+        file_put_contents($sourcePath, 'not-a-zip');
+
+        try {
+            $this->uploads->adoptBatchArchive('broken.xml.zip', 42);
+            self::fail('An invalid batch archive must fail preflight.');
+        } catch (ConfluenceImportException) {
+            self::assertFileExists($sourcePath);
+            self::assertNull($this->repository->activeBatchJob(42));
+        }
+    }
+
+    private function createSpaceArchive(string $path): void
+    {
+        $zip = new ZipArchive();
+        self::assertTrue($zip->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE));
+        self::assertTrue($zip->addFromString(
+            'exportDescriptor.properties',
+            "exportType=space\nspaceKey=DEMO\ncreatedByVersionNumber=10.2\nbackupAttachments=true\n",
+        ));
+        self::assertTrue($zip->addFromString('entities.xml', <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<hibernate-generic>
+  <object class="Space" package="com.atlassian.confluence.spaces"><id name="id">1</id><property name="key">DEMO</property><property name="name">Demo Workspace</property><property name="spaceType">global</property><property name="homePage"><id>100</id></property></object>
+  <object class="Page" package="com.atlassian.confluence.pages"><id name="id">100</id><property name="space"><id>1</id></property><property name="title">Home</property><property name="version">1</property><property name="contentStatus">current</property></object>
+</hibernate-generic>
+XML));
+        self::assertTrue($zip->close());
     }
 
     private function removeDirectory(string $directory): void

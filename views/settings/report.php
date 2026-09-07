@@ -7,6 +7,7 @@ declare(strict_types=1);
  * @var array<string,mixed> $job
  * @var array<string,mixed> $summary
  * @var list<array<string,mixed>> $reviewPages
+ * @var list<array{source_page_id:string,title:string,url:string,links:list<array{target:string,destination:string}>}> $unresolvedLinkPages
  * @var bool $calendarAvailable
  * @var list<array<string,mixed>> $calendarOptions
  * @var string $calendarResolvePath
@@ -41,6 +42,10 @@ $unresolvedReviewPages = array_filter(
         return false;
     },
 );
+$unresolvedLinkCount = array_sum(array_map(
+    static fn(array $page): int => count(is_array($page['links'] ?? null) ? $page['links'] : []),
+    $unresolvedLinkPages,
+));
 $calendarTypeLabel = static fn(string $type): string => match ($type) {
     'personal' => __('Osobni kalendar'),
     'resource' => __('Resursni kalendar'),
@@ -99,11 +104,57 @@ $normalizeCalendarName = static function (string $name): string {
                 <?php endif; ?>
 
                 <div class="row g-3 mb-4">
-                    <div class="col-sm-6 col-xl-3"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Stranice')) ?></span><strong><?= $number($summary['pages_imported'] ?? 0) ?></strong></div></div>
-                    <div class="col-sm-6 col-xl-3"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Privitci')) ?></span><strong><?= $number($summary['attachments_imported'] ?? 0) ?></strong></div></div>
-                    <div class="col-sm-6 col-xl-3"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Komentari')) ?></span><strong><?= $number($summary['comments_imported'] ?? 0) ?></strong></div></div>
-                    <div class="col-sm-6 col-xl-3"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Stranice za provjeru')) ?></span><strong><?= count($unresolvedReviewPages) ?></strong></div></div>
+                    <div class="col-sm-6 col-xl"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Stranice')) ?></span><strong><?= $number($summary['pages_imported'] ?? 0) ?></strong></div></div>
+                    <div class="col-sm-6 col-xl"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Privitci')) ?></span><strong><?= $number($summary['attachments_imported'] ?? 0) ?></strong></div></div>
+                    <div class="col-sm-6 col-xl"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Komentari')) ?></span><strong><?= $number($summary['comments_imported'] ?? 0) ?></strong></div></div>
+                    <div class="col-sm-6 col-xl"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Nerazriješene poveznice')) ?></span><strong><?= $unresolvedLinkCount ?></strong></div></div>
+                    <div class="col-sm-6 col-xl"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Stranice za provjeru')) ?></span><strong><?= count($unresolvedReviewPages) ?></strong></div></div>
                 </div>
+
+                <h2 class="h4 mb-2"><?= $this->escape(__('Nerazriješene Confluence poveznice')) ?></h2>
+                <p class="text-body-secondary"><?= $this->escape(__('Popis se automatski osvježava nakon svakog importa područja. Uspješno lokalno razriješene poveznice više se ne prikazuju.')) ?></p>
+                <?php if ($unresolvedLinkPages === []) : ?>
+                    <div class="alert alert-success mb-4" role="status"><?= $this->escape(__('Sve prepoznate Confluence poveznice trenutačno su lokalno razriješene.')) ?></div>
+                <?php else : ?>
+                    <div class="table-responsive mb-4">
+                        <table class="table table-striped align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th scope="col"><?= $this->escape(__('Izvorna stranica')) ?></th>
+                                    <th scope="col"><?= $this->escape(__('Nerazriješeno odredište')) ?></th>
+                                    <th scope="col" class="text-end"><?= $this->escape(__('Radnja')) ?></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($unresolvedLinkPages as $page) : ?>
+                                    <?php foreach ($page['links'] as $index => $link) : ?>
+                                        <tr>
+                                            <td>
+                                                <?php if ($index === 0) : ?>
+                                                    <?php if ($page['url'] !== '') : ?>
+                                                        <a href="<?= $this->escape($page['url']) ?>"><?= $this->escape($page['title'] !== '' ? $page['title'] : __('Stranica bez naslova')) ?></a>
+                                                    <?php else : ?>
+                                                        <?= $this->escape($page['title'] !== '' ? $page['title'] : __('Stranica bez naslova')) ?>
+                                                    <?php endif; ?>
+                                                    <div class="small text-body-secondary">Confluence ID: <?= $this->escape($page['source_page_id']) ?></div>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <div><?= $this->escape($link['destination']) ?></div>
+                                                <a class="small text-break" href="<?= $this->escape($link['target']) ?>" target="_blank" rel="noopener noreferrer"><?= $this->escape($link['target']) ?></a>
+                                            </td>
+                                            <td class="text-end">
+                                                <?php if ($index === 0 && $page['url'] !== '') : ?>
+                                                    <a class="btn btn-sm btn-primary" href="<?= $this->escape($page['url']) ?>"><?= $this->escape(__('Provjeri stranicu')) ?></a>
+                                                <?php endif; ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
 
                 <h2 class="h4 mb-2"><?= $this->escape(__('Sadržaj koji zahtijeva provjeru')) ?></h2>
                 <p class="text-body-secondary"><?= $this->escape(__('Ovdje su stranice na kojima dio Confluence sadržaja nije moguće prenijeti kao izvornu funkcionalnost. Statički prikaz ostao je sačuvan gdje god je to bilo moguće.')) ?></p>

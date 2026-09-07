@@ -28,6 +28,7 @@ use Throwable;
 
 use function http_build_query;
 use function is_resource;
+use function time;
 
 use const UPLOAD_ERR_OK;
 
@@ -74,6 +75,8 @@ final readonly class ConfluenceImportController
                 $error = $throwable->getMessage();
             }
         }
+        $activeBatchJob = $this->repository->activeBatchJob($actorUserId);
+        $currentAdministrator = $this->access->currentUser();
 
         return $this->views->render('settings/index', [
             'title' => __('Confluence import'),
@@ -86,10 +89,16 @@ final readonly class ConfluenceImportController
             'uploadStartPath' => $this->path('simbioza-confluence-import.upload.start', '/settings/confluence-import/upload/start'),
             'uploadChunkPath' => $this->path('simbioza-confluence-import.upload.chunk', '/settings/confluence-import/upload/chunk'),
             'uploadFinishPath' => $this->path('simbioza-confluence-import.upload.finish', '/settings/confluence-import/upload/finish'),
+            'batchStartPath' => $this->path('simbioza-confluence-import.batch.start', '/settings/confluence-import/batch/start'),
             'cancelPath' => $this->path('simbioza-confluence-import.cancel', '/settings/confluence-import/cancel'),
             'importPath' => $this->path('simbioza-confluence-import.run', '/settings/confluence-import/run'),
             'processPath' => $this->path('simbioza-confluence-import.process', '/settings/confluence-import/process'),
             'stylesPath' => $this->path('simbioza-confluence-import.assets.css', '/confluence-import/assets.css'),
+            'userSearchPath' => $this->path('workspace.acl.subjects', '/workspaces/acl/subjects'),
+            'batchArchives' => $this->uploads->batchArchives(),
+            'activeBatchJob' => $activeBatchJob,
+            'currentAdministrator' => is_array($currentAdministrator) ? $currentAdministrator : [],
+            'batchDirectory' => 'data/confluence-import/batch-import',
             'csrfName' => $this->session->getCsrfTokenName(),
             'csrfToken' => $this->session->getOrGenerateCsrfToken(),
             'chunkSize' => $this->config->chunkSize(),
@@ -137,12 +146,14 @@ final readonly class ConfluenceImportController
             }
             $calendarAvailable = $this->calendarResolution->isAvailable();
             $query = $request->getQueryParams();
+            $unresolvedLinkPages = $this->unresolvedLinkPages((int)($job['id'] ?? 0));
 
             return $this->views->render('settings/report', [
                 'title' => __('Izvještaj Confluence importa'),
                 'job' => $job,
                 'summary' => $summary,
                 'reviewPages' => $reviewPages,
+                'unresolvedLinkPages' => $unresolvedLinkPages,
                 'calendarAvailable' => $calendarAvailable,
                 'calendarOptions' => $calendarAvailable
                     ? $this->calendarResolution->availableCalendars($actor)
@@ -213,6 +224,10 @@ final readonly class ConfluenceImportController
             return $this->deniedJson();
         }
 
+        // HR: Izričita promjena jamči osvježavanje vremena PHP sesije i kada se CSRF token ne mijenja.
+        // EN: An explicit mutation refreshes the PHP session timestamp even when the CSRF token is unchanged.
+        $this->session->set('simbioza_confluence_import_activity', time());
+
         return $this->responses->json(['csrf_token' => $this->session->getOrGenerateCsrfToken()]);
     }
 
@@ -270,7 +285,10 @@ final readonly class ConfluenceImportController
         }
 
         try {
-            $job = $this->uploads->finish($this->text($this->body($request)['uuid'] ?? ''), $this->actorUserId());
+            $uuid = $this->text($this->body($request)['uuid'] ?? '');
+            $actorUserId = $this->actorUserId();
+            $this->session->close();
+            $job = $this->uploads->finish($uuid, $actorUserId);
 
             return $this->responses->json([
                 ...$this->uploadPayload($job),
@@ -278,6 +296,55 @@ final readonly class ConfluenceImportController
                 'mapping_url' => $this->path('simbioza-confluence-import.settings', '/settings/confluence-import')
                     . '?job=' . rawurlencode((string)($job['uuid'] ?? '')),
             ]);
+        } catch (Throwable $throwable) {
+            return $this->errorJson($throwable);
+        }
+    }
+
+    /** HR: Preuzima ili nastavlja sljedeću serversku batch arhivu i odmah pokreće njezin zasebni import. EN: Adopts or resumes the next server-side batch archive and immediately starts its separate import. */
+    public function batchStart(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->access->isAdministrator()) {
+            return $this->deniedJson();
+        }
+
+        try {
+            $body = $this->body($request);
+            $actor = $this->access->currentUser();
+            if (!is_array($actor)) {
+                throw new ConfluenceImportException(__('Prijavljeni administrator nije pronađen.'));
+            }
+            $actorUserId = $this->actorUserId();
+            $this->session->close();
+            $active = $this->repository->activeBatchJob($actorUserId);
+            $requestedUuid = $this->text($body['uuid'] ?? '');
+            if (is_array($active)) {
+                if ($requestedUuid !== '' && $requestedUuid !== $this->text($active['uuid'] ?? '')) {
+                    throw new ConfluenceImportException(__('Prethodni batch import još nije dovršen.'));
+                }
+                $job = $active;
+            } else {
+                $job = $this->uploads->adoptBatchArchive(
+                    $this->text($body['name'] ?? ''),
+                    $actorUserId,
+                );
+            }
+
+            $createInactiveUsers = ($body['create_inactive_users'] ?? false) === true
+                || $this->text($body['create_inactive_users'] ?? '') === '1';
+            $progress = $this->imports->queueBatch(
+                $this->text($job['uuid'] ?? ''),
+                $actor,
+                $createInactiveUsers,
+            );
+
+            return $this->responses->json([
+                ...$progress,
+                'uuid' => $this->text($job['uuid'] ?? ''),
+                'name' => $this->text($job['original_name'] ?? ''),
+                'queued' => true,
+                'message' => __('Batch Confluence import je pokrenut.'),
+            ], 201);
         } catch (Throwable $throwable) {
             return $this->errorJson($throwable);
         }
@@ -325,6 +392,7 @@ final readonly class ConfluenceImportController
                 throw new ConfluenceImportException(__('Prijavljeni administrator nije pronađen.'));
             }
 
+            $this->session->close();
             $progress = $this->imports->queue($uuid, $body, $actor);
 
             return $this->responses->json([
@@ -355,6 +423,7 @@ final readonly class ConfluenceImportController
                 throw new ConfluenceImportException(__('Prijavljeni administrator nije pronađen.'));
             }
 
+            $this->session->close();
             $progress = $this->imports->process($this->text($body['uuid'] ?? ''), $actor);
             $summary = is_array($progress['summary'] ?? null) ? $progress['summary'] : [];
             $slug = $this->text($summary['workspace_slug'] ?? '');
@@ -572,6 +641,87 @@ final readonly class ConfluenceImportController
         $slug = is_array($workspace) ? $this->text($workspace['slug'] ?? '') : '';
 
         return $slug !== '' ? $this->workspacePath($slug) : null;
+    }
+
+    /**
+     * HR: Grupira trenutačno nerazriješene poveznice po izvornoj stranici izvještaja.
+     * EN: Groups currently unresolved report links by their source page.
+     *
+     * @return list<array{source_page_id:string,title:string,url:string,links:list<array{target:string,destination:string}>}>
+     */
+    private function unresolvedLinkPages(int $jobId): array
+    {
+        $pages = [];
+        $seen = [];
+        foreach ($this->repository->unresolvedLinksForJob($jobId) as $link) {
+            $sourcePageId = $this->text($link['source_page_id'] ?? '');
+            $target = $this->text($link['original_target'] ?? '');
+            if ($sourcePageId === '' || $target === '') {
+                continue;
+            }
+            $uniqueKey = $sourcePageId . "\0" . $target;
+            if (isset($seen[$uniqueKey])) {
+                continue;
+            }
+            $seen[$uniqueKey] = true;
+
+            $mapping = $this->repository->contentForJobSource($jobId, $sourcePageId);
+            $pageKey = $sourcePageId;
+            $pages[$pageKey] ??= [
+                'source_page_id' => $sourcePageId,
+                'title' => is_array($mapping)
+                    ? $this->text($mapping['source_title'] ?? '')
+                    : '',
+                'url' => is_array($mapping) ? $this->contentPath($mapping) : '',
+                'links' => [],
+            ];
+            $destinationSpace = $this->text($link['destination_space_key'] ?? '');
+            $destinationId = $this->text($link['destination_page_id'] ?? '');
+            $destinationTitle = $this->text($link['destination_page_title'] ?? '');
+            $destination = $destinationTitle;
+            if ($destination === '' && $destinationId !== '') {
+                $destination = sprintf(__('Confluence stranica ID %s'), $destinationId);
+            }
+            if ($destination === '' && $destinationSpace !== '') {
+                $destination = sprintf(__('Naslovnica područja %s'), $destinationSpace);
+            }
+            if ($destination === '') {
+                $destination = __('Neprepoznata Confluence poveznica');
+            } elseif ($destinationSpace !== '' && $destinationTitle !== '') {
+                $destination = $destinationSpace . ' · ' . $destination;
+            }
+            $pages[$pageKey]['links'][] = [
+                'target' => $target,
+                'destination' => $destination,
+            ];
+        }
+
+        return array_values($pages);
+    }
+
+    /**
+     * HR: Gradi lokalnu putanju jednog uvezenog čvora iz trajnog mapiranja.
+     * EN: Builds a local imported-node path from its durable mapping.
+     *
+     * @param array<string,mixed> $mapping
+     */
+    private function contentPath(array $mapping): string
+    {
+        $space = $this->repository->spaceByWorkspaceId($this->integer($mapping['target_workspace_id'] ?? 0));
+        $workspaceSlug = is_array($space) ? $this->text($space['target_workspace_slug'] ?? '') : '';
+        $nodeSlug = $this->text($mapping['target_slug'] ?? '');
+        if ($workspaceSlug === '' || $nodeSlug === '') {
+            return '';
+        }
+        if ($this->urls->namedRouteExists('workspace.node.show')) {
+            return $this->urls->getPathFor('workspace.node.show', [
+                'workspaceSlug' => $workspaceSlug,
+                'nodeSlug' => $nodeSlug,
+            ]);
+        }
+
+        return rtrim($this->urls->getBasePath(), '/') . '/workspace/'
+            . rawurlencode($workspaceSlug) . '/' . rawurlencode($nodeSlug);
     }
 
     /** HR: Gradi administratorsku putanju trajnog izvještaja. EN: Builds the administrator path for a durable report. */
