@@ -121,7 +121,12 @@ final class ConfluenceImportStateStore
         return $staging . DIRECTORY_SEPARATOR . self::MANIFEST_FILE;
     }
 
-    /** @return array<string,mixed> */
+    /**
+     * HR: Čita i provjerava JSON stanje ili manifest importa.
+     * EN: Reads and validates an import state or manifest JSON file.
+     *
+     * @return array<string,mixed>
+     */
     private function readJson(string $path): array
     {
         $json = file_get_contents($path);
@@ -135,7 +140,12 @@ final class ConfluenceImportStateStore
         return $decoded;
     }
 
-    /** @param array<string,mixed> $value */
+    /**
+     * HR: Atomski zapisuje JSON stanje ili manifest importa.
+     * EN: Atomically writes an import state or manifest JSON file.
+     *
+     * @param array<string,mixed> $value
+     */
     private function writeJson(string $path, array $value): void
     {
         $json = json_encode(
