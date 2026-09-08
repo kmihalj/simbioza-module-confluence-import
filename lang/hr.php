@@ -378,5 +378,14 @@ return [
     'Nema pronađenih korisnika.' => 'Nema pronađenih korisnika.',
     'Pretraživanje korisnika nije uspjelo.' => 'Pretraživanje korisnika nije uspjelo.',
     'Administrator importa' => 'Administrator importa',
+    'Označi kao korigirano' => 'Označi kao korigirano',
+    'Poveznica je označena kao korigirana i više se neće automatski mijenjati.' =>
+        'Poveznica je označena kao korigirana i više se neće automatski mijenjati.',
+    'Sadržaj je označen kao korigiran i uklonjen iz popisa za provjeru.' =>
+        'Sadržaj je označen kao korigiran i uklonjen iz popisa za provjeru.',
+    'Poveznica više nije nerazriješena ili nije pronađena.' =>
+        'Poveznica više nije nerazriješena ili nije pronađena.',
+    'Upozorenje više nije otvoreno ili nije pronađeno.' =>
+        'Upozorenje više nije otvoreno ili nije pronađeno.',
     'kopija' => 'kopija',
 ];
