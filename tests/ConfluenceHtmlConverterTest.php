@@ -483,6 +483,10 @@ XML;
         );
         self::assertStringContainsString('alt="Sustav za webinare"', $result->html);
         self::assertStringContainsString('class="img-fluid d-block mx-auto"', $result->html);
+        self::assertStringContainsString(
+            '<span class="figure-caption d-block text-center">Sustav za webinare</span>',
+            $result->html,
+        );
         self::assertStringContainsString('width="200"', $result->html);
         self::assertSame('05_PDO_webinar.png', $result->attachments[0]['filename']);
         self::assertSame('133010769', $result->attachments[0]['source_page_id']);
@@ -702,6 +706,37 @@ XML;
         self::assertStringNotContainsString('<p><br></p>', $result->html);
         self::assertStringNotContainsString('confluence-import-', $result->html);
         self::assertSame([], $result->unsupportedMacros);
+    }
+
+    /** HR: Opisi ostaju vidljivi, a editor cursor odlomci ne razmiču retke kartica. EN: Captions remain visible while editor cursor paragraphs do not separate card rows. */
+    public function testPreservesImageTitlesAndRemovesLayoutBoundaryCursorParagraphs(): void
+    {
+        $body = <<<'XML'
+<ac:layout>
+<ac:layout-section ac:type="two_equal">
+<ac:layout-cell><p class="auto-cursor-target"><br /></p><ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">Prva</ac:parameter><ac:rich-text-body><p><ac:image ac:align="center" ac:title="CEU" ac:width="200"><ri:attachment ri:filename="ceu.png" /></ac:image></p></ac:rich-text-body></ac:structured-macro><p class="auto-cursor-target"><br /></p></ac:layout-cell>
+<ac:layout-cell><p class="auto-cursor-target"><br /></p><ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">Druga</ac:parameter><ac:rich-text-body><p><ac:image ac:align="center" ac:title="Podrška korisnicima" ac:width="200"><ri:attachment ri:filename="podrska.png" /></ac:image></p></ac:rich-text-body></ac:structured-macro><p class="auto-cursor-target"><br /></p></ac:layout-cell>
+</ac:layout-section>
+<ac:layout-section ac:type="two_equal">
+<ac:layout-cell><p class="auto-cursor-target"><br /></p><ac:structured-macro ac:name="panel"><ac:parameter ac:name="title">Treca</ac:parameter><ac:rich-text-body><p>Namjerni <br /> prijelom ostaje.</p></ac:rich-text-body></ac:structured-macro><p class="auto-cursor-target"><br /></p></ac:layout-cell>
+</ac:layout-section>
+</ac:layout>
+XML;
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'CEU', '10551307');
+
+        self::assertSame(2, substr_count($result->html, 'class="row g-3"'), $result->html);
+        self::assertStringContainsString(
+            '<span class="figure-caption d-block text-center">CEU</span>',
+            $result->html,
+        );
+        self::assertStringContainsString(
+            '<span class="figure-caption d-block text-center">Podrška korisnicima</span>',
+            $result->html,
+        );
+        self::assertStringNotContainsString('auto-cursor-target', $result->html);
+        self::assertStringNotContainsString('<p><br></p>', $result->html);
+        self::assertStringContainsString('Namjerni <br> prijelom ostaje.', $result->html);
     }
 
     /** HR: Nepoznati JavaScript ostaje vidljiv u izvještaju umjesto tihog odbacivanja. EN: Unknown JavaScript remains visible in the report instead of being silently discarded. */

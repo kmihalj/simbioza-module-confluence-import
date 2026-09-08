@@ -135,7 +135,7 @@ vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```
 
-Enable the package after all required modules, then open **Settings → Workspaces → Confluence import**. Upload one Confluence XML ZIP space export, review the preflight, confirm user/group mappings or explicitly select inactive staged-account creation, and start the import. For unattended sequential import, place multiple `.xml.zip` files in `data/confluence-import/batch-import`, choose how unmapped users should be attributed, keep the browser tab and computer active, and start the batch from the same screen. The page refreshes the local session every four minutes while the batch is running.
+Enable the package after all required modules, then open **Settings → Workspaces → Confluence import**. Upload one Confluence XML ZIP space export, review the preflight, confirm user/group mappings or explicitly select inactive staged-account creation, and start the import. For unattended sequential import, place multiple `.xml.zip` files in `data/confluence-import/batch-import`, choose how unmapped users should be attributed, keep the browser tab and computer active, and start the batch from the same screen. Configure the server-side session lifetime for the intended unattended run duration.
 
 Read-only CLI inspection:
 

@@ -18,6 +18,7 @@ use DateTimeImmutable;
 
 use function array_filter;
 use function array_map;
+use function array_pop;
 use function array_shift;
 use function array_slice;
 use function array_unique;
@@ -189,9 +190,10 @@ final readonly class ConfluenceHtmlConverter
                 }
             }
 
+            $title = $this->attribute($image, self::AC_NAMESPACE, 'title');
             $alternative = $this->attribute($image, self::AC_NAMESPACE, 'alt');
             if ($alternative === '') {
-                $alternative = $this->attribute($image, self::AC_NAMESPACE, 'title');
+                $alternative = $title;
             }
             // HR: Naziv datoteke nije zamjenski opis slike. Prazan alt čuva
             //     dekorativnu sliku bez stvaranja lažnog vidljivog captiona u Editoru.
@@ -210,7 +212,23 @@ final readonly class ConfluenceHtmlConverter
                     $replacement->setAttribute($dimension, $value);
                 }
             }
-            $image->parentNode?->replaceChild($replacement, $image);
+            $parent = $image->parentNode;
+            if (!$parent instanceof DOMNode) {
+                continue;
+            }
+            $parent->replaceChild($replacement, $image);
+            if ($title !== '') {
+                // HR: Confluence ac:title je vidljivi opis ispod slike, dok je
+                //     ac:alt pristupačni tekst. Caption ostaje odvojen kako bi
+                //     ga Editor pri prvom uređivanju vezao uz svoj media wrapper.
+                // EN: Confluence ac:title is the visible image caption, while
+                //     ac:alt is accessibility text. Keeping the caption adjacent
+                //     lets Editor attach it to its media wrapper on first edit.
+                $caption = $document->createElement('span');
+                $caption->setAttribute('class', 'figure-caption d-block text-center');
+                $caption->appendChild($document->createTextNode($title));
+                $parent->insertBefore($caption, $replacement->nextSibling);
+            }
         }
 
         foreach ($this->elements($xpath->query('//ac:link')) as $link) {
@@ -2263,10 +2281,8 @@ final readonly class ConfluenceHtmlConverter
                     'class',
                     $this->layoutColumnClass($type, $index, count($cells)),
                 );
-                foreach (iterator_to_array($cell->childNodes) as $child) {
-                    if ($child instanceof DOMNode) {
-                        $column->appendChild($child->cloneNode(true));
-                    }
+                foreach ($this->layoutCellChildren($cell) as $child) {
+                    $column->appendChild($child->cloneNode(true));
                 }
                 $row->appendChild($column);
             }
@@ -2274,6 +2290,50 @@ final readonly class ConfluenceHtmlConverter
         }
 
         return $container;
+    }
+
+    /**
+     * HR: Vraća sadržaj layout ćelije bez praznih Confluence cursor odlomaka
+     *     na rubovima. Takvi odlomci služe samo editoru, a između dva layout
+     *     retka stvaraju dvostruki, vizualno prazan razmak.
+     * EN: Returns layout-cell content without empty Confluence cursor paragraphs
+     *     at its edges. They are editor-only artifacts that otherwise create a
+     *     doubled visual gap between consecutive layout rows.
+     *
+     * @return list<DOMNode>
+     */
+    private function layoutCellChildren(DOMElement $cell): array
+    {
+        $children = [];
+        foreach (iterator_to_array($cell->childNodes) as $child) {
+            if ($child instanceof DOMNode) {
+                $children[] = $child;
+            }
+        }
+
+        while ($children !== [] && $this->isDisposableLayoutBoundaryNode($children[0])) {
+            array_shift($children);
+        }
+        while (
+            $children !== []
+            && $this->isDisposableLayoutBoundaryNode($children[count($children) - 1])
+        ) {
+            array_pop($children);
+        }
+
+        return $children;
+    }
+
+    /** HR: Prepoznaje samo prazne rubne cursor artefakte. EN: Detects only empty boundary cursor artifacts. */
+    private function isDisposableLayoutBoundaryNode(DOMNode $node): bool
+    {
+        if (!$node instanceof DOMElement) {
+            return trim(str_replace("\u{00A0}", '', $node->textContent)) === '';
+        }
+
+        return strtolower($node->tagName) === 'p'
+            && $this->hasClass($node, 'auto-cursor-target')
+            && !$this->hasMeaningfulLayoutContent($node);
     }
 
     /**

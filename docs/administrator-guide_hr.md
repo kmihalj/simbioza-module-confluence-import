@@ -54,11 +54,12 @@ grupe izrađuju se kao obične lokalne grupe. Batch nikada automatski ne prepisu
 ranije uvezen izvor.
 
 Svaka arhiva ostaje zaseban posao i izvještaj. Uspješno obrađena datoteka briše
-se iz batch direktorija; neuspjela ostaje za provjeru i ponovni pokušaj. Dok
-batch radi, aplikacija svake četiri minute izričito osvježava lokalnu sesiju.
-Preglednički tab i računalo moraju ostati aktivni. Apsolutni rok vanjske
-SAML/OIDC sesije nije moguće produljiti iz aplikacije; u tom slučaju obrada staje
-na potvrđenom koraku i preostale arhive ostaju sačuvane.
+se iz batch direktorija; neuspjela ostaje za provjeru i ponovni pokušaj.
+Preglednički tab i računalo moraju ostati aktivni. Trajanje serverske sesije
+treba podesiti za očekivano trajanje nenadziranog batcha; aplikacija ga umjetno
+ne produljuje. Apsolutni rok vanjske SAML/OIDC sesije nije moguće produljiti iz
+aplikacije; u tom slučaju obrada staje na potvrđenom koraku i preostale arhive
+ostaju sačuvane.
 
 Provjereni prijenos i mapiranja ostaju dostupni nakon napuštanja stranice. Dok
 stvarni import još nije počeo, gumb **Odustani od importa** odmah briše prenesenu

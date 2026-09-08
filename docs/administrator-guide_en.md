@@ -55,11 +55,11 @@ earlier import of the same source.
 
 Each archive remains a separate job and report. A successfully processed file
 is deleted from the batch directory; a failed file remains for inspection and
-retry. While the batch runs, the application explicitly refreshes the local
-session every four minutes. The browser tab and computer must remain active.
-An absolute external SAML/OIDC session limit cannot be extended by the
-application; in that case processing stops at a confirmed step and the
-remaining archives stay available.
+retry. The browser tab and computer must remain active. Configure the
+server-side session lifetime for the intended unattended run duration; the
+application does not artificially extend it. An absolute external SAML/OIDC
+session limit cannot be extended by the application; in that case processing
+stops at a confirmed step and the remaining archives stay available.
 
 A verified upload and its mappings remain available after leaving the page.
 Before the real import starts, **Cancel import** immediately deletes the uploaded

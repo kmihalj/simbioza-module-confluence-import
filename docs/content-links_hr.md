@@ -58,6 +58,9 @@ prikaz.
   stranice koje doista imaju strukturirana svojstva. Izvještaj se nakon importa
   dinamički ažurira i svaki put ponovno primjenjuje ACL.
 - `gallery` postaje nativna galerija stvarnih Editor privitaka aktualne stranice.
+- Slike čuvaju izvorni `ac:title` kao vidljiv opis ispod slike, dok `ac:alt`
+  ostaje pristupačni zamjenski tekst. Naziv datoteke nikada se ne koristi kao
+  izmišljeni opis slike.
 - `livesearch` i `pagetreesearch` postaju nativna, ručno uređiva dinamička forma
   pretrage. Bez `spaceKey` cilja trenutačno područje, a svaki XML `ri:space`
   sprema kao prijenosnu Confluence referencu. Referenca se razrješava tek kada je
@@ -66,7 +69,9 @@ prikaz.
 - `recently-updated` postaje ACL-siguran popis nedavnih objavljenih promjena.
 - `panel` postaje tematska kartica. Stari `section` i `column` makroi postaju
   responzivni red kartica: postotne širine preslikavaju se na Bootstrap mrežu,
-  a na uskom zaslonu svaki stupac zauzima cijelu širinu.
+  a na uskom zaslonu svaki stupac zauzima cijelu širinu. Prazni Confluenceovi
+  cursor odlomci na rubovima layout ćelija ne prenose se jer bi stvarali lažni
+  razmak između redova kartica.
 - `expand` postaje nativni uređivi dio accordiona. Uzastopni Expand makroi čine
   jedan accordion, a običan sadržaj između njih započinje novi. Naslov i tijelo
   ostaju izravno uređivi, a vrsta liste se ne mijenja.

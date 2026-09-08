@@ -649,9 +649,6 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         sourceBaseUrlInput.disabled = true;
         const sourceBaseUrl = sourceBaseUrlInput.value.trim();
         progress.classList.remove('d-none');
-        const heartbeat = window.setInterval(() => {
-            refreshCsrf().catch(() => {});
-        }, 240000);
         let success = 0;
         let failed = 0;
         const files = [...config.batchArchives].filter((name) => name !== config.activeBatchName);
@@ -690,7 +687,6 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                 : config.batchFinished.replace('{success}', String(success)).replace('{failed}', String(failed));
             toast(status.textContent, failed > 0 ? 'danger' : 'success');
         } finally {
-            window.clearInterval(heartbeat);
             progress.classList.add('d-none');
             button.disabled = false;
             sourceBaseUrlInput.disabled = false;

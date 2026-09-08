@@ -91,8 +91,8 @@ final class ConfluenceImportViewTest extends TestCase
         self::assertStringContainsString('Uspješno lokalno razriješene poveznice više se ne prikazuju.', $view);
     }
 
-    /** HR: Batch nudi izbor pravila za nemapirane korisnike i održava sesiju bez učitavanja cijelog imenika. EN: Batch exposes the unmapped-user policy and keeps the session alive without loading the full directory. */
-    public function testBatchImportHasUserPolicyHeartbeatAndRemoteUserPicker(): void
+    /** HR: Batch nudi pravilo za nemapirane korisnike bez umjetnog produljivanja sesije. EN: Batch exposes the unmapped-user policy without artificially extending the session. */
+    public function testBatchImportHasUserPolicyAndRemoteUserPickerWithoutHeartbeat(): void
     {
         $view = file_get_contents(dirname(__DIR__) . '/views/settings/index.php');
         $controller = file_get_contents(dirname(__DIR__) . '/src/Controller/ConfluenceImportController.php');
@@ -107,7 +107,9 @@ final class ConfluenceImportViewTest extends TestCase
         self::assertStringContainsString('source_base_url: sourceBaseUrl', $view);
         self::assertStringContainsString('name="source_base_url"', $view);
         self::assertStringContainsString('source_base_url: form.elements.source_base_url.value', $view);
-        self::assertStringContainsString('240000', $view);
+        self::assertStringNotContainsString('const heartbeat', $view);
+        self::assertStringNotContainsString('window.clearInterval(heartbeat)', $view);
+        self::assertStringNotContainsString('240000', $view);
         self::assertStringContainsString('simbioza_confluence_import_activity', $controller);
         self::assertStringContainsString('$this->session->close();', $controller);
         self::assertStringContainsString('data-identity-picker-search', $view);

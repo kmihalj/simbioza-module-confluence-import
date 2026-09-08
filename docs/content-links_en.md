@@ -132,9 +132,13 @@ incorrectly to the Workspace root.
 Confluence two- and three-column layouts become responsive Bootstrap rows and
 full-width columns. Empty source columns are removed before proportions are
 calculated, while multiple meaningful columns retain their layout and stack on
-narrow screens. Code/noformat blocks preserve their optional title and safe language
-class, imported images retain numeric width/height hints, and rich link labels
-remain readable. The native Simbioza table of contents continues to use the imported page headings.
+narrow screens. Empty Confluence cursor paragraphs at layout-cell boundaries are
+discarded so they do not create artificial gaps between card rows. Code/noformat
+blocks preserve their optional title and safe language class. Imported images
+retain numeric width/height hints and expose `ac:title` as their visible caption,
+while `ac:alt` remains alternative text and filenames never become invented
+captions. Rich link labels remain readable. The native Simbioza table of contents
+continues to use the imported page headings.
 
 Stored content uses standard Bootstrap classes and canonical
 `editor-html-*` / `data-editor-html-*` markers only where live Editor behavior
