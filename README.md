@@ -46,8 +46,9 @@ Internal packages use compatible `^0.1.0` releases; this module does not commit 
 - optionally imports history, drafts and soft-deleted pages;
 - rewrites relative Confluence links and absolute links on the source host selected by the administrator for each individual or batch import; every import or replacement rechecks cross-Workspace links, while other domains remain ordinary external links;
 - registers every imported file as a real private Editor page attachment and serves it through current Workspace/page ACL; a replacement preserves the same source page slugs and attachment UUIDs, while a separate copy receives isolated identities;
-- prepares cached web-sized copies of imported JPEG, PNG, and WebP attachments
-  after they are registered; originals remain unchanged and available on click;
+- creates web-sized copies of imported JPEG, PNG, and WebP attachments on first
+  display or through Editor's resumable administrator image-optimization job;
+  import therefore does not wait for every variant, while originals remain unchanged and available on click;
 - safely suggests exact existing user and group matches for mapping; the user
   picker searches a bounded server-side result instead of embedding the full
   Auth directory in the page;
@@ -68,8 +69,10 @@ Internal packages use compatible `^0.1.0` releases; this module does not commit 
 - allows an unfinished import to be cancelled, immediately deleting its uploaded archive and preparation data;
 - removes the uploaded source archive and per-job parser staging after a successful import;
 - never treats a stored attachment as disposable merely because its local page target is not yet set, because another imported space may still reference it.
-- processes a large confirmed import in bounded resumable batches and
-  reconciles links, the report, and search index exactly once at the end.
+- processes a large confirmed import in bounded resumable batches; it writes
+  the large immutable manifest once, precomputes page context and current
+  attachment versions, and reconciles links, the report, and search index
+  exactly once at the end.
 
 The converter renders `children` and `pagetree` as local ACL-protected page
 links, attachment lists and multimedia from native Editor attachments, responsive

@@ -42,12 +42,19 @@ lifecycle therefore applies to this importer and any future migration tool.
 Bulk page, workflow and ACL writes run through the public Workspace `WorkspaceContentChangeBatch` service. Source events are collected during that unit and one `bulk_content_changed` event is emitted per changed Workspace at the end. This prevents backlink and Search listeners from rebuilding derived data after every individual page. The `finally` completion deliberately emits the consolidated event after a partial failure as well, so derived indexes do not remain older than source content that was actually stored.
 
 `confluence_import.import_execution_time_limit` is the upper bound for one
-processing step. `queue()` stores the plan and state, while locked `process()`
-calls handle a bounded attachment or page batch and atomically persist the new
-offset. The final step reconciles references, the report, and derived indexes
+processing step. `queue()` writes the large immutable plan once to
+`manifest.json` and keeps small mutable progress in `state.json`. It also selects
+current attachment versions and prepares the cross-page macro context once.
+Locked `process()` calls handle a bounded attachment or page batch and
+atomically persist progress only. The final step reconciles references, the report, and derived indexes
 exactly once. A repeated or concurrent call returns current state instead of
 duplicating content. A fatal PHP termination marks the job as failed and keeps
 enough metadata for administrator diagnostics.
+
+Page attachment registration fetches all matching rows in one query and
+confirms the ownership transfer to Editor in batches. Image web variants are
+not on the import's critical path: they are created lazily on first display or
+by Editor's resumable administrator image-optimization job.
 
 Before `startImport()`, re-import preparation resolves the canonical source
 mapping. `replace` permanently deletes the earlier imported Workspace through

@@ -9,6 +9,10 @@ use AaiEduHr\SimbiozaModuleConfluenceImport\Exception\ConfluenceImportException;
 use AaiEduHr\SimbiozaModuleConfluenceImport\ModuleSimbiozaConfluenceImport;
 
 use function array_chunk;
+use function array_filter;
+use function array_map;
+use function array_unique;
+use function array_values;
 use function bin2hex;
 use function gmdate;
 use function is_array;
@@ -1122,6 +1126,41 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
+     * HR: Jednim upitom vraća spremljene i već registrirane privitke svih izvornih verzija stranice.
+     * EN: Fetches stored and already registered attachments for all source-page versions in one query.
+     *
+     * @param list<string> $sourcePageIds
+     * @return list<array<string,mixed>>
+     */
+    public function importedAttachmentsForPages(array $sourcePageIds, int $workspaceId): array
+    {
+        $sourcePageIds = array_values(array_unique(array_filter(array_map(
+            static fn(mixed $sourcePageId): string => is_scalar($sourcePageId)
+                ? trim((string)$sourcePageId)
+                : '',
+            $sourcePageIds,
+        ))));
+        if ($sourcePageIds === [] || $workspaceId <= 0) {
+            return [];
+        }
+
+        $rows = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS)
+            ->whereIn('source_page_id', $sourcePageIds)
+            ->where('target_workspace_id', '=', $workspaceId)
+            ->whereIn('status', ['stored', 'registered'])
+            ->orderBy('id', 'ASC')
+            ->get();
+        $result = [];
+        foreach ($rows as $row) {
+            if (is_array($row)) {
+                $result[] = $this->normalizeRow($row);
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * HR: Nakon sigurnog prijenosa predaje vlasništvo nad datotekom Editor modulu.
      * EN: Transfers file ownership to the Editor module after safe registration.
      */
@@ -1141,6 +1180,36 @@ final readonly class ConfluenceImportRepository
                 'error_message' => null,
                 'updated_at' => gmdate('Y-m-d H:i:s'),
             ]);
+    }
+
+    /**
+     * HR: Nakon uspješnog kopiranja jednim skupnim upisom predaje više privitaka Editoru.
+     * EN: Hands several successfully copied attachments to Editor with one batched update.
+     *
+     * @param list<int> $attachmentIds
+     */
+    public function markAttachmentsRegistered(array $attachmentIds, int $nodeId, string $documentKey): void
+    {
+        $attachmentIds = array_values(array_unique(array_filter(
+            $attachmentIds,
+            static fn(mixed $id): bool => is_numeric($id) && (int)$id > 0,
+        )));
+        if ($attachmentIds === [] || $nodeId <= 0 || trim($documentKey) === '') {
+            return;
+        }
+
+        foreach (array_chunk($attachmentIds, 500) as $ids) {
+            $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS)
+                ->whereIn('id', array_map(static fn(mixed $id): int => (int)$id, $ids))
+                ->update([
+                    'storage_path' => null,
+                    'target_node_id' => $nodeId,
+                    'target_document_key' => trim($documentKey),
+                    'status' => 'registered',
+                    'error_message' => null,
+                    'updated_at' => gmdate('Y-m-d H:i:s'),
+                ]);
+        }
     }
 
     /**

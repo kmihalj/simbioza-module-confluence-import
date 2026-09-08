@@ -117,4 +117,21 @@ final class ConfluenceImportViewTest extends TestCase
         self::assertStringContainsString('stoppedName = item.name', $view);
         self::assertStringNotContainsString('listUsersForSetup()', substr($service, 0, (int)strpos($service, 'public function queue(')));
     }
+
+    /** HR: Veliki import ne ponavlja globalnu pripremu ni optimizaciju svih slika u svakom koraku. EN: A large import does not repeat global preparation or eager image optimization in every step. */
+    public function testLargeImportDefersRepeatedGlobalWork(): void
+    {
+        $service = file_get_contents(dirname(__DIR__) . '/src/Service/ConfluenceImportService.php');
+        $services = file_get_contents(dirname(__DIR__) . '/config/services.php');
+
+        self::assertIsString($service);
+        self::assertIsString($services);
+        self::assertStringContainsString('preparedAttachmentDataset', $service);
+        self::assertStringContainsString("'render_context' => \$renderContext", $service);
+        self::assertStringContainsString('importedAttachmentsForPages', $service);
+        self::assertStringContainsString('markAttachmentsRegistered', $service);
+        self::assertStringContainsString('ConfluenceImportStateStore::class', $services);
+        self::assertStringNotContainsString('->prewarmDocument(', $service);
+        self::assertStringNotContainsString('EditorImageVariantService::class', $services);
+    }
 }

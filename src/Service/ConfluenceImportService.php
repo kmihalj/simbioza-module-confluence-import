@@ -12,7 +12,6 @@ use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorApiActorContext;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorDocumentIncludeService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorImportAttachmentService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorImportAttributionService;
-use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorImageVariantService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorWorkspaceIntegration;
 use AaiEduHr\SimbiozaModuleWorkspace\Event\WorkspaceContentChanged;
@@ -58,8 +57,6 @@ use function is_numeric;
 use function is_object;
 use function is_scalar;
 use function is_string;
-use function json_decode;
-use function json_encode;
 use function max;
 use function mkdir;
 use function parse_url;
@@ -86,10 +83,6 @@ use const E_COMPILE_ERROR;
 use const E_CORE_ERROR;
 use const E_ERROR;
 use const E_PARSE;
-use const JSON_INVALID_UTF8_SUBSTITUTE;
-use const JSON_THROW_ON_ERROR;
-use const JSON_UNESCAPED_SLASHES;
-use const JSON_UNESCAPED_UNICODE;
 use const LOCK_EX;
 use const LOCK_NB;
 use const LOCK_UN;
@@ -110,6 +103,7 @@ final readonly class ConfluenceImportService
     public function __construct(
         private ConfluenceImportRepository $repository,
         private ConfluenceImportUploadService $uploads,
+        private ConfluenceImportStateStore $stateStore,
         private ConfluenceExportReader $reader,
         private ConfluenceArchive $archive,
         private ConfluenceImportConfig $config,
@@ -127,7 +121,6 @@ final readonly class ConfluenceImportService
         private EditorApiActorContext $editorActors,
         private EditorImportAttachmentService $importedAttachmentService,
         private EditorImportAttributionService $importAttribution,
-        private EditorImageVariantService $imageVariants,
         private AuthUserService $users,
         private AuthUserAttributeService $userAttributes,
         private AuthGroupService $groups,
@@ -346,8 +339,8 @@ final readonly class ConfluenceImportService
         $actorUserId = $this->positiveInt($actor['id'] ?? null, __('Prijavljeni administrator nije pronađen.'));
         $job = $this->repository->jobByUuid($jobUuid, $actorUserId);
         $staging = $this->stagingDirectory($jobUuid);
-        if (($job['status'] ?? '') === 'running' && is_file($this->statePath($staging))) {
-            return $this->progress($this->loadState($staging));
+        if (($job['status'] ?? '') === 'running' && $this->stateStore->exists($staging)) {
+            return $this->progress($this->stateStore->load($staging));
         }
         if (($job['status'] ?? '') !== 'ready') {
             throw new ConfluenceImportException(__('Confluence import nije spreman za pokretanje.'));
@@ -383,7 +376,7 @@ final readonly class ConfluenceImportService
             $this->applyWorkspaceAcl($workspaceId, $workspaceManagerUserId, $scan, $normalized);
 
             $this->repository->setStage($jobId, 'preparing_content');
-            $dataset = $this->stageDataset($archivePath, $staging);
+            $dataset = $this->preparedAttachmentDataset($this->stageDataset($archivePath, $staging));
             // HR: Korisnički zapisi iz preflighta mali su i čuvaju se uz fazno
             //     stanje kako bi makroi profila prikazali stvarna imena.
             // EN: Preflight user records are small and are retained in the
@@ -397,9 +390,16 @@ final readonly class ConfluenceImportService
                 $dataset['pages'],
                 $this->scalarMap($normalized['_replacement_page_slugs'] ?? []),
             );
+            $renderContext = $this->pageImportContext(
+                $pages,
+                $dataset,
+                $targets,
+                $workspace,
+                $actorUserId,
+            );
             $phase = $normalized['include_attachments'] ? 'attachments' : 'pages';
             $state = [
-                'version' => 1,
+                'version' => 2,
                 'phase' => $phase,
                 'job_id' => $jobId,
                 'job_uuid' => $jobUuid,
@@ -412,9 +412,9 @@ final readonly class ConfluenceImportService
                 'dataset' => $dataset,
                 'pages' => $pages,
                 'targets' => $targets,
+                'render_context' => $renderContext,
                 'attachment_offset' => 0,
                 'attachment_result' => [
-                    'urls' => [],
                     'imported' => 0,
                     'failed' => 0,
                     'warnings' => [],
@@ -432,7 +432,7 @@ final readonly class ConfluenceImportService
                 ],
             ];
             $this->repository->setStage($jobId, $phase);
-            $this->saveState($staging, $state);
+            $this->stateStore->initialize($staging, $state);
 
             return $this->progress($state);
         } catch (\Throwable $throwable) {
@@ -469,14 +469,31 @@ final readonly class ConfluenceImportService
         $staging = $this->stagingDirectory($jobUuid);
         $lock = $this->stateLock($staging);
         if (!is_resource($lock)) {
-            $progress = $this->progress($this->loadState($staging));
+            $progress = $this->progress($this->stateStore->load($staging));
             $progress['busy'] = true;
             return $progress;
         }
 
         $state = [];
         try {
-            $state = $this->loadState($staging);
+            $state = $this->stateStore->load($staging);
+            if ((int)($state['version'] ?? 1) < 2) {
+                $state['dataset'] = $this->preparedAttachmentDataset(
+                    is_array($state['dataset'] ?? null) ? $state['dataset'] : [],
+                );
+                $state['render_context'] = $this->pageImportContext(
+                    is_array($state['pages'] ?? null) ? $state['pages'] : [],
+                    $state['dataset'],
+                    is_array($state['targets'] ?? null) ? $state['targets'] : [],
+                    is_array($state['workspace'] ?? null) ? $state['workspace'] : [],
+                    (int)($state['actor_user_id'] ?? $actorUserId),
+                );
+                if (is_array($state['attachment_result'] ?? null)) {
+                    unset($state['attachment_result']['urls']);
+                }
+                $state['version'] = 2;
+                $this->stateStore->initialize($staging, $state);
+            }
             $phase = $this->text($state['phase'] ?? '');
             if ($phase === 'attachments') {
                 $result = $this->importAttachments(
@@ -490,7 +507,9 @@ final readonly class ConfluenceImportService
                 );
                 $stored = is_array($state['attachment_result'] ?? null) ? $state['attachment_result'] : [];
                 $state['attachment_result'] = [
-                    'urls' => $this->mergeAttachmentUrls($stored['urls'] ?? [], $result['urls'] ?? []),
+                    ...(array_key_exists('urls', $stored) ? [
+                        'urls' => $this->mergeAttachmentUrls($stored['urls'], $result['urls'] ?? []),
+                    ] : []),
                     'imported' => (int)($stored['imported'] ?? 0) + (int)($result['imported'] ?? 0),
                     'failed' => (int)($stored['failed'] ?? 0) + (int)($result['failed'] ?? 0),
                     'warnings' => array_values(array_unique([
@@ -527,6 +546,7 @@ final readonly class ConfluenceImportService
                         is_array($pageResult['nodes_by_source'] ?? null) ? $pageResult['nodes_by_source'] : [],
                         is_array($pageResult['documents_by_source'] ?? null) ? $pageResult['documents_by_source'] : [],
                         5,
+                        is_array($state['render_context'] ?? null) ? $state['render_context'] : [],
                     ),
                 ));
                 $state['page_result'] = $this->mergePageResults($pageResult, $batch);
@@ -540,7 +560,7 @@ final readonly class ConfluenceImportService
                 throw new ConfluenceImportException(__('Spremljena faza Confluence importa nije valjana.'));
             }
 
-            $this->saveState($staging, $state);
+            $this->stateStore->save($staging, $state);
             return $this->progress($state);
         } catch (\Throwable $throwable) {
             $space = is_array($state['space'] ?? null) ? $state['space'] : [];
@@ -601,7 +621,7 @@ final readonly class ConfluenceImportService
             $this->repository->mapSpace($this->mappingSpace($space, $normalized), $workspace, $jobId);
             $this->applyWorkspaceAcl($workspaceId, $workspaceManagerUserId, $scan, $normalized);
 
-            $dataset = $this->stageDataset($archivePath, $staging);
+            $dataset = $this->preparedAttachmentDataset($this->stageDataset($archivePath, $staging));
             // HR: I sinkroni import treba isti kontekst korisnika kao fazni.
             // EN: A synchronous import needs the same user context as a phased import.
             $dataset['users'] = $this->rows($scan['users'] ?? []);
@@ -978,45 +998,6 @@ final readonly class ConfluenceImportService
             'pages_done' => $pageDone,
             'pages_total' => count(is_array($state['pages'] ?? null) ? $state['pages'] : []),
         ];
-    }
-
-    /**
-     * HR: Sprema nastavivo stanje uz ekskluzivni upis.
-     * EN: Stores resumable state with an exclusive write.
-     * @param array<string,mixed> $state
-     */
-    private function saveState(string $staging, array $state): void
-    {
-        $json = json_encode(
-            $state,
-            JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
-        );
-        if (file_put_contents($this->statePath($staging), $json, LOCK_EX) === false) {
-            throw new ConfluenceImportException(__('Stanje Confluence importa nije moguće spremiti.'));
-        }
-    }
-
-    /**
-     * HR: Učitava i provjerava spremljeno stanje faznog importa.
-     * EN: Loads and validates persisted phased-import state.
-     *
-     * @return array<string,mixed>
-     */
-    private function loadState(string $staging): array
-    {
-        $json = file_get_contents($this->statePath($staging));
-        $state = is_string($json) && $json !== '' ? json_decode($json, true, 512, JSON_THROW_ON_ERROR) : null;
-        if (!is_array($state)) {
-            throw new ConfluenceImportException(__('Stanje Confluence importa nije moguće učitati.'));
-        }
-
-        return $state;
-    }
-
-    /** HR: Vraća datoteku stanja jednog posla. EN: Returns one job's state file. */
-    private function statePath(string $staging): string
-    {
-        return $staging . DIRECTORY_SEPARATOR . 'state.json';
     }
 
     /** HR: Zaključava jedan procesni korak bez čekanja. EN: Locks one processing step without waiting. */
@@ -1730,6 +1711,38 @@ final readonly class ConfluenceImportService
     }
 
     /**
+     * HR: Jednom odabire aktualnu verziju svakog privitka i zadržava vezu
+     *     svih izvornih verzija sa stranicom radi uvoza komentara.
+     * EN: Selects the current version of every attachment once and retains
+     *     every source-version-to-page relation needed by comment import.
+     *
+     * @param array<string,mixed> $dataset
+     * @return array<string,mixed>
+     */
+    private function preparedAttachmentDataset(array $dataset): array
+    {
+        if (($dataset['attachments_prepared'] ?? false) === true) {
+            return $dataset;
+        }
+
+        $attachments = $this->rows($dataset['attachments'] ?? []);
+        $attachmentPages = [];
+        foreach ($attachments as $attachment) {
+            $sourceId = $this->text($attachment['source_id'] ?? '');
+            $pageId = $this->text($attachment['page_id'] ?? '');
+            if ($sourceId !== '' && $pageId !== '') {
+                $attachmentPages[$sourceId] = $pageId;
+            }
+        }
+
+        $dataset['attachments'] = array_values(ConfluenceAttachmentSelector::latestCurrent($attachments));
+        $dataset['attachment_pages_by_source'] = $attachmentPages;
+        $dataset['attachments_prepared'] = true;
+
+        return $dataset;
+    }
+
+    /**
      * HR: Kopira aktualne privitke u privatnu pohranu i bilježi neuspjele vrste.
      * EN: Copies current attachments into private storage and records failed types.
      *
@@ -1753,9 +1766,11 @@ final readonly class ConfluenceImportService
         $warnings = [];
         $workspaceId = (int)($workspace['id'] ?? 0);
         $properties = is_array($dataset['properties'] ?? null) ? $dataset['properties'] : [];
-        $all = array_values(ConfluenceAttachmentSelector::latestCurrent(
-            $this->rows($dataset['attachments'] ?? []),
-        ));
+        $all = ($dataset['attachments_prepared'] ?? false) === true
+            ? $this->rows($dataset['attachments'] ?? [])
+            : array_values(ConfluenceAttachmentSelector::latestCurrent(
+                $this->rows($dataset['attachments'] ?? []),
+            ));
         $total = count($all);
         $slice = array_slice($all, max(0, $offset), max(1, $limit));
         foreach ($slice as $attachment) {
@@ -1838,40 +1853,22 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Uvozi stablo, verzije, statuse objave i izvorna mapiranja stranica.
-     * EN: Imports the tree, versions, publication states, and source page mappings.
+     * HR: Jednom priprema podatke koje svaki paket stranica samo čita.
+     * EN: Prepares once the data that every page batch only reads.
      *
      * @param array<string,list<array<string,mixed>>> $pages
      * @param array<string,mixed> $dataset
      * @param array<string,array<string,mixed>> $targets
-     * @param array<string,array<string,string>> $attachments
-     * @param array<string,mixed> $space
      * @param array<string,mixed> $workspace
-     * @param array<string,mixed> $options
-     * @param array<string,array<string,mixed>> $nodesBySource
-     * @param array<string,array<string,mixed>> $documentsBySource
      * @return array<string,mixed>
      */
-    private function importPages(
+    private function pageImportContext(
         array $pages,
         array $dataset,
         array $targets,
-        array $attachments,
-        array $space,
         array $workspace,
-        int $jobId,
         int $actorUserId,
-        array $options,
-        array $nodesBySource = [],
-        array $documentsBySource = [],
-        int $maxPages = PHP_INT_MAX,
     ): array {
-        $workspaceId = (int)($workspace['id'] ?? 0);
-        $sourceSpaceKey = $this->text($space['source_key'] ?? '');
-        $mappingSpaceKey = $this->text($options['mapping_space_key'] ?? $sourceSpaceKey);
-        $homePageId = $this->homepageLogicalId($pages, $this->text($space['home_page_id'] ?? ''));
-        $language = $this->text($options['language'] ?? $this->config->defaultLanguage());
-        $sourceBaseUrl = $this->text($options['source_base_url'] ?? '');
         $localById = [];
         $localByTitle = [];
         $macroPages = [];
@@ -1940,6 +1937,63 @@ final readonly class ConfluenceImportService
             ];
         }
 
+        return [
+            'local_by_id' => $localById,
+            'local_by_title' => $localByTitle,
+            'macro_pages' => $macroPages,
+            'macro_users' => $macroUsers,
+            'macro_calendars' => $macroCalendars,
+            'fallback_user' => $fallbackUser,
+        ];
+    }
+
+    /**
+     * HR: Uvozi stablo, verzije, statuse objave i izvorna mapiranja stranica.
+     * EN: Imports the tree, versions, publication states, and source page mappings.
+     *
+     * @param array<string,list<array<string,mixed>>> $pages
+     * @param array<string,mixed> $dataset
+     * @param array<string,array<string,mixed>> $targets
+     * @param array<string,array<string,string>> $attachments
+     * @param array<string,mixed> $space
+     * @param array<string,mixed> $workspace
+     * @param array<string,mixed> $options
+     * @param array<string,array<string,mixed>> $nodesBySource
+     * @param array<string,array<string,mixed>> $documentsBySource
+     * @param array<string,mixed> $preparedContext
+     * @return array<string,mixed>
+     */
+    private function importPages(
+        array $pages,
+        array $dataset,
+        array $targets,
+        array $attachments,
+        array $space,
+        array $workspace,
+        int $jobId,
+        int $actorUserId,
+        array $options,
+        array $nodesBySource = [],
+        array $documentsBySource = [],
+        int $maxPages = PHP_INT_MAX,
+        array $preparedContext = [],
+    ): array {
+        $workspaceId = (int)($workspace['id'] ?? 0);
+        $sourceSpaceKey = $this->text($space['source_key'] ?? '');
+        $mappingSpaceKey = $this->text($options['mapping_space_key'] ?? $sourceSpaceKey);
+        $homePageId = $this->homepageLogicalId($pages, $this->text($space['home_page_id'] ?? ''));
+        $language = $this->text($options['language'] ?? $this->config->defaultLanguage());
+        $sourceBaseUrl = $this->text($options['source_base_url'] ?? '');
+        $context = $preparedContext !== []
+            ? $preparedContext
+            : $this->pageImportContext($pages, $dataset, $targets, $workspace, $actorUserId);
+        $localById = $this->scalarMap($context['local_by_id'] ?? []);
+        $localByTitle = $this->scalarMap($context['local_by_title'] ?? []);
+        $macroPages = is_array($context['macro_pages'] ?? null) ? $context['macro_pages'] : [];
+        $macroUsers = $this->scalarMap($context['macro_users'] ?? []);
+        $macroCalendars = $this->scalarMap($context['macro_calendars'] ?? []);
+        $fallbackUser = $this->text($context['fallback_user'] ?? '');
+
         $pending = [];
         foreach ($pages as $logicalId => $versions) {
             if (!isset($documentsBySource[(string)$logicalId])) {
@@ -1981,19 +2035,34 @@ final readonly class ConfluenceImportService
                 }
                 $currentSourceId = $this->text($this->currentPage($versions)['source_id'] ?? '');
                 $firstSourceId = $this->text($first['source_id'] ?? '');
+                $attachmentPageIds = $this->pageSourceIds($logicalId, $versions);
+                $attachmentRows = $this->repository->importedAttachmentsForPages(
+                    $attachmentPageIds,
+                    $workspaceId,
+                );
+                $pageAttachments = $attachments[$logicalId]
+                    ?? $attachments[$firstSourceId]
+                    ?? [];
+                foreach ($attachmentRows as $attachmentRow) {
+                    $name = $this->text($attachmentRow['original_name'] ?? '');
+                    $uuid = $this->text($attachmentRow['uuid'] ?? '');
+                    if ($name !== '' && $uuid !== '') {
+                        $pageAttachments[$name] = $this->attachmentPath($uuid);
+                    }
+                }
 
                 $converted = $this->convertedBody(
                     $dataset,
                     $first,
                     $sourceSpaceKey,
                     $jobId,
-                    $attachments[$logicalId] ?? $attachments[$this->text($first['source_id'] ?? '')] ?? [],
+                    $pageAttachments,
                     $localById,
                     $localByTitle,
                     new ConfluenceMacroContext(
                         $logicalId,
                         $macroPages,
-                        $attachments[$logicalId] ?? [],
+                        $pageAttachments,
                         $macroUsers,
                         $macroCalendars,
                         $fallbackUser,
@@ -2051,21 +2120,20 @@ final readonly class ConfluenceImportService
                 $nodesBySource[$logicalId] = $nodeId;
                 $documentsBySource[$logicalId] = $document->id;
                 $registeredAttachments = 0;
-                foreach ($this->pageSourceIds($logicalId, $versions) as $attachmentPageId) {
+                foreach ($attachmentPageIds as $attachmentPageId) {
                     $this->repository->attachImportedAttachmentsToPage(
                         $attachmentPageId,
                         $workspaceId,
                         $nodeId,
                         $document->id,
                     );
-                    $registeredAttachments += $this->registerImportedAttachments(
-                        $attachmentPageId,
-                        $workspaceId,
-                        $nodeId,
-                        $document->id,
-                        $actorUserId,
-                    );
                 }
+                $registeredAttachments = $this->registerImportedAttachments(
+                    $attachmentRows,
+                    $nodeId,
+                    $document->id,
+                    $actorUserId,
+                );
                 if ($registeredAttachments > 0) {
                     // HR: Confluence privitci pripadaju stranici i moraju biti vidljivi svakome tko smije vidjeti tu stranicu.
                     // EN: Confluence attachments belong to the page and must be visible to everyone allowed to view that page.
@@ -2094,13 +2162,13 @@ final readonly class ConfluenceImportService
                         $version,
                         $sourceSpaceKey,
                         $jobId,
-                        $attachments[$logicalId] ?? [],
+                        $pageAttachments,
                         $localById,
                         $localByTitle,
                         new ConfluenceMacroContext(
                             $logicalId,
                             $macroPages,
-                            $attachments[$logicalId] ?? [],
+                            $pageAttachments,
                             $macroUsers,
                             $macroCalendars,
                             $fallbackUser,
@@ -2132,13 +2200,13 @@ final readonly class ConfluenceImportService
                         $draft,
                         $sourceSpaceKey,
                         $jobId,
-                        $attachments[$logicalId] ?? [],
+                        $pageAttachments,
                         $localById,
                         $localByTitle,
                         new ConfluenceMacroContext(
                             $logicalId,
                             $macroPages,
-                            $attachments[$logicalId] ?? [],
+                            $pageAttachments,
                             $macroUsers,
                             $macroCalendars,
                             $fallbackUser,
@@ -2168,10 +2236,6 @@ final readonly class ConfluenceImportService
                     $this->workspaces->disableNodeTree($workspaceId, $nodeId, $actorUserId);
                     $this->editor->deleteDocument($document->id);
                     ++$deleted;
-                } else {
-                    // HR: Nakon registracije privitaka priprema prikazne kopije slika; original ostaje dostupan na klik.
-                    // EN: After attachment registration, prepares display image copies; the original remains available on click.
-                    $this->imageVariants->prewarmDocument($document->id);
                 }
 
                 unset($pending[$logicalId]);
@@ -2262,40 +2326,55 @@ final readonly class ConfluenceImportService
     /**
      * HR: Registrira ranije izdvojene Confluence datoteke kao stvarne Editor privitke stranice.
      * EN: Registers previously staged Confluence files as real Editor page attachments.
+     *
+     * @param list<array<string,mixed>> $attachments
      */
     private function registerImportedAttachments(
-        string $sourcePageId,
-        int $workspaceId,
+        array $attachments,
         int $nodeId,
         string $documentKey,
         int $actorUserId,
     ): int {
-        $registered = 0;
-        foreach ($this->repository->storedAttachmentsForPage($sourcePageId, $workspaceId) as $attachment) {
-            $attachmentId = (int)($attachment['id'] ?? 0);
-            $sourcePath = $this->text($attachment['storage_path'] ?? '');
-            if ($attachmentId <= 0 || $sourcePath === '' || !is_file($sourcePath)) {
-                continue;
-            }
+        $registeredIds = [];
+        try {
+            foreach ($attachments as $attachment) {
+                $attachmentId = (int)($attachment['id'] ?? 0);
+                $sourcePath = $this->text($attachment['storage_path'] ?? '');
+                if (
+                    ($attachment['status'] ?? '') !== 'stored'
+                    || $attachmentId <= 0
+                    || $sourcePath === ''
+                    || !is_file($sourcePath)
+                ) {
+                    continue;
+                }
 
-            $this->importedAttachmentService->importFromPath(
-                $documentKey,
-                $this->text($attachment['uuid'] ?? ''),
-                $sourcePath,
-                $this->text($attachment['original_name'] ?? 'attachment'),
-                $this->text($attachment['mime_type'] ?? 'application/octet-stream'),
-                $actorUserId,
-            );
-            if (!unlink($sourcePath) && is_file($sourcePath)) {
-                throw new ConfluenceImportException(
-                    __('Privremenu kopiju uvezenog privitka nije moguće ukloniti.'),
+                $this->importedAttachmentService->importFromPath(
+                    $documentKey,
+                    $this->text($attachment['uuid'] ?? ''),
+                    $sourcePath,
+                    $this->text($attachment['original_name'] ?? 'attachment'),
+                    $this->text($attachment['mime_type'] ?? 'application/octet-stream'),
+                    $actorUserId,
                 );
+                $registeredIds[] = $attachmentId;
+                if (!unlink($sourcePath) && is_file($sourcePath)) {
+                    throw new ConfluenceImportException(
+                        __('Privremenu kopiju uvezenog privitka nije moguće ukloniti.'),
+                    );
+                }
             }
-            $this->repository->markAttachmentRegistered($attachmentId, $nodeId, $documentKey);
-            ++$registered;
+        } finally {
+            // HR: Ako kasniji privitak ne uspije, ranije uspješno predani
+            // Editor asseti ipak se skupno označavaju kako nastavak ne bi
+            // pokušao duplicirati već kopirane datoteke.
+            // EN: If a later attachment fails, earlier assets successfully
+            // handed to Editor are still batch-marked so resume cannot
+            // duplicate files that were already copied.
+            $this->repository->markAttachmentsRegistered($registeredIds, $nodeId, $documentKey);
         }
 
-        return $registered;
+        return count($registeredIds);
     }
 
     /**
@@ -2804,12 +2883,14 @@ final readonly class ConfluenceImportService
         // EN: Confluence allows comments directly on an attachment. Simbioza
         //     shows them on the attachment's owning page, so we build the
         //     attachment-to-page relation before processing comments.
-        $attachmentPagesBySource = [];
-        foreach ($this->rows($dataset['attachments'] ?? []) as $attachment) {
-            $attachmentId = $this->text($attachment['source_id'] ?? '');
-            $pageId = $this->text($attachment['page_id'] ?? '');
-            if ($attachmentId !== '' && $pageId !== '') {
-                $attachmentPagesBySource[$attachmentId] = $pageId;
+        $attachmentPagesBySource = $this->scalarMap($dataset['attachment_pages_by_source'] ?? []);
+        if ($attachmentPagesBySource === []) {
+            foreach ($this->rows($dataset['attachments'] ?? []) as $attachment) {
+                $attachmentId = $this->text($attachment['source_id'] ?? '');
+                $pageId = $this->text($attachment['page_id'] ?? '');
+                if ($attachmentId !== '' && $pageId !== '') {
+                    $attachmentPagesBySource[$attachmentId] = $pageId;
+                }
             }
         }
 

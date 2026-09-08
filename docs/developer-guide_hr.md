@@ -41,12 +41,20 @@ za ovaj importer i bilo koji budući migracijski alat.
 Masovni upisi stranica, workflowa i ACL-a izvode se kroz javni Workspace servis `WorkspaceContentChangeBatch`. Izvorni događaji se tijekom te cjeline prikupljaju, a na kraju se šalje jedan `bulk_content_changed` događaj po promijenjenom području. Time backlink i Search listeneri ne obnavljaju izvedene podatke nakon svake pojedine stranice. `finally` završetak namjerno šalje objedinjeni događaj i nakon djelomičnog neuspjeha kako izvedeni indeksi ne bi ostali u stanju starijem od stvarno spremljenog izvornog sadržaja.
 
 `confluence_import.import_execution_time_limit` određuje gornju granicu jednog
-procesnog koraka. `queue()` sprema plan i stanje, a `process()` pod zaključavanjem
-obrađuje ograničeni batch privitaka ili stranica te atomarno sprema novi offset.
+procesnog koraka. `queue()` veliki nepromjenjivi plan sprema jednom u
+`manifest.json`, a mali promjenjivi napredak u `state.json`. Pritom jednom
+odabire aktualne verzije privitaka i priprema kontekst makroa svih stranica.
+`process()` pod zaključavanjem obrađuje ograničeni batch privitaka ili stranica
+te atomarno sprema samo novi napredak.
 Završni korak usklađuje reference, izvještaj i izvedene indekse samo jednom.
 Ponovljeni ili istodobni poziv vraća trenutačno stanje umjesto dupliciranja
 sadržaja. Fatalni PHP prekid označava posao neuspjelim i ostavlja dovoljno
 metapodataka za administratorsku dijagnostiku.
+
+Registracija privitaka jedne stranice dohvaća sve pripadne retke jednim upitom i
+skupno potvrđuje prijenos vlasništva Editoru. Izrada web-varijanti slika nije dio
+kritičnog puta importa: varijante se izrađuju lijeno na prvi prikaz ili kroz
+Editorov nastavivi administratorski posao optimizacije slika.
 
 Prije `startImport()` priprema ponovnog uvoza razrješava kanonsko mapiranje
 izvora. Strategija `replace` kroz javni Maintenance servis trajno briše ranije

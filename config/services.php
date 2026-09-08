@@ -10,7 +10,6 @@ use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorHtmlChartService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorHtmlRoadmapService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorDocumentIncludeService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorImportAttachmentService;
-use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorImageVariantService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorWorkspaceIntegration;
 use AaiEduHr\HeartPhrameModuleMenu\Service\MenuRenderer;
@@ -37,6 +36,7 @@ use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportMenuIntegrat
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportModuleViewRenderer;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportRepository;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportService;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportStateStore;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportUploadService;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluencePageSlugger;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluencePageHierarchy;
@@ -87,6 +87,7 @@ $services = [
             $container->get(ConfluenceImportConfig::class),
             $container->get(ConfluenceExportScanner::class),
         ),
+    ConfluenceImportStateStore::class => static fn(): ConfluenceImportStateStore => new ConfluenceImportStateStore(),
     ConfluenceHtmlConverter::class => static fn(ContainerInterface $container): ConfluenceHtmlConverter =>
         new ConfluenceHtmlConverter(
             $container->get(EditorHtmlChartService::class),
@@ -104,6 +105,7 @@ $services = [
         new ConfluenceImportService(
             $container->get(ConfluenceImportRepository::class),
             $container->get(ConfluenceImportUploadService::class),
+            $container->get(ConfluenceImportStateStore::class),
             $container->get(ConfluenceExportReader::class),
             $container->get(ConfluenceArchive::class),
             $container->get(ConfluenceImportConfig::class),
@@ -121,7 +123,6 @@ $services = [
             $container->get(EditorApiActorContext::class),
             $container->get(EditorImportAttachmentService::class),
             $container->get(\AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorImportAttributionService::class),
-            $container->get(EditorImageVariantService::class),
             $container->get(AuthUserService::class),
             $container->get(AuthUserAttributeService::class),
             $container->get(AuthGroupService::class),

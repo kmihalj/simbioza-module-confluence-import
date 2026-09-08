@@ -46,8 +46,9 @@ Interni paketi koriste kompatibilna izdanja `^0.1.0`; ovaj modul ne sprema `comp
 - opcionalno uvozi povijest, nacrte i soft-obrisane stranice;
 - prepisuje relativne Confluence poveznice i apsolutne poveznice s izvornog hosta koji administrator odabere za svaki pojedinačni ili batch import; nakon svakog importa ili zamjene ponovno provjerava sve međupodručne poveznice, dok vanjske domene ostaju obične web-poveznice;
 - svaku uvezenu datoteku registrira kao stvarni privatni Editor privitak stranice i isporučuje je uz aktualnu provjeru ACL-a područja i stranice; zamjena čuva slugove istih izvornih stranica i UUID-e privitaka, a zasebna kopija dobiva izolirane identitete;
-- nakon registracije uvezenih JPEG, PNG i WebP privitaka priprema njihove
-  predmemorirane web-verzije; originali ostaju nepromijenjeni i dostupni klikom;
+- web-verzije uvezenih JPEG, PNG i WebP privitaka izrađuje na prvi prikaz ili
+  kroz Editorov nastavivi administratorski posao optimizacije slika; import zato
+  ne čeka izradu svih varijanti, a originali ostaju nepromijenjeni i dostupni klikom;
 - točno podudarne postojeće korisnike i grupe sigurno predlaže za mapiranje;
   pretraživi korisnički izbornik s poslužitelja učitava samo ograničen skup
   rezultata umjesto cijelog Auth imenika;
@@ -67,8 +68,10 @@ Interni paketi koriste kompatibilna izdanja `^0.1.0`; ovaj modul ne sprema `comp
   izrađuje automatski;
 - omogućuje odustajanje od nedovršenog importa uz trenutačno brisanje prenesene arhive i podataka pripreme;
 - nakon uspješnog importa briše prenesenu izvornu arhivu.
-- veliki potvrđeni import obrađuje u ograničenim faznim koracima koji se mogu nastaviti i
-  tek jednom na kraju usklađuje poveznice, izvještaj i indeks pretrage.
+- veliki potvrđeni import obrađuje u ograničenim faznim koracima koji se mogu
+  nastaviti; veliki nepromjenjivi manifest zapisuje jednom, unaprijed priprema
+  kontekst stranica i aktualne verzije privitaka te tek jednom na kraju usklađuje
+  poveznice, izvještaj i indeks pretrage.
 
 Pretvarač prikazuje `children` i `pagetree` kao lokalne ACL-zaštićene poveznice,
 popise privitaka i multimediju iz nativnih Editor privitaka, responzivne

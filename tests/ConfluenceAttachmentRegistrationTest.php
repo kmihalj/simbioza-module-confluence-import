@@ -50,6 +50,67 @@ final class ConfluenceAttachmentRegistrationTest extends TestCase
         self::assertSame('document-key', $registered['target_document_key']);
     }
 
+    /** HR: Više verzija stranice dohvaća i predaje Editoru skupno. EN: Multiple page versions are fetched and handed to Editor in batches. */
+    public function testFetchesAndRegistersAttachmentsForAllPageVersionsInBatches(): void
+    {
+        $repository = $this->repository();
+        $first = $repository->recordAttachment([
+            'source_attachment_id' => 'attachment-current',
+            'logical_source_id' => 'attachment-1',
+            'source_page_id' => 'page-current',
+            'source_version' => 2,
+            'original_name' => 'current.png',
+            'storage_path' => '/private/current.png',
+            'workspace_id' => 9,
+            'status' => 'stored',
+        ], 1);
+        $second = $repository->recordAttachment([
+            'source_attachment_id' => 'attachment-history',
+            'logical_source_id' => 'attachment-2',
+            'source_page_id' => 'page-history',
+            'source_version' => 1,
+            'original_name' => 'history.pdf',
+            'storage_path' => '/private/history.pdf',
+            'workspace_id' => 9,
+            'status' => 'stored',
+        ], 1);
+        $repository->recordAttachment([
+            'source_attachment_id' => 'attachment-other-workspace',
+            'logical_source_id' => 'attachment-3',
+            'source_page_id' => 'page-current',
+            'source_version' => 1,
+            'original_name' => 'other.txt',
+            'storage_path' => '/private/other.txt',
+            'workspace_id' => 10,
+            'status' => 'stored',
+        ], 2);
+
+        $attachments = $repository->importedAttachmentsForPages(
+            [' page-current ', 'page-history', 'page-current'],
+            9,
+        );
+        self::assertCount(2, $attachments);
+        self::assertSame(
+            ['current.png', 'history.pdf'],
+            array_column($attachments, 'original_name'),
+        );
+
+        $repository->markAttachmentsRegistered(
+            [(int)$first['id'], (int)$second['id'], (int)$first['id'], 0],
+            14,
+            'batch-document',
+        );
+
+        foreach (['attachment-current' => 2, 'attachment-history' => 1] as $sourceId => $version) {
+            $registered = $repository->attachmentBySourceVersion(1, $sourceId, $version);
+            self::assertIsArray($registered);
+            self::assertSame('registered', $registered['status']);
+            self::assertNull($registered['storage_path']);
+            self::assertSame(14, (int)$registered['target_node_id']);
+            self::assertSame('batch-document', $registered['target_document_key']);
+        }
+    }
+
     /**
      * HR: Dokazuje da dva odvojena importa istog Confluence privitka dobivaju
      *     zasebne identitete i ne mogu preuzeti vlasništvo jedan drugome.
