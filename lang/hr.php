@@ -368,6 +368,8 @@ return [
         'Samo autorstvo; izvorne ovlasti ostaju nemapirane.',
     'Upišite najmanje 2 znaka za pretragu korisnika' =>
         'Upišite najmanje 2 znaka za pretragu korisnika',
+    'Pretraži korisnike' => 'Pretraži korisnike',
+    'Učitaj još' => 'Učitaj još',
     'Pokrenuti sekvencijalni import svih pronađenih batch arhiva?' =>
         'Pokrenuti sekvencijalni import svih pronađenih batch arhiva?',
     'Batch import: {name} ({current} / {total})' => 'Batch import: {name} ({current} / {total})',

@@ -368,6 +368,8 @@ return [
         'Attribution only; source permissions remain unmapped.',
     'Upišite najmanje 2 znaka za pretragu korisnika' =>
         'Enter at least 2 characters to search for users',
+    'Pretraži korisnike' => 'Search users',
+    'Učitaj još' => 'Load more',
     'Pokrenuti sekvencijalni import svih pronađenih batch arhiva?' =>
         'Start a sequential import of all discovered batch archives?',
     'Batch import: {name} ({current} / {total})' => 'Batch import: {name} ({current} / {total})',

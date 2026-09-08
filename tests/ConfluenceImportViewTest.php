@@ -137,7 +137,9 @@ final class ConfluenceImportViewTest extends TestCase
         self::assertStringContainsString('simbioza_confluence_import_activity', $controller);
         self::assertStringContainsString('$this->session->close();', $controller);
         self::assertStringContainsString('data-identity-picker-search', $view);
-        self::assertStringContainsString("url.searchParams.set('q', term)", $view);
+        self::assertStringContainsString("url.searchParams.set('q', search.value.trim())", $view);
+        self::assertStringContainsString("url.searchParams.set('page', String(requestedPage))", $view);
+        self::assertStringContainsString('data-identity-picker-more', $view);
         self::assertStringContainsString('const positionPanel = () =>', $view);
         self::assertStringContainsString('$batchArchiveCount', $view);
         self::assertStringContainsString('stoppedName = item.name', $view);

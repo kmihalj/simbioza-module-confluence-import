@@ -43,7 +43,19 @@ $targetGroups = is_array($preparation['target_groups'] ?? null) ? $preparation['
 $currentActor = is_array($preparation['current_actor'] ?? null)
     ? $preparation['current_actor']
     : $currentAdministrator;
-$currentActorName = (string)($currentActor['display_name'] ?? $currentActor['login_identifier'] ?? __('Trenutni administrator'));
+$userPickerLabel = static function (array $user): string {
+    $lastName = is_scalar($user['last_name'] ?? null) ? trim((string)$user['last_name']) : '';
+    $firstName = is_scalar($user['first_name'] ?? null) ? trim((string)$user['first_name']) : '';
+    $surnameFirst = trim($lastName . ' ' . $firstName);
+
+    return $surnameFirst !== ''
+        ? $surnameFirst
+        : (string)($user['display_name'] ?? $user['login_identifier'] ?? '');
+};
+$currentActorName = $userPickerLabel($currentActor);
+if ($currentActorName === '') {
+    $currentActorName = __('Trenutni administrator');
+}
 $activeBatchOptions = is_array($activeBatchJob['options'] ?? null) ? $activeBatchJob['options'] : [];
 $batchCreateInactiveUsers = ($activeBatchOptions['batch_create_inactive_users'] ?? false) === true;
 $batchPolicyLocked = ($activeBatchJob['status'] ?? '') === 'running';
@@ -283,7 +295,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                                             $suggested = is_numeric($suggestions[$sourceKey] ?? null) ? (int)$suggestions[$sourceKey] : 0;
                                             $suggestedUser = $targetUsersById[$suggested] ?? null;
                                             $suggestedLabel = is_array($suggestedUser)
-                                                ? (string)($suggestedUser['display_name'] ?? $suggestedUser['login_identifier'] ?? $suggested)
+                                                ? $userPickerLabel($suggestedUser)
                                                 : '';
                                             $administratorLabel = sprintf(__('Trenutni administrator (%s)'), $currentActorName); ?>
                                             <tr data-filter-row class="<?= $sourceKey !== '' && $sourceKey === $ownerSourceKey ? 'confluence-import-owner-row' : '' ?>">
@@ -297,8 +309,9 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                                                         <div class="confluence-import-user-picker-panel shadow" data-identity-picker-panel hidden>
                                                             <button class="list-group-item list-group-item-action" type="button" data-identity-picker-choice="" data-identity-picker-label="<?= $this->escape($administratorLabel) ?>"><?= $this->escape($administratorLabel) ?><span class="d-block small text-body-secondary"><?= $this->escape(__('Samo autorstvo; izvorne ovlasti ostaju nemapirane.')) ?></span></button>
                                                             <button class="list-group-item list-group-item-action" type="button" data-identity-picker-choice="__create_inactive__" data-identity-picker-label="<?= $this->escape(__('Izradi neaktivnog korisnika bez prijave')) ?>"><?= $this->escape(__('Izradi neaktivnog korisnika bez prijave')) ?></button>
-                                                            <div class="p-2"><input class="form-control form-control-sm" type="search" autocomplete="off" role="combobox" aria-autocomplete="list" placeholder="<?= $this->escape(__('Upišite najmanje 2 znaka za pretragu korisnika')) ?>" data-identity-picker-search></div>
+                                                            <div class="p-2"><input class="form-control form-control-sm" type="search" autocomplete="off" role="combobox" aria-autocomplete="list" placeholder="<?= $this->escape(__('Pretraži korisnike')) ?>" data-identity-picker-search></div>
                                                             <div class="list-group list-group-flush" data-identity-picker-results></div>
+                                                            <div class="p-2 pt-0"><button class="btn btn-sm btn-outline-secondary" type="button" data-identity-picker-more hidden><?= $this->escape(__('Učitaj još')) ?></button></div>
                                                         </div>
                                                     </div>
                                                 </td>
@@ -413,6 +426,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         'batchStopped' => __('Batch import je zaustavljen na arhivi {name}. Osvježite stranicu kako biste sigurno nastavili isti posao.'),
         'userSearchEmpty' => __('Nema pronađenih korisnika.'),
         'userSearchFailed' => __('Pretraživanje korisnika nije uspjelo.'),
+        'userSearchMore' => __('Učitaj još'),
         'processingAttachments' => __('Uvoz privitaka: {done} / {total}'),
         'processingPages' => __('Uvoz stranica: {done} / {total}'),
         'finalizing' => __('Završavam ovlasti, komentare, poveznice i indeks pretrage…'),
@@ -488,11 +502,15 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         const panel = picker.querySelector('[data-identity-picker-panel]');
         const search = picker.querySelector('[data-identity-picker-search]');
         const results = picker.querySelector('[data-identity-picker-results]');
+        const loadMore = picker.querySelector('[data-identity-picker-more]');
         const value = picker.querySelector('[data-identity-map]');
-        if (!(toggle instanceof HTMLButtonElement) || !(panel instanceof HTMLElement) || !(search instanceof HTMLInputElement) || !(results instanceof HTMLElement) || !(value instanceof HTMLInputElement)) return;
+        if (!(toggle instanceof HTMLButtonElement) || !(panel instanceof HTMLElement) || !(search instanceof HTMLInputElement) || !(results instanceof HTMLElement) || !(loadMore instanceof HTMLButtonElement) || !(value instanceof HTMLInputElement)) return;
 
         let timer = 0;
         let controller = null;
+        let page = 0;
+        let hasMore = false;
+        let loaded = false;
         const close = () => { panel.hidden = true; toggle.setAttribute('aria-expanded', 'false'); };
         const positionPanel = () => {
             const padding = 8;
@@ -512,6 +530,43 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
             panel.style.top = `${top}px`;
         };
         const choose = (id, label) => { value.value = String(id || ''); toggle.textContent = String(label || ''); close(); };
+        const loadPage = async (requestedPage, append = false) => {
+            if (controller instanceof AbortController) controller.abort();
+            controller = new AbortController();
+            loadMore.disabled = true;
+            const url = new URL(config.userSearch, window.location.href);
+            url.searchParams.set('type', 'user');
+            url.searchParams.set('mode', 'creator');
+            url.searchParams.set('q', search.value.trim());
+            url.searchParams.set('page', String(requestedPage));
+            url.searchParams.set('per_page', '25');
+            try {
+                const response = await fetch(url, {headers: {Accept: 'application/json'}, credentials: 'same-origin', signal: controller.signal});
+                const data = await responsePayload(response);
+                if (!response.ok || data.ok !== true || !Array.isArray(data.results)) throw new Error(config.userSearchFailed);
+                if (!append) results.replaceChildren();
+                if (data.results.length === 0 && !append) {
+                    const empty = document.createElement('div'); empty.className = 'list-group-item text-body-secondary'; empty.textContent = config.userSearchEmpty; results.appendChild(empty);
+                } else {
+                    data.results.forEach((user) => {
+                        const button = document.createElement('button'); button.className = 'list-group-item list-group-item-action'; button.type = 'button'; button.dataset.identityPickerChoice = String(user.id || ''); button.dataset.identityPickerLabel = String(user.label || ''); button.textContent = String(user.label || ''); results.appendChild(button);
+                    });
+                }
+                page = Number(data.page || requestedPage);
+                hasMore = data.hasMore === true;
+                loadMore.hidden = !hasMore;
+                loaded = true;
+                positionPanel();
+            } catch (error) {
+                if (error instanceof DOMException && error.name === 'AbortError') return;
+                const failed = document.createElement('div'); failed.className = 'list-group-item text-danger'; failed.textContent = config.userSearchFailed;
+                if (!append) results.replaceChildren(failed); else results.appendChild(failed);
+                hasMore = false;
+                loadMore.hidden = true;
+            } finally {
+                loadMore.disabled = false;
+            }
+        };
         toggle.addEventListener('click', () => {
             document.querySelectorAll('[data-identity-picker-panel]').forEach((other) => { if (other !== panel) other.hidden = true; });
             panel.hidden = !panel.hidden;
@@ -519,6 +574,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
             if (!panel.hidden) {
                 positionPanel();
                 search.focus();
+                if (!loaded) void loadPage(1);
             }
         });
         panel.addEventListener('click', (event) => {
@@ -528,32 +584,10 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         });
         search.addEventListener('input', () => {
             window.clearTimeout(timer);
-            if (controller instanceof AbortController) controller.abort();
-            const term = search.value.trim();
-            results.replaceChildren();
-            if (term.length < 2) return;
-            timer = window.setTimeout(async () => {
-                controller = new AbortController();
-                const url = new URL(config.userSearch, window.location.href);
-                url.searchParams.set('type', 'user');
-                url.searchParams.set('mode', 'creator');
-                url.searchParams.set('q', term);
-                try {
-                    const response = await fetch(url, {headers: {Accept: 'application/json'}, credentials: 'same-origin', signal: controller.signal});
-                    const data = await responsePayload(response);
-                    if (!response.ok || data.ok !== true || !Array.isArray(data.results)) throw new Error(config.userSearchFailed);
-                    if (data.results.length === 0) {
-                        const empty = document.createElement('div'); empty.className = 'list-group-item text-body-secondary'; empty.textContent = config.userSearchEmpty; results.appendChild(empty); return;
-                    }
-                    data.results.forEach((user) => {
-                        const button = document.createElement('button'); button.className = 'list-group-item list-group-item-action'; button.type = 'button'; button.dataset.identityPickerChoice = String(user.id || ''); button.dataset.identityPickerLabel = String(user.label || ''); button.textContent = String(user.label || ''); results.appendChild(button);
-                    });
-                } catch (error) {
-                    if (error instanceof DOMException && error.name === 'AbortError') return;
-                    const failed = document.createElement('div'); failed.className = 'list-group-item text-danger'; failed.textContent = config.userSearchFailed; results.replaceChildren(failed);
-                }
-            }, 180);
+            loaded = false;
+            timer = window.setTimeout(() => { void loadPage(1); }, 180);
         });
+        loadMore.addEventListener('click', () => { if (hasMore) void loadPage(page + 1, true); });
         document.addEventListener('click', (event) => { if (event.target instanceof Node && !picker.contains(event.target)) close(); });
     });
 
