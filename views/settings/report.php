@@ -38,7 +38,8 @@ $unresolvedReviewPages = array_values(array_filter(array_map(
     static function (array $page): array {
         $page['issues'] = array_values(array_filter(
             is_array($page['issues'] ?? null) ? $page['issues'] : [],
-            static fn(mixed $issue): bool => !is_array($issue) || !($issue['resolved'] ?? false),
+            static fn(mixed $issue): bool => !is_array($issue)
+                || ($issue['resolution_mode'] ?? '') !== 'manual_content_correction',
         ));
 
         return $page;

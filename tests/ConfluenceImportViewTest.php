@@ -109,6 +109,10 @@ final class ConfluenceImportViewTest extends TestCase
         self::assertStringContainsString('markReviewCorrected', $controller);
         self::assertStringContainsString("'status' => 'manually_resolved'", $repository);
         self::assertStringContainsString("->whereRaw('status <> ?', ['manually_resolved'])", $repository);
+        self::assertStringContainsString(
+            "(\$issue['resolution_mode'] ?? '') !== 'manual_content_correction'",
+            $view,
+        );
     }
 
     /** HR: Batch nudi pravilo za nemapirane korisnike bez umjetnog produljivanja sesije. EN: Batch exposes the unmapped-user policy without artificially extending the session. */
