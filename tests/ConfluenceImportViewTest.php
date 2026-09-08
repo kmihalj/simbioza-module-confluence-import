@@ -91,6 +91,26 @@ final class ConfluenceImportViewTest extends TestCase
         self::assertStringContainsString('Uspješno lokalno razriješene poveznice više se ne prikazuju.', $view);
     }
 
+    /** HR: Administrator može potvrditi ručnu korekciju veze ili makroa, a riješena upozorenja nestaju iz aktivnog izvještaja. EN: An administrator can confirm a manual link or macro correction and resolved warnings leave the active report. */
+    public function testReportSupportsDurableManualCorrections(): void
+    {
+        $view = file_get_contents(dirname(__DIR__) . '/views/settings/report.php');
+        $controller = file_get_contents(dirname(__DIR__) . '/src/Controller/ConfluenceImportController.php');
+        $repository = file_get_contents(dirname(__DIR__) . '/src/Service/ConfluenceImportRepository.php');
+
+        self::assertIsString($view);
+        self::assertIsString($controller);
+        self::assertIsString($repository);
+        self::assertStringContainsString("__('Označi kao korigirano')", $view);
+        self::assertStringContainsString('name="link_uuids[]"', $view);
+        self::assertStringContainsString('name="issue_type" value="unsupported_macro"', $view);
+        self::assertStringContainsString('$unresolvedReviewPages as $page', $view);
+        self::assertStringContainsString('markLinkCorrected', $controller);
+        self::assertStringContainsString('markReviewCorrected', $controller);
+        self::assertStringContainsString("'status' => 'manually_resolved'", $repository);
+        self::assertStringContainsString("->whereRaw('status <> ?', ['manually_resolved'])", $repository);
+    }
+
     /** HR: Batch nudi pravilo za nemapirane korisnike bez umjetnog produljivanja sesije. EN: Batch exposes the unmapped-user policy without artificially extending the session. */
     public function testBatchImportHasUserPolicyAndRemoteUserPickerWithoutHeartbeat(): void
     {

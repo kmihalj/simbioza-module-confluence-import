@@ -7,13 +7,17 @@ declare(strict_types=1);
  * @var array<string,mixed> $job
  * @var array<string,mixed> $summary
  * @var list<array<string,mixed>> $reviewPages
- * @var list<array{source_page_id:string,title:string,url:string,links:list<array{target:string,destination:string}>}> $unresolvedLinkPages
+ * @var list<array{source_page_id:string,title:string,url:string,links:list<array{target:string,destination:string,uuids:list<string>}>}> $unresolvedLinkPages
  * @var bool $calendarAvailable
  * @var list<array<string,mixed>> $calendarOptions
  * @var string $calendarResolvePath
  * @var string|null $calendarAdminPath
  * @var string $calendarResolutionStatus
  * @var string $calendarResolutionMessage
+ * @var string $manualCorrectionStatus
+ * @var string $manualCorrectionMessage
+ * @var string $linkCorrectionPath
+ * @var string $reviewCorrectionPath
  * @var string $settingsPath
  * @var string|null $workspacePath
  * @var string $stylesPath
@@ -30,18 +34,17 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
     }
 }
 $number = static fn(mixed $value): int => is_numeric($value) ? (int)$value : 0;
-$unresolvedReviewPages = array_filter(
-    $reviewPages,
-    static function (array $page): bool {
-        foreach (is_array($page['issues'] ?? null) ? $page['issues'] : [] as $issue) {
-            if (!is_array($issue) || !($issue['resolved'] ?? false)) {
-                return true;
-            }
-        }
+$unresolvedReviewPages = array_values(array_filter(array_map(
+    static function (array $page): array {
+        $page['issues'] = array_values(array_filter(
+            is_array($page['issues'] ?? null) ? $page['issues'] : [],
+            static fn(mixed $issue): bool => !is_array($issue) || !($issue['resolved'] ?? false),
+        ));
 
-        return false;
+        return $page;
     },
-);
+    $reviewPages,
+), static fn(array $page): bool => $page['issues'] !== []));
 $unresolvedLinkCount = array_sum(array_map(
     static fn(array $page): int => count(is_array($page['links'] ?? null) ? $page['links'] : []),
     $unresolvedLinkPages,
@@ -102,6 +105,11 @@ $normalizeCalendarName = static function (string $name): string {
                 <?php elseif ($calendarResolutionStatus === 'error' && $calendarResolutionMessage !== '') : ?>
                     <div class="alert alert-danger" role="alert"><?= $this->escape($calendarResolutionMessage) ?></div>
                 <?php endif; ?>
+                <?php if ($manualCorrectionStatus === 'success' && $manualCorrectionMessage !== '') : ?>
+                    <div class="alert alert-success" role="status"><?= $this->escape($manualCorrectionMessage) ?></div>
+                <?php elseif ($manualCorrectionStatus === 'error' && $manualCorrectionMessage !== '') : ?>
+                    <div class="alert alert-danger" role="alert"><?= $this->escape($manualCorrectionMessage) ?></div>
+                <?php endif; ?>
 
                 <div class="row g-3 mb-4">
                     <div class="col-sm-6 col-xl"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Stranice')) ?></span><strong><?= $number($summary['pages_imported'] ?? 0) ?></strong></div></div>
@@ -148,9 +156,22 @@ $normalizeCalendarName = static function (string $name): string {
                                                 <?php endif; ?>
                                             </td>
                                             <td class="text-end">
-                                                <?php if ($index === 0 && $page['url'] !== '') : ?>
-                                                    <a class="btn btn-sm btn-primary" href="<?= $this->escape($page['url']) ?>"><?= $this->escape(__('Provjeri stranicu')) ?></a>
-                                                <?php endif; ?>
+                                                <div class="d-flex flex-wrap justify-content-end gap-2">
+                                                    <?php if ($index === 0 && $page['url'] !== '') : ?>
+                                                        <a class="btn btn-sm btn-primary" href="<?= $this->escape($page['url']) ?>"><?= $this->escape(__('Provjeri stranicu')) ?></a>
+                                                    <?php endif; ?>
+                                                    <?php if (is_array($link['uuids'] ?? null) && $link['uuids'] !== []) : ?>
+                                                        <form method="post" action="<?= $this->escape($linkCorrectionPath) ?>">
+                                                            <?= $this->csrfHandler->generateCsrfTokenInputField() ?>
+                                                            <?php foreach ($link['uuids'] as $linkUuid) : ?>
+                                                                <input type="hidden" name="link_uuids[]" value="<?= $this->escape((string)$linkUuid) ?>">
+                                                            <?php endforeach; ?>
+                                                            <button class="btn btn-sm btn-outline-success" type="submit">
+                                                                <?= $this->escape(__('Označi kao korigirano')) ?>
+                                                            </button>
+                                                        </form>
+                                                    <?php endif; ?>
+                                                </div>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -163,11 +184,11 @@ $normalizeCalendarName = static function (string $name): string {
                 <h2 class="h4 mb-2"><?= $this->escape(__('Sadržaj koji zahtijeva provjeru')) ?></h2>
                 <p class="text-body-secondary"><?= $this->escape(__('Ovdje su stranice na kojima dio Confluence sadržaja nije moguće prenijeti kao izvornu funkcionalnost. Statički prikaz ostao je sačuvan gdje god je to bilo moguće.')) ?></p>
 
-                <?php if ($reviewPages === []) : ?>
+                <?php if ($unresolvedReviewPages === []) : ?>
                     <div class="alert alert-success mb-0" role="status"><?= $this->escape(__('Import nije pronašao sadržaj koji zahtijeva ručnu provjeru.')) ?></div>
                 <?php else : ?>
                     <div class="list-group confluence-import-report-list">
-                        <?php foreach ($reviewPages as $page) :
+                        <?php foreach ($unresolvedReviewPages as $page) :
                             $issues = is_array($page['issues'] ?? null) ? $page['issues'] : [];
                             $pageUrl = is_string($page['url'] ?? null) ? (string)$page['url'] : '';
                             ?>
@@ -348,11 +369,23 @@ $normalizeCalendarName = static function (string $name): string {
                                                 <?php endif; ?>
                                             </section>
                                         <?php elseif (is_array($issue) && ($issue['type'] ?? '') === 'unsupported_macro') : ?>
-                                            <div class="alert alert-warning mb-0">
-                                                <?= $this->escape(sprintf(
-                                                    __('Confluence makro „%s” nema odgovarajuću Simbioza funkcionalnost.'),
-                                                    (string)($issue['macro'] ?? ''),
-                                                )) ?>
+                                            <div class="alert alert-warning mb-0 d-flex flex-wrap align-items-center justify-content-between gap-3">
+                                                <span>
+                                                    <?= $this->escape(sprintf(
+                                                        __('Confluence makro „%s” nema odgovarajuću Simbioza funkcionalnost.'),
+                                                        (string)($issue['macro'] ?? ''),
+                                                    )) ?>
+                                                </span>
+                                                <form method="post" action="<?= $this->escape($reviewCorrectionPath) ?>">
+                                                    <?= $this->csrfHandler->generateCsrfTokenInputField() ?>
+                                                    <input type="hidden" name="source_page_id" value="<?= $this->escape((string)($page['source_page_id'] ?? '')) ?>">
+                                                    <input type="hidden" name="issue_type" value="unsupported_macro">
+                                                    <input type="hidden" name="macro" value="<?= $this->escape((string)($issue['macro'] ?? '')) ?>">
+                                                    <input type="hidden" name="marker" value="<?= $this->escape((string)($issue['marker'] ?? '')) ?>">
+                                                    <button class="btn btn-sm btn-outline-success" type="submit">
+                                                        <?= $this->escape(__('Označi kao korigirano')) ?>
+                                                    </button>
+                                                </form>
                                             </div>
                                         <?php else : ?>
                                             <div class="alert alert-warning mb-0">

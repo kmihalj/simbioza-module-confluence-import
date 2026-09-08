@@ -165,6 +165,10 @@ final readonly class ConfluenceImportController
                     : null,
                 'calendarResolutionStatus' => $this->text($query['calendar_resolution'] ?? ''),
                 'calendarResolutionMessage' => $this->text($query['calendar_message'] ?? ''),
+                'manualCorrectionStatus' => $this->text($query['manual_correction'] ?? ''),
+                'manualCorrectionMessage' => $this->text($query['manual_message'] ?? ''),
+                'linkCorrectionPath' => $this->linkCorrectionPath($this->text($job['uuid'] ?? '')),
+                'reviewCorrectionPath' => $this->reviewCorrectionPath($this->text($job['uuid'] ?? '')),
                 'settingsPath' => $this->path('simbioza-confluence-import.settings', '/settings/confluence-import'),
                 'workspacePath' => $this->workspacePathById($this->integer($job['workspace_id'] ?? 0)),
                 'stylesPath' => $this->path('simbioza-confluence-import.assets.css', '/confluence-import/assets.css'),
@@ -214,6 +218,82 @@ final readonly class ConfluenceImportController
         } catch (Throwable $throwable) {
             return $this->responses->redirect(
                 $this->calendarResolutionRedirect($uuid, 'error', $throwable->getMessage()),
+            );
+        }
+    }
+
+    /** HR: Potvrđuje da je administrator korigirao jednu grupu nerazriješenih poveznica. EN: Confirms that an administrator corrected one unresolved-link group. */
+    public function markLinkCorrected(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->access->isAdministrator()) {
+            return $this->denied();
+        }
+
+        $uuid = $this->text($request->getAttribute('uuid'));
+        try {
+            $job = $this->repository->jobByUuid($uuid);
+            if (($job['status'] ?? '') !== 'completed') {
+                throw new ConfluenceImportException(__('Izvještaj je dostupan tek nakon dovršenog importa.'));
+            }
+            $body = $this->body($request);
+            $linkUuids = array_values(array_filter(array_map(
+                $this->text(...),
+                is_array($body['link_uuids'] ?? null) ? $body['link_uuids'] : [],
+            ), static fn(string $linkUuid): bool => $linkUuid !== ''));
+            $count = $this->repository->markLinksManuallyResolved(
+                $this->integer($job['id'] ?? 0),
+                $linkUuids,
+            );
+            if ($count <= 0) {
+                throw new ConfluenceImportException(__('Poveznica više nije nerazriješena ili nije pronađena.'));
+            }
+
+            return $this->responses->redirect($this->manualCorrectionRedirect(
+                $uuid,
+                'success',
+                __('Poveznica je označena kao korigirana i više se neće automatski mijenjati.'),
+            ));
+        } catch (Throwable $throwable) {
+            return $this->responses->redirect(
+                $this->manualCorrectionRedirect($uuid, 'error', $throwable->getMessage()),
+            );
+        }
+    }
+
+    /** HR: Potvrđuje da je administrator ručno korigirao nepodržani Confluence makro. EN: Confirms that an administrator manually corrected an unsupported Confluence macro. */
+    public function markReviewCorrected(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->access->isAdministrator()) {
+            return $this->denied();
+        }
+
+        $uuid = $this->text($request->getAttribute('uuid'));
+        try {
+            $job = $this->repository->jobByUuid($uuid);
+            if (($job['status'] ?? '') !== 'completed') {
+                throw new ConfluenceImportException(__('Izvještaj je dostupan tek nakon dovršenog importa.'));
+            }
+            $body = $this->body($request);
+            $marked = $this->repository->markReviewIssueManuallyResolved(
+                $this->integer($job['id'] ?? 0),
+                $this->text($body['source_page_id'] ?? ''),
+                $this->text($body['issue_type'] ?? ''),
+                $this->text($body['macro'] ?? ''),
+                $this->text($body['marker'] ?? ''),
+                $this->actorUserId(),
+            );
+            if (!$marked) {
+                throw new ConfluenceImportException(__('Upozorenje više nije otvoreno ili nije pronađeno.'));
+            }
+
+            return $this->responses->redirect($this->manualCorrectionRedirect(
+                $uuid,
+                'success',
+                __('Sadržaj je označen kao korigiran i uklonjen iz popisa za provjeru.'),
+            ));
+        } catch (Throwable $throwable) {
+            return $this->responses->redirect(
+                $this->manualCorrectionRedirect($uuid, 'error', $throwable->getMessage()),
             );
         }
     }
@@ -649,12 +729,14 @@ final readonly class ConfluenceImportController
      * HR: Grupira trenutačno nerazriješene poveznice po izvornoj stranici izvještaja.
      * EN: Groups currently unresolved report links by their source page.
      *
-     * @return list<array{source_page_id:string,title:string,url:string,links:list<array{target:string,destination:string}>}>
+     * @return list<array{source_page_id:string,title:string,url:string,links:list<array{target:string,destination:string,uuids:list<string>}>}>
      */
     private function unresolvedLinkPages(int $jobId): array
     {
+        /** @var array<string,array{source_page_id:string,title:string,url:string}> $pages */
         $pages = [];
-        $seen = [];
+        /** @var array<string,array<string,array{target:string,destination:string,uuids:list<string>}>> $linksByPage */
+        $linksByPage = [];
         foreach ($this->repository->unresolvedLinksForJob($jobId) as $link) {
             $sourcePageId = $this->text($link['source_page_id'] ?? '');
             $target = $this->text($link['original_target'] ?? '');
@@ -668,11 +750,6 @@ final readonly class ConfluenceImportController
                 $this->text($link['destination_page_id'] ?? ''),
                 $this->text($link['destination_page_title'] ?? ''),
             ]);
-            if (isset($seen[$uniqueKey])) {
-                continue;
-            }
-            $seen[$uniqueKey] = true;
-
             $mapping = $this->repository->contentForJobSource($jobId, $sourcePageId);
             $pageKey = $sourcePageId;
             $pages[$pageKey] ??= [
@@ -681,7 +758,6 @@ final readonly class ConfluenceImportController
                     ? $this->text($mapping['source_title'] ?? '')
                     : '',
                 'url' => is_array($mapping) ? $this->contentPath($mapping) : '',
-                'links' => [],
             ];
             $destinationSpace = $this->text($link['destination_space_key'] ?? '');
             $destinationId = $this->text($link['destination_page_id'] ?? '');
@@ -698,13 +774,26 @@ final readonly class ConfluenceImportController
             } elseif ($destinationSpace !== '' && $destinationTitle !== '') {
                 $destination = $destinationSpace . ' · ' . $destination;
             }
-            $pages[$pageKey]['links'][] = [
+            $linksByPage[$pageKey][$uniqueKey] ??= [
                 'target' => $target,
                 'destination' => $destination,
+                'uuids' => [],
+            ];
+            $linkUuid = $this->text($link['uuid'] ?? '');
+            if ($linkUuid !== '') {
+                $linksByPage[$pageKey][$uniqueKey]['uuids'][] = $linkUuid;
+            }
+        }
+
+        $result = [];
+        foreach ($pages as $pageKey => $page) {
+            $result[] = [
+                ...$page,
+                'links' => array_values($linksByPage[$pageKey] ?? []),
             ];
         }
 
-        return array_values($pages);
+        return $result;
     }
 
     /**
@@ -751,6 +840,35 @@ final readonly class ConfluenceImportController
         }
 
         return $this->reportPath($uuid) . '/calendar';
+    }
+
+    /** HR: Gradi putanju potvrde ručno korigirane poveznice. EN: Builds the manual link-correction confirmation path. */
+    private function linkCorrectionPath(string $uuid): string
+    {
+        if ($this->urls->namedRouteExists('simbioza-confluence-import.report.link-corrected')) {
+            return $this->urls->getPathFor('simbioza-confluence-import.report.link-corrected', ['uuid' => $uuid]);
+        }
+
+        return $this->reportPath($uuid) . '/link-corrected';
+    }
+
+    /** HR: Gradi putanju potvrde ručno korigiranog makroa. EN: Builds the manual macro-correction confirmation path. */
+    private function reviewCorrectionPath(string $uuid): string
+    {
+        if ($this->urls->namedRouteExists('simbioza-confluence-import.report.review-corrected')) {
+            return $this->urls->getPathFor('simbioza-confluence-import.report.review-corrected', ['uuid' => $uuid]);
+        }
+
+        return $this->reportPath($uuid) . '/review-corrected';
+    }
+
+    /** HR: Vraća na izvještaj s ishodom ručne korekcije. EN: Returns to the report with a manual-correction outcome. */
+    private function manualCorrectionRedirect(string $uuid, string $status, string $message): string
+    {
+        return $this->reportPath($uuid) . '?' . http_build_query([
+            'manual_correction' => $status,
+            'manual_message' => $message,
+        ]);
     }
 
     /** HR: Vraća na izvještaj s kratkom porukom ishoda. EN: Returns to the report with a concise outcome message. */

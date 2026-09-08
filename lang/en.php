@@ -378,5 +378,14 @@ return [
     'Nema pronađenih korisnika.' => 'No users found.',
     'Pretraživanje korisnika nije uspjelo.' => 'User search failed.',
     'Administrator importa' => 'Import administrator',
+    'Označi kao korigirano' => 'Mark as corrected',
+    'Poveznica je označena kao korigirana i više se neće automatski mijenjati.' =>
+        'The link was marked as corrected and will no longer be changed automatically.',
+    'Sadržaj je označen kao korigiran i uklonjen iz popisa za provjeru.' =>
+        'The content was marked as corrected and removed from the review list.',
+    'Poveznica više nije nerazriješena ili nije pronađena.' =>
+        'The link is no longer unresolved or could not be found.',
+    'Upozorenje više nije otvoreno ili nije pronađeno.' =>
+        'The warning is no longer open or could not be found.',
     'kopija' => 'copy',
 ];

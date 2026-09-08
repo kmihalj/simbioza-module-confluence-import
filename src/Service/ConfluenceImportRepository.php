@@ -892,6 +892,7 @@ final readonly class ConfluenceImportRepository
                 ...$rows,
                 ...$this->database->table(ModuleSimbiozaConfluenceImport::TABLE_LINKS)
                     ->whereRaw('LOWER(destination_space_key) = LOWER(?)', [trim($destinationSpaceKey)])
+                    ->whereRaw('status <> ?', ['manually_resolved'])
                     ->orderBy('id', 'ASC')
                     ->get(),
             ];
@@ -947,6 +948,90 @@ final readonly class ConfluenceImportRepository
                 'status' => $target !== '' ? 'resolved' : 'unresolved',
                 'updated_at' => gmdate('Y-m-d H:i:s'),
             ]);
+    }
+
+    /**
+     * HR: Trajno izuzima ručno korigirane poveznice iz izvještaja i budućih automatskih usklađivanja.
+     * EN: Permanently excludes manually corrected links from reports and future automatic reconciliation.
+     *
+     * @param list<string> $uuids
+     */
+    public function markLinksManuallyResolved(int $jobId, array $uuids): int
+    {
+        $uuids = array_values(array_unique(array_filter(array_map(
+            static fn(mixed $uuid): string => is_scalar($uuid) ? trim((string)$uuid) : '',
+            $uuids,
+        ))));
+        if ($jobId <= 0 || $uuids === []) {
+            return 0;
+        }
+
+        return $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_LINKS)
+            ->where('job_id', '=', $jobId)
+            ->where('status', '=', 'unresolved')
+            ->whereIn('uuid', $uuids)
+            ->update([
+                'status' => 'manually_resolved',
+                'updated_at' => gmdate('Y-m-d H:i:s'),
+            ]);
+    }
+
+    /**
+     * HR: Označava jedno upozorenje nepodržanog makroa ručno korigiranim u trajnom izvještaju.
+     * EN: Marks one unsupported-macro warning as manually corrected in the durable report.
+     */
+    public function markReviewIssueManuallyResolved(
+        int $jobId,
+        string $sourcePageId,
+        string $issueType,
+        string $macro,
+        string $marker,
+        int $actorUserId,
+    ): bool {
+        if ($jobId <= 0 || trim($sourcePageId) === '' || trim($issueType) !== 'unsupported_macro') {
+            return false;
+        }
+
+        $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
+            ->where('id', '=', $jobId)
+            ->where('status', '=', 'completed')
+            ->first();
+        if (!is_array($row)) {
+            return false;
+        }
+
+        $job = $this->normalizeRow($row);
+        $summary = is_array($job['summary'] ?? null) ? $job['summary'] : [];
+        foreach (is_array($summary['review_pages'] ?? null) ? $summary['review_pages'] : [] as $pageIndex => $page) {
+            if (!is_array($page) || $this->string($page['source_page_id'] ?? '') !== trim($sourcePageId)) {
+                continue;
+            }
+            foreach (is_array($page['issues'] ?? null) ? $page['issues'] : [] as $issueIndex => $issue) {
+                if (!is_array($issue) || (bool)($issue['resolved'] ?? false)) {
+                    continue;
+                }
+                if (
+                    $this->string($issue['type'] ?? '') !== trim($issueType)
+                    || $this->string($issue['macro'] ?? '') !== trim($macro)
+                    || (trim($marker) !== '' && $this->string($issue['marker'] ?? '') !== trim($marker))
+                ) {
+                    continue;
+                }
+
+                $summary['review_pages'][$pageIndex]['issues'][$issueIndex] = [
+                    ...$issue,
+                    'resolved' => true,
+                    'resolution_mode' => 'manual_content_correction',
+                    'resolved_at' => gmdate('Y-m-d H:i:s'),
+                    'resolved_by_user_id' => $actorUserId > 0 ? $actorUserId : null,
+                ];
+                $this->updateCompletedSummary($jobId, $summary);
+
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

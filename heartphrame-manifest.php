@@ -121,6 +121,20 @@ return new class extends AbstractModuleManifest {
                 $authenticated,
             ],
             [
+                'POST',
+                '/settings/confluence-import/report/{uuid}/link-corrected',
+                ConfluenceImportController::class . '@markLinkCorrected',
+                'simbioza-confluence-import.report.link-corrected',
+                $authenticated,
+            ],
+            [
+                'POST',
+                '/settings/confluence-import/report/{uuid}/review-corrected',
+                ConfluenceImportController::class . '@markReviewCorrected',
+                'simbioza-confluence-import.report.review-corrected',
+                $authenticated,
+            ],
+            [
                 'GET',
                 '/settings/confluence-import/csrf',
                 ConfluenceImportController::class . '@csrf',

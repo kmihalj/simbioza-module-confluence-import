@@ -140,6 +140,70 @@ final class ConfluenceLinkBatchPersistenceTest extends TestCase
         self::assertSame('https://wiki.example/x/MgL7Aw', $links[0]['original_target']);
     }
 
+    /** HR: Ručno korigirana poveznica više se ne prikazuje niti automatski usklađuje. EN: A manually corrected link is neither reported nor automatically reconciled again. */
+    public function testManualCorrectionPermanentlyExcludesLinkFromReconciliation(): void
+    {
+        [$repository] = $this->environment();
+        $uuid = $repository->recordLink([
+            'source_page_id' => 'source',
+            'source_space_key' => 'SOURCE',
+            'destination_space_key' => 'TARGET',
+            'destination_page_title' => 'Target page',
+            'original_target' => 'https://wiki.example/display/TARGET/Target+page',
+            'status' => 'unresolved',
+        ], 5);
+
+        self::assertSame(1, $repository->markLinksManuallyResolved(5, [$uuid]));
+        self::assertSame('manually_resolved', $repository->linkByUuid($uuid)['status']);
+        self::assertSame([], $repository->unresolvedLinksForJob(5));
+        self::assertSame([], $repository->linksForReconciliation('TARGET'));
+    }
+
+    /** HR: Ručno korigirani nepodržani makro ostaje razriješen u trajnom JSON izvještaju. EN: A manually corrected unsupported macro remains resolved in the durable JSON report. */
+    public function testManualCorrectionPersistsUnsupportedMacroResolution(): void
+    {
+        [$repository, $database] = $this->environment();
+        $now = gmdate('Y-m-d H:i:s');
+        $database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)->insert([
+            'id' => 8,
+            'uuid' => '00000000-0000-4000-8000-000000000008',
+            'operation' => 'import',
+            'status' => 'completed',
+            'stage' => 'completed',
+            'original_name' => 'space.xml.zip',
+            'archive_path' => '/tmp/space.xml.zip',
+            'summary_json' => json_encode([
+                'review_pages' => [[
+                    'source_page_id' => '42',
+                    'title' => 'Page',
+                    'issues' => [[
+                        'type' => 'unsupported_macro',
+                        'macro' => 'view-file',
+                        'marker' => 'macro-42',
+                    ]],
+                ]],
+            ], JSON_THROW_ON_ERROR),
+            'actor_user_id' => 3,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        self::assertTrue($repository->markReviewIssueManuallyResolved(
+            8,
+            '42',
+            'unsupported_macro',
+            'view-file',
+            'macro-42',
+            9,
+        ));
+        $job = $repository->jobByUuid('00000000-0000-4000-8000-000000000008');
+        $issue = $job['summary']['review_pages'][0]['issues'][0] ?? [];
+
+        self::assertTrue($issue['resolved'] ?? false);
+        self::assertSame('manual_content_correction', $issue['resolution_mode'] ?? null);
+        self::assertSame(9, $issue['resolved_by_user_id'] ?? null);
+    }
+
     /** HR: Semantička XML poveznica sprema odredište, ali nikada ne izlaže interni pretvorbeni token kao URL. EN: A semantic XML link stores its destination without ever exposing the internal conversion token as a URL. */
     public function testSemanticLinkDoesNotPersistInternalTokenAsOriginalUrl(): void
     {
