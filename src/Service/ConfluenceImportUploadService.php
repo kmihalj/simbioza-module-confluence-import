@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AaiEduHr\SimbiozaModuleConfluenceImport\Service;
 
 use AaiEduHr\HeartPhrameModuleOrm\Database\Database;
+use AaiEduHr\HeartPhrameModuleOrm\Database\LocaleSorter;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Exception\ConfluenceImportException;
 
 use function basename;
@@ -35,7 +36,7 @@ use function rename;
 use function rmdir;
 use function scandir;
 use function set_time_limit;
-use function sort;
+use function usort;
 use function strtolower;
 use function str_ends_with;
 use function time;
@@ -82,7 +83,7 @@ final readonly class ConfluenceImportUploadService
                 $names[] = $name;
             }
         }
-        sort($names, SORT_NATURAL | SORT_FLAG_CASE);
+        usort($names, static fn(string $left, string $right): int => LocaleSorter::compare($left, $right));
 
         return array_map(
             static fn(string $name): array => [

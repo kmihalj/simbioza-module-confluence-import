@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AaiEduHr\SimbiozaModuleConfluenceImport\Service;
 
+use AaiEduHr\HeartPhrameModuleOrm\Database\LocaleSorter;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Support\Utf8Url;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorHtmlChartService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorHtmlRoadmapService;
@@ -2481,7 +2482,7 @@ final readonly class ConfluenceHtmlConverter
             $byUpdated = strcmp($right['updated_at'] ?? '', $left['updated_at'] ?? '');
             return $byUpdated !== 0
                 ? $byUpdated
-                : strnatcasecmp($left['title'] ?? '', $right['title'] ?? '');
+                : LocaleSorter::compare($left['title'] ?? '', $right['title'] ?? '');
         });
         if ($pages === []) {
             $emptyTitle = $this->macroParameter($xpath, $macro, 'blankTitle');
@@ -2970,7 +2971,7 @@ final readonly class ConfluenceHtmlConverter
         );
         uasort($children, static function (array $left, array $right): int {
             $order = ($left['sort_order'] ?? 100) <=> ($right['sort_order'] ?? 100);
-            return $order !== 0 ? $order : strnatcasecmp($left['title'] ?? '', $right['title'] ?? '');
+            return $order !== 0 ? $order : LocaleSorter::compare($left['title'] ?? '', $right['title'] ?? '');
         });
 
         return $children;

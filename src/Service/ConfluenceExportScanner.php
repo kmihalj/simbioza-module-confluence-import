@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AaiEduHr\SimbiozaModuleConfluenceImport\Service;
 
+use AaiEduHr\HeartPhrameModuleOrm\Database\LocaleSorter;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Exception\ConfluenceImportException;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Value\ConfluenceObject;
 
@@ -176,7 +177,7 @@ final readonly class ConfluenceExportScanner
         ksort($statuses);
         ksort($macros);
         ksort($users);
-        ksort($groups);
+        uksort($groups, static fn(string $left, string $right): int => LocaleSorter::compare($left, $right));
 
         $attachmentCounts = [
             'current' => count(ConfluenceAttachmentSelector::latestCurrent($attachments)),
