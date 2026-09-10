@@ -151,17 +151,31 @@ final readonly class ConfluenceCalendarResolutionService
         $options = is_array($job['options'] ?? null) ? $job['options'] : [];
         $language = $this->text($options['language'] ?? $this->config->defaultLanguage());
         $publishedVersionNumber = $this->workflow->publicationVersionForNode($nodeId, $language);
-        $currentVersionNumber = $this->editor->currentVersionNumber($documentKey, $language);
         if ($publishedVersionNumber <= 0) {
             throw new ConfluenceImportException(__('Ciljna stranica još nije objavljena.'));
         }
+
+        /*
+         * HR: Resolver već ima provjerenog administratora pa sva Editor čitanja
+         *     izvodi u istom eksplicitnom kontekstu kao i kasniji zapis. Time
+         *     rezultat ne ovisi o redoslijedu učitavanja HTTP auth servisa.
+         * EN: The resolver already has a verified administrator, so every
+         *     Editor read uses the same explicit context as the later write.
+         *     This keeps the result independent of HTTP auth service load order.
+         */
+        [$currentVersionNumber, $version] = $this->editorActors->runAs(
+            $actor,
+            fn(): array => [
+                $this->editor->currentVersionNumber($documentKey, $language),
+                $this->editor->loadVersion($documentKey, $language, $publishedVersionNumber),
+            ],
+        );
         if ($currentVersionNumber !== $publishedVersionNumber) {
             throw new ConfluenceImportException(
                 __('Stranica ima neobjavljeni nacrt. Najprije ga objavite ili odbacite pa ponovno povežite kalendar.'),
             );
         }
 
-        $version = $this->editor->loadVersion($documentKey, $language, $publishedVersionNumber);
         if (!$version instanceof EditorDocumentVersion || !str_contains($version->html, 'id="' . $marker . '"')) {
             throw new ConfluenceImportException(__('Oznaka Confluence kalendara više nije prisutna na stranici.'));
         }

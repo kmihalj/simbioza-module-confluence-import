@@ -62,6 +62,7 @@ final class ConfluenceImportViewTest extends TestCase
         );
         self::assertStringContainsString("'prefer_ics_name' => true", $service);
         self::assertStringContainsString("\$issue['source_calendar_name']", $service);
+        self::assertStringContainsString('[$currentVersionNumber, $version] = $this->editorActors->runAs(', $service);
         self::assertStringContainsString('$matchedCalendarUuid', $view);
         self::assertStringContainsString(
             "__('Pronađen je postojeći kalendar istog naziva i unaprijed je odabran. Provjerite ga prije povezivanja.')",
