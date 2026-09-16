@@ -31,7 +31,8 @@ Workspace, HTML Editor, Auth, Menu and Simbioza User remain owners of their reco
    public Auth service to create explicitly requested inactive staged accounts,
    and creates the target objects.
 7. `ConfluenceHtmlConverter` produces portable HTML placeholders.
-8. `ConfluenceReferenceResolver` replaces local targets and retains stable unresolved targets.
+8. `ConfluenceReferenceResolver` replaces local targets, and finalization
+   permanently materializes later resolved links in Editor content.
 9. Optional Search, Audit, Comment and Backup integrations run through their public contracts.
 
 The importer never writes Auth tables directly. `AuthUserService` enforces the
@@ -50,6 +51,14 @@ atomically persist progress only. The final step reconciles references, the repo
 exactly once. A repeated or concurrent call returns current state instead of
 duplicating content. A fatal PHP termination marks the job as failed and keeps
 enough metadata for administrator diagnostics.
+
+After successful finalization, normal page rendering uses only Workspace,
+Editor, and their derived indexes. It does not read any
+`simbioza_confluence_import_*` table. Temporary resolver links become durable
+routes as soon as their targets can be resolved, and dynamic search forms store
+ordinary Workspace slugs. The module can therefore be disabled after imports
+are complete; its tables are needed only for re-import, reports, and
+administrator-facing provenance.
 
 Page attachment registration fetches all matching rows in one query and
 confirms the ownership transfer to Editor in batches. Image web variants are

@@ -417,6 +417,36 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
+     * HR: Jednim upitom vraća sva trajna mapiranja Confluence ključeva na
+     *     lokalne Workspace slugove za materijalizaciju uvezenog sadržaja.
+     * EN: Returns every durable Confluence-key to local-Workspace-slug mapping
+     *     in one query so imported content can be materialized locally.
+     *
+     * @return array<string,string>
+     */
+    public function workspaceSlugsBySourceKey(): array
+    {
+        $result = [];
+        foreach (
+            $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_SPACES)
+                ->where('source_instance', '=', 'archive')
+                ->orderBy('updated_at', 'ASC')
+                ->get() as $row
+        ) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $sourceKey = strtoupper($this->string($row['source_space_key'] ?? ''));
+            $workspaceSlug = $this->string($row['target_workspace_slug'] ?? '');
+            if ($sourceKey !== '' && $workspaceSlug !== '') {
+                $result[$sourceKey] = $workspaceSlug;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * HR: Sprema izričito mapiranje izvornog korisnika.
      * EN: Stores an explicit source-user mapping.
      *
@@ -620,6 +650,32 @@ final readonly class ConfluenceImportRepository
         $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_CONTENT)
             ->whereRaw('LOWER(source_space_key) = LOWER(?)', [trim($spaceKey)])
             ->where('logical_source_id', '=', trim($sourceId))
+            ->where('import_status', '=', 'imported')
+            ->orderBy('source_version', 'DESC')
+            ->first();
+
+        return is_array($row) ? $this->normalizeRow($row) : null;
+    }
+
+    /**
+     * HR: Pronalazi ciljni dokument i kada spremljena poveznica pokazuje na
+     *     ID konkretne povijesne verzije umjesto logičkog ID-a stranice.
+     * EN: Finds the target document even when a stored link points at a
+     *     concrete historical-version ID instead of the logical page ID.
+     *
+     * @return array<string,mixed>|null
+     */
+    public function contentBySourceReference(string $spaceKey, string $sourceId): ?array
+    {
+        $spaceKey = trim($spaceKey);
+        $sourceId = trim($sourceId);
+        if ($spaceKey === '' || $sourceId === '') {
+            return null;
+        }
+
+        $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_CONTENT)
+            ->whereRaw('LOWER(source_space_key) = LOWER(?)', [$spaceKey])
+            ->whereRaw('(logical_source_id = ? OR source_content_id = ?)', [$sourceId, $sourceId])
             ->where('import_status', '=', 'imported')
             ->orderBy('source_version', 'DESC')
             ->first();
@@ -1088,6 +1144,8 @@ final readonly class ConfluenceImportRepository
         $values = [
             'logical_source_id' => $this->string($attachment['logical_source_id'] ?? $sourceId),
             'source_page_id' => $this->string($attachment['source_page_id'] ?? ''),
+            'source_creator_key' => $this->nullableString($attachment['source_creator_key'] ?? null),
+            'source_created_at' => $this->nullableString($attachment['source_created_at'] ?? null),
             'original_name' => $this->string($attachment['original_name'] ?? 'attachment'),
             'mime_type' => $this->string($attachment['mime_type'] ?? 'application/octet-stream'),
             'file_size' => $this->integer($attachment['file_size'] ?? 0),

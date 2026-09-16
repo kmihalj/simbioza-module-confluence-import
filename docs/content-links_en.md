@@ -26,8 +26,10 @@ only when its host exactly matches the selected source URL host.
 - Same-space links are replaced with the new Workspace route.
 - Page fragments are retained.
 - Links to an already imported space are resolved through source-ID mappings.
-- Links to a space not imported yet use a stable resolver URL and keep the original destination.
-- A later successful import runs reconciliation in both directions.
+- Links to a space not imported yet temporarily use a stable resolver URL and keep the original destination.
+- A later successful import runs reconciliation in both directions and replaces
+  the temporary resolver with a durable Workspace link in every already imported
+  document version. Version author, timestamp, and history remain unchanged.
 - An unrecognized URL on the selected source Confluence host remains clickable and is recorded as unresolved.
 - External web links are preserved.
 
@@ -59,11 +61,11 @@ static representation remains in the imported page.
   dynamically after import and reapplies ACL every time.
 - `gallery` becomes a native gallery of real Editor attachments on the current page.
 - `livesearch` and `pagetreesearch` become a native, manually editable dynamic
-  search form. Without `spaceKey` they target the current Workspace; every XML
-  `ri:space` is otherwise stored as a portable Confluence reference. A reference
-  resolves only after its target Workspace has been imported. Until then the
-  form is disabled and never falls back to another or global scope. All results
-  still pass current Workspace/page ACL.
+  search form. Without `spaceKey` they target the current Workspace. A known XML
+  `ri:space` becomes an ordinary Workspace slug immediately; an unknown target
+  creates a disabled empty-scope form and a review item, without retaining a
+  runtime dependency on Confluence tables. All results still pass current
+  Workspace/page ACL.
 - `recently-updated` becomes an ACL-safe list of recent published changes.
 - `panel` becomes a themed card. Legacy `section` and `column` macros become a
   responsive row of cards: percentage widths map to the Bootstrap grid, and

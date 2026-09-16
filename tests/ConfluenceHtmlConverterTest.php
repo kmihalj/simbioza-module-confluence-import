@@ -915,8 +915,8 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Ciljani Confluence livesearch čuva prijenosne XML ključeve područja. EN: Targeted Confluence livesearch preserves portable XML Workspace keys. */
-    public function testLiveSearchPreservesTargetWorkspaceReferencesFromXml(): void
+    /** HR: Ciljani Confluence livesearch sprema lokalni slug i ne ovisi o import tablicama. EN: Targeted Confluence livesearch stores a local slug without depending on import tables. */
+    public function testLiveSearchMaterializesTargetWorkspaceSlugFromXml(): void
     {
         $body = <<<'XML'
 <ac:structured-macro ac:name="livesearch">
@@ -925,7 +925,12 @@ XML;
 </ac:structured-macro>
 XML;
 
-        $result = (new ConfluenceHtmlConverter())->convert($body, 'DSU', '10');
+        $result = (new ConfluenceHtmlConverter())->convert(
+            $body,
+            'DSU',
+            '10',
+            new ConfluenceMacroContext('10', [], [], [], [], '', ['AAIUPUTE' => 'aaiupute']),
+        );
 
         self::assertMatchesRegularExpression(
             '/data-workspace-block-kind="workspace-search"[^>]+data-workspace-block-config="([^"]+)"/',
@@ -941,12 +946,32 @@ XML;
         $configuration = json_decode((string)base64_decode($encoded, true), true, 512, JSON_THROW_ON_ERROR);
 
         self::assertSame('Pretraži dokumentaciju', $configuration['title']);
-        self::assertSame(
-            [['provider' => 'confluence', 'reference' => 'AAIUPUTE']],
-            $configuration['workspace_refs'],
-        );
-        self::assertArrayNotHasKey('workspace_slugs', $configuration);
+        self::assertSame(['aaiupute'], $configuration['workspace_slugs']);
+        self::assertArrayNotHasKey('workspace_refs', $configuration);
         self::assertSame([], $result->unsupportedMacros);
+        self::assertSame([], $result->reviewIssues);
+    }
+
+    /** HR: Neriješeno ciljano područje ne pada pogrešno na trenutačno područje. EN: An unresolved targeted Workspace does not incorrectly fall back to the current Workspace. */
+    public function testLiveSearchKeepsUnresolvedTargetAsEmptyLocalScopeForReview(): void
+    {
+        $body = '<ac:structured-macro ac:name="livesearch">'
+            . '<ac:parameter ac:name="spaceKey">MISSING</ac:parameter>'
+            . '</ac:structured-macro>';
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'DSU', '10');
+        preg_match(
+            '/data-workspace-block-kind="workspace-search"[^>]+data-workspace-block-config="([^"]+)"/',
+            $result->html,
+            $matches,
+        );
+        $encoded = strtr($matches[1] ?? '', '-_', '+/');
+        $encoded .= str_repeat('=', (4 - strlen($encoded) % 4) % 4);
+        $configuration = json_decode((string)base64_decode($encoded, true), true, 512, JSON_THROW_ON_ERROR);
+
+        self::assertSame([], $configuration['workspace_slugs']);
+        self::assertSame('workspace_reference', $result->reviewIssues[0]['type'] ?? '');
+        self::assertSame('MISSING', $result->reviewIssues[0]['source_space_key'] ?? '');
     }
 
     /** HR: Livesearch bez `spaceKey` ostaje uređiva pretraga trenutačnog područja. EN: Livesearch without `spaceKey` remains an editable current-Workspace search. */

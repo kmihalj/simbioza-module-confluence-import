@@ -112,16 +112,11 @@ final readonly class ConfluenceReferenceResolver
                     'status' => $target !== '#' ? 'resolved' : 'unresolved',
                 ];
 
-                $crossSpace = $destinationSpace !== ''
-                    && strcasecmp($destinationSpace, $sourceSpaceKey) !== 0;
-
                 if ($referenceType === 'unknown' && $this->safeExternalTarget($originalTarget)) {
                     return $originalTarget;
                 }
 
-                return $crossSpace || $target === '#'
-                    ? $this->unresolvedPath($linkUuid)
-                    : $target;
+                return $target !== '#' ? $target : $this->unresolvedPath($linkUuid);
             },
             $html,
         ) ?? $html;

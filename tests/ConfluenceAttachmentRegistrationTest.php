@@ -26,6 +26,8 @@ final class ConfluenceAttachmentRegistrationTest extends TestCase
             'logical_source_id' => 'attachment-1',
             'source_page_id' => 'page-1',
             'source_version' => 1,
+            'source_creator_key' => 'user-7',
+            'source_created_at' => '2025-04-03T12:13:14Z',
             'original_name' => 'demo.tar.gz',
             'mime_type' => 'application/gzip',
             'file_size' => 17,
@@ -45,6 +47,8 @@ final class ConfluenceAttachmentRegistrationTest extends TestCase
         $registered = $repository->attachmentBySourceVersion(1, 'attachment-1', 1);
         self::assertIsArray($registered);
         self::assertSame('registered', $registered['status']);
+        self::assertSame('user-7', $registered['source_creator_key']);
+        self::assertSame('2025-04-03T12:13:14Z', $registered['source_created_at']);
         self::assertNull($registered['storage_path']);
         self::assertSame(12, (int)$registered['target_node_id']);
         self::assertSame('document-key', $registered['target_document_key']);

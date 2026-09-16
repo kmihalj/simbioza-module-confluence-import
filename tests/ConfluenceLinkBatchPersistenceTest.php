@@ -108,7 +108,37 @@ final class ConfluenceLinkBatchPersistenceTest extends TestCase
 
         self::assertSame(12, (int)($repository->spaceBySourceKey('target')['target_workspace_id'] ?? 0));
         self::assertSame('home', $repository->contentBySource('target', '99')['target_slug'] ?? null);
+        self::assertSame('home', $repository->contentBySourceReference('target', '99')['target_slug'] ?? null);
         self::assertSame('home', $repository->homepageContentBySpaceKey('target')['target_slug'] ?? null);
+    }
+
+    /** HR: Povijesni ID verzije razrješava se preko stvarnog stupca izvornog sadržaja. EN: A historical version ID resolves through the real source-content column. */
+    public function testHistoricalVersionReferenceUsesSourceContentId(): void
+    {
+        [$repository, $database] = $this->environment();
+        $now = gmdate('Y-m-d H:i:s');
+        $database->table(ModuleSimbiozaConfluenceImport::TABLE_CONTENT)->insert([
+            'source_content_id' => 'version-17',
+            'logical_source_id' => 'page-4',
+            'source_space_key' => 'DOCS',
+            'source_type' => 'page',
+            'source_status' => 'current',
+            'source_version' => 3,
+            'source_title' => 'Versioned page',
+            'target_workspace_id' => 12,
+            'target_node_id' => 24,
+            'target_document_key' => 'doc-versioned',
+            'target_slug' => 'versioned-page',
+            'import_status' => 'imported',
+            'job_id' => 4,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        self::assertSame(
+            'versioned-page',
+            $repository->contentBySourceReference('docs', 'version-17')['target_slug'] ?? null,
+        );
     }
 
     /** HR: Izvještaj dobiva samo aktualne nerazriješene poveznice svojega importa. EN: A report receives only its import's currently unresolved links. */

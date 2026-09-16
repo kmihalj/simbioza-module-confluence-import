@@ -10,6 +10,7 @@ use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorHtmlChartService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorHtmlRoadmapService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorDocumentIncludeService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorImportAttachmentService;
+use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorMaintenanceService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorWorkspaceIntegration;
 use AaiEduHr\HeartPhrameModuleMenu\Service\MenuRenderer;
@@ -123,6 +124,7 @@ $services = [
             $container->get(EditorApiActorContext::class),
             $container->get(EditorImportAttachmentService::class),
             $container->get(\AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorImportAttributionService::class),
+            $container->get(EditorMaintenanceService::class),
             $container->get(AuthUserService::class),
             $container->get(AuthUserAttributeService::class),
             $container->get(AuthGroupService::class),

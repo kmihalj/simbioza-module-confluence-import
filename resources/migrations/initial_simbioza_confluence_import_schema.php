@@ -138,6 +138,8 @@ return new class implements ReversibleMigrationInterface {
                 $table->string('logical_source_id', 190)->index();
                 $table->string('source_page_id', 190)->index();
                 $table->integer('source_version')->unsigned()->default(1);
+                $table->string('source_creator_key', 190)->nullable()->index();
+                $table->string('source_created_at', 64)->nullable()->index();
                 $table->string('original_name', 1024);
                 $table->string('mime_type', 255)->default('application/octet-stream')->index();
                 $table->bigInteger('file_size')->unsigned()->default(0);

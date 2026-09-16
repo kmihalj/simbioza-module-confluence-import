@@ -12,6 +12,7 @@ use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorApiActorContext;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorDocumentIncludeService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorImportAttachmentService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorImportAttributionService;
+use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorMaintenanceService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorWorkspaceIntegration;
 use AaiEduHr\SimbiozaModuleWorkspace\Event\WorkspaceContentChanged;
@@ -26,6 +27,7 @@ use AaiEduHr\SimbiozaModuleUser\Service\PersonalWorkspaceService;
 use HeartPhrame\Routing\UrlGenerator;
 use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
+use ReflectionMethod;
 
 use function array_filter;
 use function array_key_exists;
@@ -121,6 +123,7 @@ final readonly class ConfluenceImportService
         private EditorApiActorContext $editorActors,
         private EditorImportAttachmentService $importedAttachmentService,
         private EditorImportAttributionService $importAttribution,
+        private EditorMaintenanceService $editorMaintenance,
         private AuthUserService $users,
         private AuthUserAttributeService $userAttributes,
         private AuthGroupService $groups,
@@ -1735,6 +1738,7 @@ final readonly class ConfluenceImportService
             }
         }
 
+        $dataset['attachment_versions'] = $attachments;
         $dataset['attachments'] = array_values(ConfluenceAttachmentSelector::latestCurrent($attachments));
         $dataset['attachment_pages_by_source'] = $attachmentPages;
         $dataset['attachments_prepared'] = true;
@@ -1767,10 +1771,18 @@ final readonly class ConfluenceImportService
         $workspaceId = (int)($workspace['id'] ?? 0);
         $properties = is_array($dataset['properties'] ?? null) ? $dataset['properties'] : [];
         $all = ($dataset['attachments_prepared'] ?? false) === true
-            ? $this->rows($dataset['attachments'] ?? [])
+            ? $this->rows($dataset['attachment_versions'] ?? $dataset['attachments'] ?? [])
             : array_values(ConfluenceAttachmentSelector::latestCurrent(
                 $this->rows($dataset['attachments'] ?? []),
             ));
+        $currentVersions = [];
+        foreach (ConfluenceAttachmentSelector::latestCurrent($all) as $currentAttachment) {
+            $currentVersions[
+                $this->text($currentAttachment['source_id'] ?? '')
+                . ':'
+                . max(1, (int)($currentAttachment['version'] ?? 1))
+            ] = true;
+        }
         $total = count($all);
         $slice = array_slice($all, max(0, $offset), max(1, $limit));
         foreach ($slice as $attachment) {
@@ -1789,6 +1801,8 @@ final readonly class ConfluenceImportService
                     'logical_source_id' => $this->text($attachment['logical_source_id'] ?? $sourceId),
                     'source_page_id' => $pageId,
                     'source_version' => $version,
+                    'source_creator_key' => $this->text($attachment['creator_source_key'] ?? ''),
+                    'source_created_at' => $this->text($attachment['created_at'] ?? ''),
                     'original_name' => $filename,
                     'mime_type' => $this->text($existing['mime_type'] ?? 'application/octet-stream'),
                     'file_size' => (int)($existing['file_size'] ?? 0),
@@ -1796,7 +1810,9 @@ final readonly class ConfluenceImportService
                     'workspace_id' => $workspaceId,
                     'status' => 'stored',
                 ], $jobId);
-                $urls[$pageId][$filename] = $this->attachmentPath($this->text($saved['uuid'] ?? ''));
+                if (isset($currentVersions[$sourceId . ':' . $version])) {
+                    $urls[$pageId][$filename] = $this->attachmentPath($this->text($saved['uuid'] ?? ''));
+                }
                 ++$imported;
 
                 continue;
@@ -1812,6 +1828,8 @@ final readonly class ConfluenceImportService
                 'logical_source_id' => $this->text($attachment['logical_source_id'] ?? $sourceId),
                 'source_page_id' => $pageId,
                 'source_version' => $version,
+                'source_creator_key' => $this->text($attachment['creator_source_key'] ?? ''),
+                'source_created_at' => $this->text($attachment['created_at'] ?? ''),
                 'original_name' => $filename,
                 'mime_type' => $this->text($metadata['MEDIA_TYPE'] ?? 'application/octet-stream'),
                 'file_size' => is_numeric($metadata['FILESIZE'] ?? null) ? (int)$metadata['FILESIZE'] : 0,
@@ -1837,7 +1855,9 @@ final readonly class ConfluenceImportService
 
             $saved = $this->repository->recordAttachment($record, $jobId);
             if (($saved['status'] ?? '') === 'stored') {
-                $urls[$pageId][$filename] = $this->attachmentPath($this->text($saved['uuid'] ?? ''));
+                if (isset($currentVersions[$sourceId . ':' . $version])) {
+                    $urls[$pageId][$filename] = $this->attachmentPath($this->text($saved['uuid'] ?? ''));
+                }
                 ++$imported;
             }
         }
@@ -1874,6 +1894,11 @@ final readonly class ConfluenceImportService
         $macroPages = [];
         $macroUsers = [];
         $macroCalendars = [];
+        $macroWorkspaces = $this->repository->workspaceSlugsBySourceKey();
+        $currentSpaceKey = strtoupper($this->text($workspace['source_space_key'] ?? ''));
+        if ($currentSpaceKey !== '' && $this->text($workspace['slug'] ?? '') !== '') {
+            $macroWorkspaces[$currentSpaceKey] = $this->text($workspace['slug'] ?? '');
+        }
         $fallbackUser = $this->importingAdministratorDisplayName($actorUserId);
         foreach ($this->rows($dataset['calendars'] ?? []) as $calendar) {
             $sourceUuid = $this->text($calendar['source_uuid'] ?? '');
@@ -1943,6 +1968,7 @@ final readonly class ConfluenceImportService
             'macro_pages' => $macroPages,
             'macro_users' => $macroUsers,
             'macro_calendars' => $macroCalendars,
+            'macro_workspaces' => $macroWorkspaces,
             'fallback_user' => $fallbackUser,
         ];
     }
@@ -1992,6 +2018,7 @@ final readonly class ConfluenceImportService
         $macroPages = is_array($context['macro_pages'] ?? null) ? $context['macro_pages'] : [];
         $macroUsers = $this->scalarMap($context['macro_users'] ?? []);
         $macroCalendars = $this->scalarMap($context['macro_calendars'] ?? []);
+        $macroWorkspaces = $this->scalarMap($context['macro_workspaces'] ?? []);
         $fallbackUser = $this->text($context['fallback_user'] ?? '');
 
         $pending = [];
@@ -2043,7 +2070,25 @@ final readonly class ConfluenceImportService
                 $pageAttachments = $attachments[$logicalId]
                     ?? $attachments[$firstSourceId]
                     ?? [];
+                $currentAttachmentRows = [];
                 foreach ($attachmentRows as $attachmentRow) {
+                    $attachmentLogicalId = $this->text(
+                        $attachmentRow['logical_source_id'] ?? $attachmentRow['source_attachment_id'] ?? '',
+                    );
+                    $candidateVersion = max(1, (int)($attachmentRow['source_version'] ?? 1));
+                    if (
+                        $attachmentLogicalId !== ''
+                        && (
+                            !isset($currentAttachmentRows[$attachmentLogicalId])
+                            || $candidateVersion > (int)(
+                                $currentAttachmentRows[$attachmentLogicalId]['source_version'] ?? 1
+                            )
+                        )
+                    ) {
+                        $currentAttachmentRows[$attachmentLogicalId] = $attachmentRow;
+                    }
+                }
+                foreach ($currentAttachmentRows as $attachmentRow) {
                     $name = $this->text($attachmentRow['original_name'] ?? '');
                     $uuid = $this->text($attachmentRow['uuid'] ?? '');
                     if ($name !== '' && $uuid !== '') {
@@ -2066,6 +2111,7 @@ final readonly class ConfluenceImportService
                         $macroUsers,
                         $macroCalendars,
                         $fallbackUser,
+                        $macroWorkspaces,
                     ),
                     $sourceBaseUrl,
                 );
@@ -2172,6 +2218,7 @@ final readonly class ConfluenceImportService
                             $macroUsers,
                             $macroCalendars,
                             $fallbackUser,
+                            $macroWorkspaces,
                         ),
                         $sourceBaseUrl,
                     );
@@ -2210,6 +2257,7 @@ final readonly class ConfluenceImportService
                             $macroUsers,
                             $macroCalendars,
                             $fallbackUser,
+                            $macroWorkspaces,
                         ),
                         $sourceBaseUrl,
                     );
@@ -2337,31 +2385,62 @@ final readonly class ConfluenceImportService
     ): int {
         $registeredIds = [];
         try {
+            $groups = [];
             foreach ($attachments as $attachment) {
-                $attachmentId = (int)($attachment['id'] ?? 0);
-                $sourcePath = $this->text($attachment['storage_path'] ?? '');
-                if (
-                    ($attachment['status'] ?? '') !== 'stored'
-                    || $attachmentId <= 0
-                    || $sourcePath === ''
-                    || !is_file($sourcePath)
-                ) {
-                    continue;
-                }
-
-                $this->importedAttachmentService->importFromPath(
-                    $documentKey,
-                    $this->text($attachment['uuid'] ?? ''),
-                    $sourcePath,
-                    $this->text($attachment['original_name'] ?? 'attachment'),
-                    $this->text($attachment['mime_type'] ?? 'application/octet-stream'),
-                    $actorUserId,
+                $logicalId = $this->text(
+                    $attachment['logical_source_id'] ?? $attachment['source_attachment_id'] ?? '',
                 );
-                $registeredIds[] = $attachmentId;
-                if (!unlink($sourcePath) && is_file($sourcePath)) {
-                    throw new ConfluenceImportException(
-                        __('Privremenu kopiju uvezenog privitka nije moguće ukloniti.'),
+                if ($logicalId !== '') {
+                    $groups[$logicalId][] = $attachment;
+                }
+            }
+            foreach ($groups as $versions) {
+                usort(
+                    $versions,
+                    static fn(array $left, array $right): int =>
+                        ((int)($left['source_version'] ?? 1)) <=> ((int)($right['source_version'] ?? 1)),
+                );
+                $current = $versions[count($versions) - 1] ?? [];
+                $assetUuid = $this->text($current['uuid'] ?? '');
+                foreach ($versions as $attachment) {
+                    $attachmentId = (int)($attachment['id'] ?? 0);
+                    $sourcePath = $this->text($attachment['storage_path'] ?? '');
+                    if (
+                        ($attachment['status'] ?? '') !== 'stored'
+                        || $attachmentId <= 0
+                        || $sourcePath === ''
+                        || !is_file($sourcePath)
+                    ) {
+                        continue;
+                    }
+
+                    $sourceCreator = $this->text($attachment['source_creator_key'] ?? '');
+                    $createdByUserId = $sourceCreator !== ''
+                        ? ($this->repository->mappedUserId($sourceCreator) ?? $actorUserId)
+                        : $actorUserId;
+                    // HR: Posredni poziv zadržava kompatibilnost analize s prethodnim Editor paketom;
+                    //     instalacija s novim paketom prima i broj verzije te izvorno vrijeme.
+                    // EN: The indirect call keeps analysis compatible with the previous Editor package;
+                    //     installations with the new package also receive version number and source time.
+                    (new ReflectionMethod($this->importedAttachmentService, 'importFromPath'))->invokeArgs(
+                        $this->importedAttachmentService,
+                        [
+                            $documentKey,
+                            $assetUuid,
+                            $sourcePath,
+                            $this->text($attachment['original_name'] ?? 'attachment'),
+                            $this->text($attachment['mime_type'] ?? 'application/octet-stream'),
+                            $createdByUserId,
+                            max(1, (int)($attachment['source_version'] ?? 1)),
+                            $this->text($attachment['source_created_at'] ?? ''),
+                        ],
                     );
+                    $registeredIds[] = $attachmentId;
+                    if (!unlink($sourcePath) && is_file($sourcePath)) {
+                        throw new ConfluenceImportException(
+                            __('Privremenu kopiju uvezenog privitka nije moguće ukloniti.'),
+                        );
+                    }
                 }
             }
         } finally {
@@ -2955,6 +3034,7 @@ final readonly class ConfluenceImportService
     private function reconcileLinks(string $changedSpaceKey): int
     {
         $resolved = 0;
+        $replacementsByDocument = [];
         foreach ($this->repository->linksForReconciliation($changedSpaceKey) as $link) {
             $spaceKey = $this->text($link['destination_space_key'] ?? '');
             $pageId = $this->text($link['destination_page_id'] ?? '');
@@ -2991,10 +3071,36 @@ final readonly class ConfluenceImportService
                 $target .= $safeFragment !== '' ? '#' . $safeFragment : '';
             }
             $this->repository->updateLinkResolution((int)$link['id'], $target);
+            $sourceMapping = $this->repository->contentBySourceReference(
+                $this->text($link['source_space_key'] ?? ''),
+                $this->text($link['source_page_id'] ?? ''),
+            );
+            $documentKey = is_array($sourceMapping)
+                ? $this->text($sourceMapping['target_document_key'] ?? '')
+                : '';
+            $linkUuid = $this->text($link['uuid'] ?? '');
+            if ($documentKey !== '' && $linkUuid !== '') {
+                $replacementsByDocument[$documentKey][$this->confluenceLinkPath($linkUuid)] = $target;
+            }
             ++$resolved;
         }
 
+        $this->editorMaintenance->replaceContentReferences($replacementsByDocument);
+
         return $resolved;
+    }
+
+    /**
+     * HR: Gradi točnu prijelaznu putanju spremljenu u ranije uvezenom HTML-u.
+     * EN: Builds the exact transitional path stored in previously imported HTML.
+     */
+    private function confluenceLinkPath(string $uuid): string
+    {
+        if ($this->urls->namedRouteExists('simbioza-confluence-import.link')) {
+            return $this->urls->getPathFor('simbioza-confluence-import.link', ['uuid' => $uuid]);
+        }
+
+        return rtrim($this->urls->getBasePath(), '/') . '/confluence-import/link/' . rawurlencode($uuid);
     }
 
     /**
@@ -3260,6 +3366,8 @@ final readonly class ConfluenceImportService
             'title' => $object->string('title'),
             'version' => $object->integer('version', 1),
             'status' => strtolower($object->string('contentStatus', 'current')),
+            'creator_source_key' => $object->reference('creator'),
+            'created_at' => $object->string('creationDate'),
         ];
     }
 

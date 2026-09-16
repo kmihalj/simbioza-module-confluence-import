@@ -30,7 +30,8 @@ Workspace, HTML Editor, Auth, Menu i Simbioza User ostaju vlasnici svojih zapisa
 6. `ConfluenceImportService` provjerava administratorsku potvrdu, po izričitom
    izboru kroz javni Auth servis izrađuje neaktivne predračune te izrađuje ciljne objekte.
 7. `ConfluenceHtmlConverter` proizvodi prenosivi HTML s privremenim oznakama.
-8. `ConfluenceReferenceResolver` zamjenjuje lokalna odredišta i čuva stabilna neriješena odredišta.
+8. `ConfluenceReferenceResolver` zamjenjuje lokalna odredišta, a finalizacija
+   trajno materijalizira naknadno razriješene poveznice u sadržaj Editora.
 9. Opcionalne Search, Audit, Comment i Backup integracije rade kroz svoje javne ugovore.
 
 Importer ne upisuje izravno u Auth tablice. `AuthUserService` provodi zajednička
@@ -50,6 +51,13 @@ Završni korak usklađuje reference, izvještaj i izvedene indekse samo jednom.
 Ponovljeni ili istodobni poziv vraća trenutačno stanje umjesto dupliciranja
 sadržaja. Fatalni PHP prekid označava posao neuspjelim i ostavlja dovoljno
 metapodataka za administratorsku dijagnostiku.
+
+Nakon uspješne finalizacije normalni prikaz stranice koristi samo Workspace,
+Editor i njihove izvedene indekse. Ne čita `simbioza_confluence_import_*`
+tablice. Privremene resolver poveznice zamjenjuju se trajnim rutama čim se cilj
+može razriješiti, a dinamičke forme pretrage spremaju obične Workspace slugove.
+Zato se modul nakon dovršenih importa može isključiti; njegove tablice služe
+samo ponovnom importu, izvještaju i administratorskom porijeklu podataka.
 
 Registracija privitaka jedne stranice dohvaća sve pripadne retke jednim upitom i
 skupno potvrđuje prijenos vlasništva Editoru. Izrada web-varijanti slika nije dio

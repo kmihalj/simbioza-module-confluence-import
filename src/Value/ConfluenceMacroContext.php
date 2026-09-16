@@ -20,6 +20,7 @@ final readonly class ConfluenceMacroContext
      * @param array<string,string> $attachments
      * @param array<string,string> $users
      * @param array<string,string> $calendars
+     * @param array<string,string> $workspaces
      */
     public function __construct(
         int|string $currentPageId,
@@ -28,6 +29,7 @@ final readonly class ConfluenceMacroContext
         public array $users = [],
         public array $calendars = [],
         public string $fallbackUser = '',
+        public array $workspaces = [],
     ) {
         // HR: PHP brojčane XML identifikatore pretvara u cjelobrojne ključeve polja; lokalno ih uvijek čuvamo kao tekst.
         // EN: PHP converts numeric XML identifiers into integer array keys; locally we always retain them as strings.

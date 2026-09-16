@@ -26,8 +26,10 @@ joj host točno odgovara hostu odabranog izvornog URL-a.
 - Poveznice unutar istog spacea zamjenjuju se novom rutom područja.
 - Fragmenti stranice ostaju sačuvani.
 - Poveznice na već uvezeni space rješavaju se kroz mapiranja izvornih ID-eva.
-- Poveznice na space koji još nije uvezen koriste stabilni resolver URL i čuvaju izvorno odredište.
-- Svaki kasniji uspješni import pokreće usklađivanje u oba smjera.
+- Poveznice na space koji još nije uvezen privremeno koriste stabilni resolver URL i čuvaju izvorno odredište.
+- Svaki kasniji uspješni import pokreće usklađivanje u oba smjera i u svim već
+  uvezenim verzijama dokumenta zamjenjuje privremeni resolver trajnom Workspace
+  poveznicom. Autor, vrijeme i povijest verzije pritom ostaju sačuvani.
 - Neprepoznati URL s odabranog izvornog Confluence hosta ostaje klikabilan i bilježi se kao nerazriješen.
 - Vanjske web-poveznice ostaju nepromijenjene.
 
@@ -62,10 +64,11 @@ prikaz.
   ostaje pristupačni zamjenski tekst. Naziv datoteke nikada se ne koristi kao
   izmišljeni opis slike.
 - `livesearch` i `pagetreesearch` postaju nativna, ručno uređiva dinamička forma
-  pretrage. Bez `spaceKey` cilja trenutačno područje, a svaki XML `ri:space`
-  sprema kao prijenosnu Confluence referencu. Referenca se razrješava tek kada je
-  ciljno područje uvezeno; do tada je forma onemogućena i ne prelazi na drugi ili
-  globalni opseg. Svi rezultati prolaze aktualni ACL područja i stranice.
+  pretrage. Bez `spaceKey` cilja trenutačno područje. Poznati XML `ri:space`
+  odmah se pretvara u obični Workspace slug; nepoznati cilj daje onemogućenu
+  formu praznog opsega i stavku za ručnu provjeru, bez spremanja runtime
+  ovisnosti o Confluence tablicama. Svi rezultati prolaze aktualni ACL područja i
+  stranice.
 - `recently-updated` postaje ACL-siguran popis nedavnih objavljenih promjena.
 - `panel` postaje tematska kartica. Stari `section` i `column` makroi postaju
   responzivni red kartica: postotne širine preslikavaju se na Bootstrap mrežu,

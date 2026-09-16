@@ -305,6 +305,7 @@ final readonly class ConfluenceExportScanner
             'title' => $object->string('title'),
             'version' => $object->integer('version', 1),
             'status' => strtolower($object->string('contentStatus', 'current')),
+            'creator_source_key' => $object->reference('creator'),
             'created_at' => $object->string('creationDate'),
             'updated_at' => $object->string('lastModificationDate'),
         ];

@@ -31,7 +31,14 @@ final class ConfluenceImportSchemaTest extends TestCase
         }
         self::assertTrue($database->schema()->hasColumns(
             ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS,
-            ['uuid', 'storage_path', 'target_node_id', 'mime_type'],
+            [
+                'uuid',
+                'storage_path',
+                'target_node_id',
+                'mime_type',
+                'source_creator_key',
+                'source_created_at',
+            ],
         ));
 
         $migration->down($database);

@@ -782,13 +782,27 @@ final readonly class ConfluenceHtmlConverter
             $configuration = ['title' => $this->macroParameter($xpath, $macro, 'placeholder')];
             $spaceKeys = $this->macroWorkspaceReferences($xpath, $macro);
             if ($spaceKeys !== []) {
-                $configuration['workspace_refs'] = array_map(
-                    static fn(string $spaceKey): array => [
-                        'provider' => 'confluence',
-                        'reference' => $spaceKey,
-                    ],
-                    $spaceKeys,
-                );
+                $workspaceSlugs = [];
+                foreach ($spaceKeys as $spaceKey) {
+                    $workspaceSlug = $context instanceof ConfluenceMacroContext
+                        ? trim((string)($context->workspaces[strtoupper($spaceKey)] ?? ''))
+                        : '';
+                    if ($workspaceSlug !== '') {
+                        $workspaceSlugs[] = $workspaceSlug;
+                        continue;
+                    }
+                    $reviewIssues[] = [
+                        'type' => 'workspace_reference',
+                        'macro' => $name,
+                        'source_space_key' => $spaceKey,
+                        'resolved' => false,
+                    ];
+                }
+                // HR: I prazan eksplicitni popis sprječava pogrešan fallback
+                //     na trenutačno područje kada cilj još nije uvezen.
+                // EN: Even an empty explicit list prevents an incorrect
+                //     fallback to the current Workspace before the target is imported.
+                $configuration['workspace_slugs'] = array_values(array_unique($workspaceSlugs));
             }
 
             return $this->workspaceBlockNode(
