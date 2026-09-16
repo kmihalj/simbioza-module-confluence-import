@@ -69,7 +69,7 @@ final class ConfluenceImportWorkspaceBackupProviderTest extends TestCase
         };
         $this->database = new Database($configuration, $helper);
         $this->createWorkspaceTables();
-        $migration = require dirname(__DIR__) . '/resources/migrations/initial_simbioza_confluence_import_schema.php';
+        $migration = require __DIR__ . '/../resources/migrations/initial_simbioza_confluence_import_schema.php';
         $migration->up($this->database);
         $this->importConfig = new ConfluenceImportConfig($configuration, dirname(__DIR__));
         $backupModuleRoot = dirname((string)(new ReflectionClass(BackupConfig::class))->getFileName(), 3);

@@ -56,7 +56,7 @@ final class ConfluencePageSluggerTest extends TestCase
     /** HR: Čista instalacija može izraditi slug servis iz modulske konfiguracije. EN: A clean installation can build the slug service from module configuration. */
     public function testModuleConfigurationRegistersSlugger(): void
     {
-        $services = require dirname(__DIR__) . '/config/services.php';
+        $services = require __DIR__ . '/../config/services.php';
 
         self::assertIsArray($services);
         self::assertArrayHasKey(ConfluencePageSlugger::class, $services);

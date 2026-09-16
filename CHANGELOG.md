@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.32 - 2026-09-16
+
+- Normalizes test fixture paths for the current supported Rector release used
+  by the release pipeline.
+
 ## 0.1.31 - 2026-09-16
 
 - Records the original Confluence attachment creator and creation/update timestamps

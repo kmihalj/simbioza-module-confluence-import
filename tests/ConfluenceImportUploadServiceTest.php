@@ -53,7 +53,7 @@ final class ConfluenceImportUploadServiceTest extends TestCase
             }
         };
         $this->database = new Database($configuration, $helper);
-        $migration = require dirname(__DIR__) . '/resources/migrations/initial_simbioza_confluence_import_schema.php';
+        $migration = require __DIR__ . '/../resources/migrations/initial_simbioza_confluence_import_schema.php';
         $migration->up($this->database);
         $config = new ConfluenceImportConfig($configuration, dirname(__DIR__));
         $this->config = $config;

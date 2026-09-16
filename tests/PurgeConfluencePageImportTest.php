@@ -54,7 +54,7 @@ final class PurgeConfluencePageImportTest extends TestCase
             }
         };
         $database = new Database($config, $helper);
-        $migration = require dirname(__DIR__) . '/resources/migrations/initial_simbioza_confluence_import_schema.php';
+        $migration = require __DIR__ . '/../resources/migrations/initial_simbioza_confluence_import_schema.php';
         $migration->up($database);
         $importConfig = new ConfluenceImportConfig($config, dirname(__DIR__));
         mkdir($importConfig->attachmentDirectory(), 0770, true);

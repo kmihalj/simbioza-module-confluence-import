@@ -60,7 +60,7 @@ final class ConfluenceIdentityMappingTest extends TestCase
         $database = new Database(new Config($helper, [
             'database' => ['connections' => ['default' => ['driver' => 'sqlite', 'database' => ':memory:']]],
         ]), $helper);
-        $migration = require dirname(__DIR__) . '/resources/migrations/initial_simbioza_confluence_import_schema.php';
+        $migration = require __DIR__ . '/../resources/migrations/initial_simbioza_confluence_import_schema.php';
         $migration->up($database);
 
         return [new ConfluenceImportRepository($database), $database];

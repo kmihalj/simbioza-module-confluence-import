@@ -11,7 +11,7 @@ final class ConfluenceImportViewTest extends TestCase
     /** HR: File picker mora koristiti prevedive oznake umjesto tekstova preglednika. EN: The file picker must use translatable labels instead of browser-owned text. */
     public function testFilePickerUsesLocalizedCustomControls(): void
     {
-        $view = file_get_contents(dirname(__DIR__) . '/views/settings/index.php');
+        $view = file_get_contents(__DIR__ . '/../views/settings/index.php');
 
         self::assertIsString($view);
         self::assertStringContainsString('id="confluence-import-file"', $view);
@@ -21,7 +21,7 @@ final class ConfluenceImportViewTest extends TestCase
         self::assertStringContainsString("fileInput?.addEventListener('change'", $view);
         self::assertStringContainsString('$this->escape(__((string)$warning))', $view);
 
-        $english = require dirname(__DIR__) . '/lang/en.php';
+        $english = require __DIR__ . '/../lang/en.php';
         self::assertSame('Choose file', $english['Odaberi datoteku']);
         self::assertSame('No file selected.', $english['Nije odabrana nijedna datoteka.']);
     }
@@ -29,7 +29,7 @@ final class ConfluenceImportViewTest extends TestCase
     /** HR: Import kartice moraju koristiti stvarne površine aktivne teme. EN: Import cards must use the active theme's real surfaces. */
     public function testImportCardsUseDefinedThemeSurfaceVariables(): void
     {
-        $styles = file_get_contents(dirname(__DIR__) . '/resources/assets/confluence-import.css');
+        $styles = file_get_contents(__DIR__ . '/../resources/assets/confluence-import.css');
 
         self::assertIsString($styles);
         self::assertStringContainsString(
@@ -50,8 +50,8 @@ final class ConfluenceImportViewTest extends TestCase
     /** HR: Razrješenje kalendara ne traži ručni naziv koji ICS već sadrži. EN: Calendar resolution does not request a manual name already carried by the ICS file. */
     public function testCalendarImportUsesTheIcsCalendarName(): void
     {
-        $view = file_get_contents(dirname(__DIR__) . '/views/settings/report.php');
-        $service = file_get_contents(dirname(__DIR__) . '/src/Service/ConfluenceCalendarResolutionService.php');
+        $view = file_get_contents(__DIR__ . '/../views/settings/report.php');
+        $service = file_get_contents(__DIR__ . '/../src/Service/ConfluenceCalendarResolutionService.php');
 
         self::assertIsString($view);
         self::assertIsString($service);
@@ -69,7 +69,7 @@ final class ConfluenceImportViewTest extends TestCase
             $view,
         );
 
-        $controller = file_get_contents(dirname(__DIR__) . '/src/Controller/ConfluenceImportController.php');
+        $controller = file_get_contents(__DIR__ . '/../src/Controller/ConfluenceImportController.php');
         self::assertIsString($controller);
         self::assertStringContainsString('$this->session->close();', $controller);
         self::assertLessThan(
@@ -81,8 +81,8 @@ final class ConfluenceImportViewTest extends TestCase
     /** HR: Trajni izvještaj prikazuje živu listu samo nerazriješenih Confluence veza. EN: The durable report shows a live list of unresolved Confluence links only. */
     public function testReportShowsDynamicUnresolvedLinks(): void
     {
-        $view = file_get_contents(dirname(__DIR__) . '/views/settings/report.php');
-        $controller = file_get_contents(dirname(__DIR__) . '/src/Controller/ConfluenceImportController.php');
+        $view = file_get_contents(__DIR__ . '/../views/settings/report.php');
+        $controller = file_get_contents(__DIR__ . '/../src/Controller/ConfluenceImportController.php');
 
         self::assertIsString($view);
         self::assertIsString($controller);
@@ -95,9 +95,9 @@ final class ConfluenceImportViewTest extends TestCase
     /** HR: Administrator može potvrditi ručnu korekciju veze ili makroa, a riješena upozorenja nestaju iz aktivnog izvještaja. EN: An administrator can confirm a manual link or macro correction and resolved warnings leave the active report. */
     public function testReportSupportsDurableManualCorrections(): void
     {
-        $view = file_get_contents(dirname(__DIR__) . '/views/settings/report.php');
-        $controller = file_get_contents(dirname(__DIR__) . '/src/Controller/ConfluenceImportController.php');
-        $repository = file_get_contents(dirname(__DIR__) . '/src/Service/ConfluenceImportRepository.php');
+        $view = file_get_contents(__DIR__ . '/../views/settings/report.php');
+        $controller = file_get_contents(__DIR__ . '/../src/Controller/ConfluenceImportController.php');
+        $repository = file_get_contents(__DIR__ . '/../src/Service/ConfluenceImportRepository.php');
 
         self::assertIsString($view);
         self::assertIsString($controller);
@@ -119,9 +119,9 @@ final class ConfluenceImportViewTest extends TestCase
     /** HR: Batch nudi pravilo za nemapirane korisnike bez umjetnog produljivanja sesije. EN: Batch exposes the unmapped-user policy without artificially extending the session. */
     public function testBatchImportHasUserPolicyAndRemoteUserPickerWithoutHeartbeat(): void
     {
-        $view = file_get_contents(dirname(__DIR__) . '/views/settings/index.php');
-        $controller = file_get_contents(dirname(__DIR__) . '/src/Controller/ConfluenceImportController.php');
-        $service = file_get_contents(dirname(__DIR__) . '/src/Service/ConfluenceImportService.php');
+        $view = file_get_contents(__DIR__ . '/../views/settings/index.php');
+        $controller = file_get_contents(__DIR__ . '/../src/Controller/ConfluenceImportController.php');
+        $service = file_get_contents(__DIR__ . '/../src/Service/ConfluenceImportService.php');
 
         self::assertIsString($view);
         self::assertIsString($controller);
@@ -150,8 +150,8 @@ final class ConfluenceImportViewTest extends TestCase
     /** HR: Veliki import ne ponavlja globalnu pripremu ni optimizaciju svih slika u svakom koraku. EN: A large import does not repeat global preparation or eager image optimization in every step. */
     public function testLargeImportDefersRepeatedGlobalWork(): void
     {
-        $service = file_get_contents(dirname(__DIR__) . '/src/Service/ConfluenceImportService.php');
-        $services = file_get_contents(dirname(__DIR__) . '/config/services.php');
+        $service = file_get_contents(__DIR__ . '/../src/Service/ConfluenceImportService.php');
+        $services = file_get_contents(__DIR__ . '/../config/services.php');
 
         self::assertIsString($service);
         self::assertIsString($services);
