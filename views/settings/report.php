@@ -245,7 +245,7 @@ $normalizeCalendarName = static function (string $name): string {
                                                     <div class="alert alert-success mt-3 mb-0" role="status">
                                                         <?= $this->escape(sprintf(
                                                             __('Stranica prikazuje kalendar „%s”.'),
-                                                            (string)($issue['target_calendar_name'] ?? __('Calendar')),
+                                                            (string)($issue['target_calendar_name'] ?? __('Kalendar')),
                                                         )) ?>
                                                         <?php if (($issue['resolution_mode'] ?? '') === 'import') : ?>
                                                             <?= $this->escape(sprintf(
@@ -298,7 +298,7 @@ $normalizeCalendarName = static function (string $name): string {
                                                                         >
                                                                             <?= $this->escape(sprintf(
                                                                                 '%s · %s · %s',
-                                                                                (string)($calendar['name'] ?? __('Calendar')),
+                                                                                (string)($calendar['name'] ?? __('Kalendar')),
                                                                                 $calendarTypeLabel((string)($calendar['calendar_type'] ?? 'team')),
                                                                                 $calendarVisibilityLabel($calendar),
                                                                             )) ?>

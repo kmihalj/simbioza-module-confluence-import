@@ -93,7 +93,7 @@ final readonly class ConfluenceCalendarResolutionService
 
             $calendars[] = [
                 'uuid' => $uuid,
-                'name' => $this->text($row['name'] ?? __('Calendar')),
+                'name' => $this->text($row['name'] ?? __('Kalendar')),
                 'calendar_type' => $this->text($row['calendar_type'] ?? ''),
                 'is_public_read' => (bool)($row['is_public_read'] ?? false),
                 'is_authenticated_read' => (bool)($row['is_authenticated_read'] ?? false),
@@ -219,7 +219,7 @@ final readonly class ConfluenceCalendarResolutionService
         }
 
         $calendarUuid = $this->text($calendar['uuid'] ?? '');
-        $calendarName = $this->text($calendar['name'] ?? __('Calendar'));
+        $calendarName = $this->text($calendar['name'] ?? __('Kalendar'));
         if ($calendarUuid === '') {
             throw new ConfluenceImportException(__('Odabrani kalendar nema stabilni UUID.'));
         }

@@ -211,7 +211,7 @@ final readonly class ConfluenceImportController
             $result = $this->calendarResolution->resolve($uuid, $body, $ics, $actor);
             $message = sprintf(
                 __('Stranica sada prikazuje kalendar „%s”.'),
-                $this->text($result['target_calendar_name'] ?? __('Calendar')),
+                $this->text($result['target_calendar_name'] ?? __('Kalendar')),
             );
 
             return $this->responses->redirect($this->calendarResolutionRedirect($uuid, 'success', $message));

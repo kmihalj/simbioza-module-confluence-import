@@ -3031,7 +3031,7 @@ final readonly class ConfluenceHtmlConverter
         };
         $badge = $document->createElement('span');
         $badge->setAttribute('class', 'badge ' . $class);
-        $badge->appendChild($document->createTextNode($this->macroParameter($xpath, $macro, 'title') ?: __('Status')));
+        $badge->appendChild($document->createTextNode($this->macroParameter($xpath, $macro, 'title') ?: __('Stanje')));
         return $badge;
     }
 
