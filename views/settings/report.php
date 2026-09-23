@@ -261,6 +261,13 @@ $normalizeCalendarName = static function (string $name): string {
                                                         <?= $this->escape(__('Calendar modul nije dostupan. Instalirajte ga prije povezivanja ovog makroa.')) ?>
                                                     </div>
                                                 <?php else : ?>
+                                                    <?php
+                                                    $icsInputId = 'confluence-import-ics-' . substr(hash(
+                                                        'sha256',
+                                                        (string)($page['source_page_id'] ?? '')
+                                                        . ':' . (string)($issue['marker'] ?? ''),
+                                                    ), 0, 16);
+                                                    ?>
                                                     <div class="row g-3 mt-1">
                                                         <div class="col-xl-6">
                                                             <form class="confluence-import-resolution-option h-100" method="post" action="<?= $this->escape($calendarResolvePath) ?>">
@@ -331,8 +338,12 @@ $normalizeCalendarName = static function (string $name): string {
                                                                 </p>
                                                                 <div class="row g-3">
                                                                     <div class="col-12">
-                                                                        <label class="form-label"><?= $this->escape(__('iCalendar datoteka')) ?></label>
-                                                                        <input class="form-control" type="file" name="ics_file" accept=".ics,text/calendar" required>
+                                                                        <label class="form-label" for="<?= $this->escape($icsInputId) ?>"><?= $this->escape(__('iCalendar datoteka')) ?></label>
+                                                                        <div class="input-group">
+                                                                            <input class="visually-hidden" id="<?= $this->escape($icsInputId) ?>" type="file" name="ics_file" accept=".ics,text/calendar" required data-localized-file-input>
+                                                                            <label class="btn btn-outline-secondary" for="<?= $this->escape($icsInputId) ?>"><?= $this->escape(__('Odaberi datoteku')) ?></label>
+                                                                            <span class="form-control text-truncate" data-localized-file-name data-empty-label="<?= $this->escape(__('Nije odabrana nijedna datoteka.')) ?>" aria-live="polite"><?= $this->escape(__('Nije odabrana nijedna datoteka.')) ?></span>
+                                                                        </div>
                                                                         <div class="form-text">
                                                                             <?= $this->escape(__('Naziv kalendara preuzima se iz ICS datoteke; ako u njoj nije naveden, koristi se naziv iz Confluencea.')) ?>
                                                                         </div>
@@ -403,3 +414,17 @@ $normalizeCalendarName = static function (string $name): string {
         </section>
     </main>
 </div>
+<script>
+document.querySelectorAll('[data-localized-file-input]').forEach(function (input) {
+    var filename = input.closest('.input-group')?.querySelector('[data-localized-file-name]');
+    if (!filename) {
+        return;
+    }
+    input.addEventListener('change', function () {
+        var selected = Array.from(input.files || []).map(function (file) {
+            return file.name;
+        });
+        filename.textContent = selected.length > 0 ? selected.join(', ') : filename.dataset.emptyLabel || '';
+    });
+});
+</script>

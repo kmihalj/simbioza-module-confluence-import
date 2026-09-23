@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AaiEduHr\SimbiozaModuleConfluenceImport\Controller;
 
+use AaiEduHr\HeartPhrameModuleOrm\Database\LocaleDateFormatter;
 use AaiEduHr\SimbiozaModuleWorkspace\Service\WorkspaceAccessService;
 use AaiEduHr\SimbiozaModuleWorkspace\Service\WorkspaceRepository;
 use AaiEduHr\HeartPhrameModuleMenu\Service\MenuRenderer;
@@ -959,11 +960,11 @@ final readonly class ConfluenceImportController
             return trim($value);
         }
 
-        $format = str_starts_with(strtolower($this->translator->getLocale()), 'en')
-            ? 'Y-m-d H:i:s'
-            : 'j. n. Y. H:i:s';
-
-        return $date->setTimezone($this->timezone())->format($format);
+        return LocaleDateFormatter::dateTimeSeconds(
+            $date,
+            $this->translator->getLocale(),
+            $this->timezone()->getName(),
+        );
     }
 
     /** HR: Vraća sigurnu vremensku zonu aplikacije. EN: Returns the application's safe time zone. */
