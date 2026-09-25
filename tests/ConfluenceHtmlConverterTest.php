@@ -14,6 +14,78 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(ConfluenceHtmlConverter::class)]
 final class ConfluenceHtmlConverterTest extends TestCase
 {
+    /** HR: Makroi s istim izvornim ID-ovima zadržavaju odvojene veze ćelija. EN: Macros with identical source IDs retain separate cell associations. */
+    public function testHtmlTableHeadersAreRemappedWithinEachMacro(): void
+    {
+        $macro = '<ac:structured-macro ac:name="html"><ac:plain-text-body><![CDATA['
+            . '<table><caption>Plan</caption><tr><th id="year" scope="col">2026</th>'
+            . '<th id="month" headers="year" scope="col">Rujan</th></tr>'
+            . '<tr><td headers="year month">Vrijednost</td><td>Drugo</td></tr></table>'
+            . ']]></ac:plain-text-body></ac:structured-macro>';
+        $followingMacro = '<ac:structured-macro ac:name="info"><ac:rich-text-body><p>Info</p>'
+            . '</ac:rich-text-body></ac:structured-macro>';
+        $result = (new ConfluenceHtmlConverter())->convert($macro . $macro . $followingMacro, 'DEMO', '10');
+        $document = new \DOMDocument();
+        $document->loadHTML('<?xml encoding="UTF-8">' . $result->html);
+        $tables = $document->getElementsByTagName('table');
+        self::assertCount(2, $tables);
+        $ids = [];
+        foreach ($tables as $table) {
+            $headers = $table->getElementsByTagName('th');
+            $year = $headers->item(0)?->getAttribute('id');
+            $month = $headers->item(1)?->getAttribute('id');
+            self::assertMatchesRegularExpression('/^import-table-[a-f0-9]{24}-1$/', (string)$year);
+            self::assertSame($year, $headers->item(1)?->getAttribute('headers'));
+            self::assertSame($year . ' ' . $month, $table->getElementsByTagName('td')->item(0)?->getAttribute('headers'));
+            self::assertSame('col', $headers->item(0)?->getAttribute('scope'));
+            self::assertSame('Plan', $table->getElementsByTagName('caption')->item(0)?->textContent);
+            $ids[] = $year;
+            $ids[] = $month;
+        }
+        self::assertCount(4, array_unique($ids));
+        self::assertSame([], $result->unsupportedMacros);
+    }
+
+    /** HR: Nevaljane i vanjske reference ne postaju prividno valjane veze. EN: Invalid and external references must not become seemingly valid associations. */
+    public function testHtmlTableRejectsAmbiguousAndExternalHeaderReferences(): void
+    {
+        $macro = '<ac:structured-macro ac:name="html"><ac:plain-text-body><![CDATA['
+            . '<table><tr><th id="duplicate">A</th><th id="duplicate">B</th>'
+            . '<th id="self" headers="self">C</th></tr><tr>'
+            . '<td headers="duplicate">D</td><td headers="outside">E</td>'
+            . '<td headers="self outside">F</td></tr></table>'
+            . ']]></ac:plain-text-body></ac:structured-macro>';
+        $result = (new ConfluenceHtmlConverter())->convert($macro, 'DEMO', '10');
+        self::assertStringNotContainsString(' headers=', $result->html);
+        self::assertStringNotContainsString('id="duplicate"', $result->html);
+        self::assertStringContainsString('>D</td>', $result->html);
+        self::assertStringContainsString('>E</td>', $result->html);
+        self::assertStringContainsString('>F</td>', $result->html);
+        self::assertSame([], $result->unsupportedMacros);
+    }
+
+    /** HR: Zaglavlja ne prelaze granice ugniježđenih tablica. EN: Headers cannot cross nested table boundaries. */
+    public function testHtmlTableKeepsNestedHeaderAssociationsLocal(): void
+    {
+        $macro = '<ac:structured-macro ac:name="html"><ac:plain-text-body><![CDATA['
+            . '<table><tr><th id="outer">Vanjsko</th></tr><tr><td headers="inner">'
+            . '<table><tr><th id="inner">Unutarnje</th></tr><tr>'
+            . '<td headers="inner">Valjano</td><td headers="outer">Nevaljano</td>'
+            . '</tr></table></td></tr></table>'
+            . ']]></ac:plain-text-body></ac:structured-macro>';
+        $result = (new ConfluenceHtmlConverter())->convert($macro, 'DEMO', '10');
+        $document = new \DOMDocument();
+        $document->loadHTML('<?xml encoding="UTF-8">' . $result->html);
+        $cells = $document->getElementsByTagName('td');
+        self::assertFalse($cells->item(0)?->hasAttribute('headers'));
+        self::assertSame(
+            $document->getElementsByTagName('th')->item(1)?->getAttribute('id'),
+            $cells->item(1)?->getAttribute('headers'),
+        );
+        self::assertFalse($cells->item(2)?->hasAttribute('headers'));
+        self::assertSame([], $result->unsupportedMacros);
+    }
+
     /** HR: Naslov informativnog makroa ostaje vidljiv i kada je tijelo prazno. EN: An information macro title remains visible when its body is empty. */
     public function testPreservesTipTitleWhenRichBodyIsEmpty(): void
     {
@@ -541,6 +613,20 @@ XML;
         self::assertStringNotContainsString(' name=', $result->html);
         self::assertLessThan(strpos($result->html, 'Razdjelnik'), strpos($result->html, 'Drugi'));
         self::assertLessThan(strpos($result->html, 'Treći'), strpos($result->html, 'Razdjelnik'));
+    }
+
+    /** HR: Zamjena susjeda ne smije ponoviti ID sklopivog bloka. EN: Replacing siblings must not duplicate collapsible-block IDs. */
+    public function testSeparatedExpandIdentifiersUseOriginalMacroPositions(): void
+    {
+        $expand = '<ac:structured-macro ac:name="expand"><ac:parameter ac:name="title">Naslov</ac:parameter>'
+            . '<ac:rich-text-body><p>Sadržaj</p></ac:rich-text-body></ac:structured-macro><p>Razmak</p>';
+        $body = str_repeat($expand, 3) . '<ac:structured-macro ac:name="info" />';
+        $converter = new ConfluenceHtmlConverter();
+        $result = $converter->convert($body, 'DEMO', '10');
+        preg_match_all('/data-editor-html-accordion-id="([^"]+)"/', $result->html, $matches);
+        self::assertCount(3, $matches[1]);
+        self::assertCount(3, array_unique($matches[1]));
+        self::assertSame($result->html, $converter->convert($body, 'DEMO', '10')->html);
     }
 
     /** HR: Stari Section/Column makroi postaju responsivne kartice koje čuvaju omjere. EN: Legacy Section/Column macros become responsive cards that retain their proportions. */

@@ -5,6 +5,8 @@ declare(strict_types=1);
 // HR: Izvorni hrvatski ključevi i prijevodi jezika en.
 // EN: Canonical Croatian source keys and en translations.
 return array (
+  'Učitavanje...' => 'Loading...',
+  'Pronađeno rezultata: %d' => 'Results found: %d',
   'Prikaži sadržaj' => 'Show content',
   'Pretraga područja' => 'Workspace search',
   'Ugrađeni sadržaj' => 'Embedded content',

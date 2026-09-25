@@ -2,6 +2,14 @@
 
 Croatian version: [content-links_hr.md](content-links_hr.md)
 
+## Mapping accessibility
+
+Each target-user picker identifies the source identity. Opening moves focus into
+search; Tab visits native result buttons, Enter selects, and Escape closes and
+returns focus. Opening another picker closes the first and updates its expanded
+state. Late responses cannot reopen a closed picker. Loading, result counts and
+errors have a status region; workflow messages remain available until dismissed.
+
 ## Pages and versions
 
 The importer groups Confluence page objects by logical content ID. The latest published version becomes the current Simbioza document. The parent relation recreates the Workspace page tree. When selected, earlier published versions enter history, drafts remain drafts and deleted pages remain soft-deleted so an administrator can restore them.
@@ -80,6 +88,13 @@ static representation remains in the imported page.
   the entire macro enters the manual-review report.
   An HTML macro containing only a safe HTTP(S) button link becomes an ordinary
   theme-aware Simbioza button; source styles and JavaScript handlers are discarded.
+  An HTML macro consisting only of a safe static table keeps its caption and
+  explicit header scopes. Unique header IDs and valid `headers` references are
+  remapped within each table, including nested tables, without collisions between
+  macros. Ambiguous, external and self-referencing associations are not copied;
+  the visible cell content is preserved. The importer does not infer missing
+  headings, invent image descriptions or add arbitrary ARIA labels. Existing
+  imported documents are not rewritten automatically.
 - `profile` becomes a static rendering of the mapped Auth name. If an
   administrator created an inactive staged account, the importer uses a safe
   inferred name instead of the raw login identifier. It does not impersonate

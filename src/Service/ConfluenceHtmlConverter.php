@@ -310,6 +310,12 @@ final readonly class ConfluenceHtmlConverter
         // EN: Nested macros must be converted before their parent panels and layouts,
         //     while same-level macros retain their source order.
         $macros = $this->elements($xpath->query('//ac:structured-macro'));
+        // HR: Položaje snimamo prije zamjena; uklanjanje susjeda mijenja njihov XPath.
+        // EN: Snapshot positions before replacement; removing siblings changes their XPath.
+        $sourceMacroPaths = [];
+        foreach ($macros as $macro) {
+            $sourceMacroPaths[spl_object_id($macro)] = $macro->getNodePath() ?? '';
+        }
         usort($macros, fn(DOMElement $left, DOMElement $right): int =>
             $this->macroDepth($right) <=> $this->macroDepth($left));
         foreach ($macros as $macro) {
@@ -331,6 +337,7 @@ final readonly class ConfluenceHtmlConverter
                 $sourcePageId,
                 $macroContext,
                 $properties,
+                $sourceMacroPaths[spl_object_id($macro)],
             );
             $macro->parentNode?->replaceChild($replacement, $macro);
         }
@@ -583,6 +590,7 @@ final readonly class ConfluenceHtmlConverter
         string $sourcePageId,
         ?ConfluenceMacroContext $context,
         array &$properties,
+        string $sourceMacroPath,
     ): DOMNode {
         $plain = trim($this->nodeText($xpath, './/ac:plain-text-body', $macro));
         $rich = $this->firstElement($xpath->query('.//ac:rich-text-body', $macro));
@@ -675,7 +683,7 @@ final readonly class ConfluenceHtmlConverter
                 $titleText !== '' ? $titleText : __('Prikaži sadržaj'),
                 $rich,
                 $plain,
-                $sourcePageId . '|' . $macro->getNodePath(),
+                $sourcePageId . '|' . $sourceMacroPath,
             );
         }
 
@@ -733,7 +741,7 @@ final readonly class ConfluenceHtmlConverter
                 return $buttonLink;
             }
 
-            $table = $this->htmlTableReplacement($document, $plain);
+            $table = $this->htmlTableReplacement($document, $plain, $sourcePageId . '|' . $sourceMacroPath);
             if ($table instanceof DOMNode) {
                 return $table;
             }
@@ -1219,7 +1227,7 @@ final readonly class ConfluenceHtmlConverter
      *     attributes, and links pass a strict allowlist; scripts, forms,
      *     embedded content, and arbitrary HTML remain in the manual-review report.
      */
-    private function htmlTableReplacement(DOMDocument $document, string $plain): ?DOMElement
+    private function htmlTableReplacement(DOMDocument $document, string $plain, string $identity): ?DOMElement
     {
         if (trim($plain) === '') {
             return null;
@@ -1275,12 +1283,38 @@ final readonly class ConfluenceHtmlConverter
             }
         }
 
-        $replacement = $this->copySafeHtmlTableNode($document, $sourceTable);
+        // HR: Prepisujemo samo valjane veze zaglavlja unutar ovog makroa.
+        //     Novi prefiks sprječava sudare istih izvornih ID-ova iz više tablica.
+        // EN: Remap only valid header associations within this macro.
+        //     A new prefix prevents collisions between source IDs in different tables.
+        $idCounts = [];
+        foreach ([$sourceTable, ...$this->elements($sourceTable->getElementsByTagName('*'))] as $element) {
+            $id = $element->getAttribute('id');
+            if ($id !== '') {
+                $idCounts[$id] = ($idCounts[$id] ?? 0) + 1;
+            }
+        }
+        $headerIds = [];
+        $headerIndex = 0;
+        $prefix = 'import-table-' . substr(hash('sha256', $identity), 0, 24) . '-';
+        foreach ($this->elements($sourceTable->getElementsByTagName('th')) as $header) {
+            $id = $header->getAttribute('id');
+            if ($id !== '' && ($idCounts[$id] ?? 0) === 1 && preg_match('/\s/u', $id) === 0) {
+                $headerIds[$this->htmlTablePath($header)][$id] = $prefix . ++$headerIndex;
+            }
+        }
+
+        $replacement = $this->copySafeHtmlTableNode($document, $sourceTable, $headerIds);
         return $replacement instanceof DOMElement ? $replacement : null;
     }
 
-    /** HR: Kopira samo semantički sadržaj sigurne HTML tablice. EN: Copies only semantic content from a safe HTML table. */
-    private function copySafeHtmlTableNode(DOMDocument $document, DOMNode $source): ?DOMNode
+    /**
+     * HR: Kopira sigurnu tablicu i provjerene lokalne veze zaglavlja, bez izmišljanja novih.
+     * EN: Copies a safe table and verified local header associations, without inventing new ones.
+     *
+     * @param array<string, array<string, string>> $headerIdsByTable
+     */
+    private function copySafeHtmlTableNode(DOMDocument $document, DOMNode $source, array $headerIdsByTable): ?DOMNode
     {
         if ($source->nodeType === XML_TEXT_NODE || $source->nodeType === XML_CDATA_SECTION_NODE) {
             return $document->createTextNode($source->nodeValue ?? '');
@@ -1291,7 +1325,20 @@ final readonly class ConfluenceHtmlConverter
 
         $tag = strtolower($source->tagName);
         $replacement = $document->createElement($tag);
+        $headerIds = $headerIdsByTable[$this->htmlTablePath($source)] ?? [];
         if (in_array($tag, ['th', 'td'], true)) {
+            $references = preg_split('/\s+/u', trim($source->getAttribute('headers')), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            $mapped = [];
+            foreach ($references as $reference) {
+                if (!isset($headerIds[$reference]) || $reference === $source->getAttribute('id')) {
+                    $mapped = [];
+                    break;
+                }
+                $mapped[] = $headerIds[$reference];
+            }
+            if ($mapped !== []) {
+                $replacement->setAttribute('headers', implode(' ', array_unique($mapped)));
+            }
             foreach (['colspan', 'rowspan'] as $attribute) {
                 $value = trim($source->getAttribute($attribute));
                 if (preg_match('/^[1-9][0-9]?$/', $value) === 1) {
@@ -1300,6 +1347,10 @@ final readonly class ConfluenceHtmlConverter
             }
         }
         if ($tag === 'th') {
+            $id = $source->getAttribute('id');
+            if (isset($headerIds[$id])) {
+                $replacement->setAttribute('id', $headerIds[$id]);
+            }
             $scope = strtolower(trim($source->getAttribute('scope')));
             if (in_array($scope, ['row', 'col', 'rowgroup', 'colgroup'], true)) {
                 $replacement->setAttribute('scope', $scope);
@@ -1310,13 +1361,28 @@ final readonly class ConfluenceHtmlConverter
         }
 
         foreach ($source->childNodes as $child) {
-            $copy = $this->copySafeHtmlTableNode($document, $child);
+            $copy = $this->copySafeHtmlTableNode($document, $child, $headerIdsByTable);
             if ($copy instanceof DOMNode) {
                 $replacement->appendChild($copy);
             }
         }
 
         return $replacement;
+    }
+
+    /**
+     * HR: Ugniježđene tablice imaju vlastiti opseg veza zaglavlja.
+     * EN: Nested tables have their own header-association scope.
+     */
+    private function htmlTablePath(DOMNode $node): string
+    {
+        for ($parent = $node->parentNode; $parent instanceof DOMElement; $parent = $parent->parentNode) {
+            if (strtolower($parent->tagName) === 'table') {
+                return $parent->getNodePath() ?? '';
+            }
+        }
+
+        return '';
     }
 
     /** HR: Dopušta obične HTTP(S) i valjane e-mail poveznice. EN: Allows ordinary HTTP(S) and valid email links. */

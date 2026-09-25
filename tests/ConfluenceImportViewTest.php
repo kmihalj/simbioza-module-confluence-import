@@ -8,6 +8,19 @@ use PHPUnit\Framework\TestCase;
 
 final class ConfluenceImportViewTest extends TestCase
 {
+    /** HR: Mapiranja imaju vlastite oznake bez nepotpunog combobox ugovora. EN: Mappings have their own labels without an incomplete combobox contract. */
+    public function testMappingPickersExposeNativeControlsAndStatus(): void
+    {
+        $view = file_get_contents(__DIR__ . '/../views/settings/index.php');
+        self::assertIsString($view);
+        self::assertStringNotContainsString('role="combobox"', $view);
+        self::assertStringContainsString('data-identity-picker-status role="status"', $view);
+        self::assertStringContainsString('aria-controls="<?= $pickerId ?>-panel"', $view);
+        self::assertStringContainsString("__('Ciljna grupa') . ': ' . \$sourceName", $view);
+        self::assertStringContainsString('requestSequence !== sequence || panel.hidden', $view);
+        self::assertStringContainsString("event.key === 'Escape'", $view);
+    }
+
     /** HR: File picker mora koristiti prevedive oznake umjesto tekstova preglednika. EN: The file picker must use translatable labels instead of browser-owned text. */
     public function testFilePickerUsesLocalizedCustomControls(): void
     {
@@ -16,6 +29,15 @@ final class ConfluenceImportViewTest extends TestCase
         self::assertIsString($view);
         self::assertStringContainsString('id="confluence-import-file"', $view);
         self::assertStringContainsString('class="visually-hidden"', $view);
+        self::assertSame(1, substr_count($view, 'for="confluence-import-file"'));
+        self::assertStringContainsString(
+            'aria-labelledby="confluence-import-file-label confluence-import-file-choice"',
+            $view,
+        );
+        self::assertStringContainsString(
+            'aria-describedby="confluence-import-file-name confluence-import-file-help"',
+            $view,
+        );
         self::assertStringContainsString("__('Odaberi datoteku')", $view);
         self::assertStringContainsString("__('Nije odabrana nijedna datoteka.')", $view);
         self::assertStringContainsString("fileInput?.addEventListener('change'", $view);

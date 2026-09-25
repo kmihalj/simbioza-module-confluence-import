@@ -10,6 +10,14 @@
     min-width: 0;
 }
 
+/* HR: Skriveni nativni birač zadržava jasan fokus na vidljivoj oznaci.
+   EN: The hidden native picker keeps a clear focus indicator on its visible label. */
+.confluence-import-file-picker input:focus-visible + label {
+    outline: 3px solid currentColor;
+    outline-offset: 3px;
+    z-index: 3;
+}
+
 .confluence-import-shell .confluence-import-panel,
 .confluence-import-shell .confluence-import-mapping {
     background: var(--confluence-import-surface-bg);
@@ -77,7 +85,9 @@
 }
 
 .confluence-import-shell .confluence-import-source-key {
-    color: var(--hph-muted-text, var(--bs-secondary-color, #6c757d));
+    /* HR: Rezervni tekst mora biti čitljiv i na zatamnjenoj kartici bez Teme.
+       EN: Fallback text must remain readable on a shaded card without Theme. */
+    color: var(--hph-muted-text, var(--bs-body-color, #212529));
     font-family: var(--bs-font-monospace);
     font-size: .8rem;
     overflow-wrap: anywhere;

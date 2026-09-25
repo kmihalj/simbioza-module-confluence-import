@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+// HR: Glavni orijentir daje aplikacijski raspored; ovaj je prikaz samo njegov sadržaj.
+// EN: The host layout owns the main landmark; this view only supplies its content.
+
 /**
  * @var string $title
  * @var array<string,mixed> $job
@@ -80,7 +83,7 @@ $normalizeCalendarName = static function (string $name): string {
         <?php endif; ?>
     </aside>
 
-    <main class="col-lg-9 confluence-import-shell">
+    <div class="col-lg-9 confluence-import-shell">
         <section class="card">
             <div class="card-body">
                 <header class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
@@ -412,7 +415,7 @@ $normalizeCalendarName = static function (string $name): string {
                 <?php endif; ?>
             </div>
         </section>
-    </main>
+    </div>
 </div>
 <script>
 document.querySelectorAll('[data-localized-file-input]').forEach(function (input) {

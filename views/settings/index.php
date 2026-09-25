@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+// HR: Glavni orijentir daje aplikacijski raspored; ovaj je prikaz samo njegov sadržaj.
+// EN: The host layout owns the main landmark; this view only supplies its content.
+
 /**
  * @var string $title
  * @var array<string,mixed>|null $preparation
@@ -107,7 +110,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         <?php endif; ?>
     </aside>
 
-    <main class="col-lg-9 confluence-import-shell">
+    <div class="col-lg-9 confluence-import-shell">
         <section class="card">
             <div class="card-body">
                 <header class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
@@ -126,13 +129,14 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                 <summary><?= $this->escape(__('1. Prenesi i provjeri Confluence arhivu')) ?></summary>
                 <div class="confluence-import-body">
                     <div class="mb-3">
-                        <label class="form-label" for="confluence-import-file"><?= $this->escape(__('Confluence XML ZIP arhiva')) ?></label>
-                        <div class="input-group">
-                            <input class="visually-hidden" id="confluence-import-file" type="file" accept=".zip,application/zip">
-                            <label class="btn btn-outline-primary" for="confluence-import-file"><?= $this->escape(__('Odaberi datoteku')) ?></label>
+                        <?php // HR: Jedna oznaka i vidljiv fokus zadržavaju lokalizirani nativni birač. EN: One label and visible focus retain the localized native picker. ?>
+                        <div class="form-label" id="confluence-import-file-label"><?= $this->escape(__('Confluence XML ZIP arhiva')) ?></div>
+                        <div class="input-group confluence-import-file-picker">
+                            <input class="visually-hidden" id="confluence-import-file" type="file" accept=".zip,application/zip" aria-labelledby="confluence-import-file-label confluence-import-file-choice" aria-describedby="confluence-import-file-name confluence-import-file-help">
+                            <label class="btn btn-outline-primary" id="confluence-import-file-choice" for="confluence-import-file"><?= $this->escape(__('Odaberi datoteku')) ?></label>
                             <span class="form-control text-body-secondary" id="confluence-import-file-name"><?= $this->escape(__('Nije odabrana nijedna datoteka.')) ?></span>
                         </div>
-                        <div class="form-text"><?= $this->escape(__('Podržan je backup jednog Confluence područja. Velika datoteka šalje se u manjim dijelovima koji se mogu nastaviti nakon prekida.')) ?></div>
+                        <div class="form-text" id="confluence-import-file-help"><?= $this->escape(__('Podržan je backup jednog Confluence područja. Velika datoteka šalje se u manjim dijelovima koji se mogu nastaviti nakon prekida.')) ?></div>
                     </div>
                     <div class="progress confluence-import-progress mb-2" role="progressbar" aria-label="<?= $this->escape(__('Napredak prijenosa')) ?>">
                         <div class="progress-bar" id="confluence-import-upload-progress" style="width: 0"></div>
@@ -173,7 +177,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                                 <?php endforeach; ?>
                             </ul>
                         <?php endif; ?>
-                        <div class="progress confluence-import-progress mb-2 d-none" id="confluence-import-batch-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width:0"></div></div>
+                        <div class="progress confluence-import-progress mb-2 d-none" id="confluence-import-batch-progress" role="progressbar" aria-label="<?= $this->escape(__('Batch import arhiva s poslužitelja')) ?>" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width:0"></div></div>
                         <div class="d-flex flex-wrap gap-2 align-items-center confluence-import-actions">
                             <button class="btn btn-primary" type="button" id="confluence-import-batch-start"><?= $this->escape(is_array($activeBatchJob) ? __('Nastavi batch import') : __('Uvezi sve batch arhive')) ?></button>
                             <span class="text-body-secondary" id="confluence-import-batch-status" aria-live="polite"></span>
@@ -285,7 +289,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                                         <label class="form-check-label" for="confluence-import-create-unmapped-users"><?= $this->escape(__('Za sve trenutačno nemapirane identitete izradi neaktivne korisnike')) ?></label>
                                         <div class="form-text"><?= $this->escape(__('Kada je uključeno, izrađeni neaktivni korisnici postaju autori umjesto trenutnog administratora. Računi nemaju mogućnost prijave dok ih administrator ne konfigurira i aktivira.')) ?></div>
                                     </div>
-                                    <input class="form-control mb-3" type="search" data-filter-table="identity" placeholder="<?= $this->escape(__('Pretraži Confluence korisnike')) ?>">
+                                    <input class="form-control mb-3" type="search" data-filter-table="identity" aria-label="<?= $this->escape(__('Pretraži Confluence korisnike')) ?>" placeholder="<?= $this->escape(__('Pretraži Confluence korisnike')) ?>">
                                     <div class="table-responsive confluence-import-table-wrap">
                                         <table class="table table-sm align-middle mb-0" data-filter-target="identity"><thead><tr><th><?= $this->escape(__('Confluence identitet')) ?></th><th><?= $this->escape(__('Ciljni korisnik')) ?></th></tr></thead><tbody>
                                         <?php foreach ($sourceUsers as $sourceUser) : ?>
@@ -297,7 +301,9 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                                             $suggestedLabel = is_array($suggestedUser)
                                                 ? $userPickerLabel($suggestedUser)
                                                 : '';
-                                            $administratorLabel = sprintf(__('Trenutni administrator (%s)'), $currentActorName); ?>
+                                            $administratorLabel = sprintf(__('Trenutni administrator (%s)'), $currentActorName);
+                                            $pickerId = 'import-user-' . hash('sha256', $sourceKey);
+                                            $sourceLabel = (string)($sourceUser['display_name'] ?? $sourceUser['username'] ?? $sourceKey); ?>
                                             <tr data-filter-row class="<?= $sourceKey !== '' && $sourceKey === $ownerSourceKey ? 'confluence-import-owner-row' : '' ?>">
                                                 <td><strong><?= $this->escape((string)($sourceUser['display_name'] ?? $sourceUser['username'] ?? $sourceKey)) ?></strong><?php if ($sourceKey === $ownerSourceKey) :
                                                     ?> <span class="badge text-bg-warning"><?= $this->escape(__('Vlasnik')) ?></span><?php
@@ -305,11 +311,13 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                                                 <td>
                                                     <div class="confluence-import-user-picker" data-identity-picker>
                                                         <input type="hidden" data-identity-map="<?= $this->escape($sourceKey) ?>" value="<?= $suggested > 0 ? $suggested : '' ?>">
-                                                        <button class="form-select form-select-sm text-start" type="button" data-identity-picker-toggle data-current-administrator-label="<?= $this->escape($administratorLabel) ?>" data-create-user-label="<?= $this->escape(__('Izradi neaktivnog korisnika bez prijave')) ?>" aria-expanded="false"><?= $this->escape($suggestedLabel !== '' ? $suggestedLabel : $administratorLabel) ?></button>
-                                                        <div class="confluence-import-user-picker-panel shadow" data-identity-picker-panel hidden>
+                                                        <span id="<?= $pickerId ?>-label" class="visually-hidden"><?= $this->escape(__('Ciljni korisnik') . ': ' . $sourceLabel) ?></span>
+                                                        <button id="<?= $pickerId ?>-toggle" class="form-select form-select-sm text-start" type="button" data-identity-picker-toggle data-current-administrator-label="<?= $this->escape($administratorLabel) ?>" data-create-user-label="<?= $this->escape(__('Izradi neaktivnog korisnika bez prijave')) ?>" aria-labelledby="<?= $pickerId ?>-label <?= $pickerId ?>-toggle" aria-controls="<?= $pickerId ?>-panel" aria-expanded="false"><?= $this->escape($suggestedLabel !== '' ? $suggestedLabel : $administratorLabel) ?></button>
+                                                        <div id="<?= $pickerId ?>-panel" class="confluence-import-user-picker-panel shadow" data-identity-picker-panel hidden>
                                                             <button class="list-group-item list-group-item-action" type="button" data-identity-picker-choice="" data-identity-picker-label="<?= $this->escape($administratorLabel) ?>"><?= $this->escape($administratorLabel) ?><span class="d-block small text-body-secondary"><?= $this->escape(__('Samo autorstvo; izvorne ovlasti ostaju nemapirane.')) ?></span></button>
                                                             <button class="list-group-item list-group-item-action" type="button" data-identity-picker-choice="__create_inactive__" data-identity-picker-label="<?= $this->escape(__('Izradi neaktivnog korisnika bez prijave')) ?>"><?= $this->escape(__('Izradi neaktivnog korisnika bez prijave')) ?></button>
-                                                            <div class="p-2"><input class="form-control form-control-sm" type="search" autocomplete="off" role="combobox" aria-autocomplete="list" placeholder="<?= $this->escape(__('Pretraži korisnike')) ?>" data-identity-picker-search></div>
+                                                            <div class="p-2"><input class="form-control form-control-sm" type="search" autocomplete="off" aria-label="<?= $this->escape(__('Pretraži korisnike')) ?>" placeholder="<?= $this->escape(__('Pretraži korisnike')) ?>" data-identity-picker-search></div>
+                                                            <div class="small px-2" data-identity-picker-status role="status" aria-atomic="true"></div>
                                                             <div class="list-group list-group-flush" data-identity-picker-results></div>
                                                             <div class="p-2 pt-0"><button class="btn btn-sm btn-outline-secondary" type="button" data-identity-picker-more hidden><?= $this->escape(__('Učitaj još')) ?></button></div>
                                                         </div>
@@ -333,7 +341,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                                                 continue;
                                             } $sourceName = (string)($sourceGroup['source_name'] ?? ''); ?>
                                             <?php $suggestedGroupId = is_numeric($groupSuggestions[$sourceName] ?? null) ? (int)$groupSuggestions[$sourceName] : 0; ?>
-                                            <tr><td><strong><?= $this->escape($sourceName) ?></strong></td><td><select class="form-select form-select-sm" data-group-map="<?= $this->escape($sourceName) ?>"><option value=""><?= $this->escape(__('Nije mapirano — pristup ostaje blokiran')) ?></option><option value="__create__"><?= $this->escape(__('Izradi novu običnu grupu')) ?></option><?php foreach ($targetGroups as $targetGroup) :
+                                            <tr><td><strong><?= $this->escape($sourceName) ?></strong></td><td><select class="form-select form-select-sm" aria-label="<?= $this->escape(__('Ciljna grupa') . ': ' . $sourceName) ?>" data-group-map="<?= $this->escape($sourceName) ?>"><option value=""><?= $this->escape(__('Nije mapirano — pristup ostaje blokiran')) ?></option><option value="__create__"><?= $this->escape(__('Izradi novu običnu grupu')) ?></option><?php foreach ($targetGroups as $targetGroup) :
                                                 ?><?php if (!is_array($targetGroup) || !is_numeric($targetGroup['id'] ?? null)) {
                                                 continue;
                                                 } $targetGroupId = (int)$targetGroup['id']; ?><option value="<?= $targetGroupId ?>"<?= $targetGroupId === $suggestedGroupId ? ' selected' : '' ?>><?= $this->escape((string)($targetGroup['group_name'] ?? $targetGroup['group_key'] ?? $targetGroup['id'])) ?></option><?php
@@ -344,7 +352,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                                 </div>
                             </details>
 
-                            <div class="progress confluence-import-progress mt-4 d-none" id="confluence-import-run-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width:0"></div></div>
+                            <div class="progress confluence-import-progress mt-4 d-none" id="confluence-import-run-progress" role="progressbar" aria-label="<?= $this->escape(__('2. Pregledaj mapiranja i pokreni import')) ?>" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width:0"></div></div>
                             <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mt-3 confluence-import-actions">
                                 <span class="text-body-secondary" id="confluence-import-run-status" aria-live="polite"><?= $this->escape(__('Spremno za import. Izvorna arhiva briše se s poslužitelja tek nakon uspješnog završetka.')) ?></span>
                                 <div class="d-flex flex-wrap gap-2">
@@ -383,7 +391,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                     </tbody></table></div>
             </div>
         </section>
-    </main>
+    </div>
 </div>
 
 <div class="toast-container position-fixed bottom-0 end-0 p-3 confluence-import-toast-container"><div class="toast border-0 confluence-import-toast" id="confluence-import-toast" role="status" aria-live="polite" aria-atomic="true"><div class="toast-header bg-primary text-white" id="confluence-import-toast-header"><strong class="me-auto" id="confluence-import-toast-title"><?= $this->escape(__('Informacija')) ?></strong><button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="<?= $this->escape(__('Zatvori')) ?>"></button></div><div class="toast-body" id="confluence-import-toast-body"></div></div></div>
@@ -425,6 +433,8 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         'batchFinished' => __('Batch import je dovršen. Uspješno: {success}; neuspjelo: {failed}.'),
         'batchStopped' => __('Batch import je zaustavljen na arhivi {name}. Osvježite stranicu kako biste sigurno nastavili isti posao.'),
         'userSearchEmpty' => __('Nema pronađenih korisnika.'),
+        'userSearchLoading' => __('Učitavanje...'),
+        'userSearchCount' => __('Pronađeno rezultata: %d'),
         'userSearchFailed' => __('Pretraživanje korisnika nije uspjelo.'),
         'userSearchMore' => __('Učitaj još'),
         'processingAttachments' => __('Uvoz privitaka: {done} / {total}'),
@@ -463,6 +473,25 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
             return {error: response.ok ? config.failed : transportError};
         }
     };
+    let toastReturnFocus = null;
+    // HR: Zatvaranje poruke vraća fokus na prethodnu kontrolu, ne na tijelo stranice.
+    // EN: Dismissing a message returns focus to the previous control, not the page body.
+    document.addEventListener('focusin', (event) => {
+        if (event.target instanceof HTMLElement && !query('#confluence-import-toast')?.contains(event.target)) {
+            toastReturnFocus = event.target;
+        }
+    });
+    query('#confluence-import-toast [data-bs-dismiss]')?.addEventListener('click', () => {
+        if (query('#confluence-import-toast').contains(document.activeElement)) {
+            if (toastReturnFocus?.isConnected && !toastReturnFocus.disabled) toastReturnFocus.focus();
+            else {
+                const heading = document.querySelector('h1');
+                heading?.setAttribute('tabindex', '-1');
+                heading?.focus();
+            }
+        }
+        if (!window.bootstrap?.Toast) query('#confluence-import-toast').classList.remove('show');
+    });
     const toast = (message, type = 'info') => {
         const element = query('#confluence-import-toast');
         const header = query('#confluence-import-toast-header');
@@ -471,8 +500,8 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         header.classList.remove('bg-primary', 'bg-success', 'bg-danger');
         header.classList.add(type === 'danger' ? 'bg-danger' : (type === 'success' ? 'bg-success' : 'bg-primary'));
         query('#confluence-import-toast-title').textContent = type === 'danger' ? config.errorTitle : (type === 'success' ? config.successTitle : config.infoTitle);
-        if (window.bootstrap?.Toast) window.bootstrap.Toast.getOrCreateInstance(element, {delay: 7000}).show();
-        else { element.classList.add('show'); window.setTimeout(() => element.classList.remove('show'), 7000); }
+        if (window.bootstrap?.Toast) window.bootstrap.Toast.getOrCreateInstance(element, {autohide: false}).show();
+        else element.classList.add('show');
     };
     let csrfRefreshPromise = null;
     const refreshCsrf = async () => {
@@ -504,6 +533,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         const results = picker.querySelector('[data-identity-picker-results]');
         const loadMore = picker.querySelector('[data-identity-picker-more]');
         const value = picker.querySelector('[data-identity-map]');
+        const status = picker.querySelector('[data-identity-picker-status]');
         if (!(toggle instanceof HTMLButtonElement) || !(panel instanceof HTMLElement) || !(search instanceof HTMLInputElement) || !(results instanceof HTMLElement) || !(loadMore instanceof HTMLButtonElement) || !(value instanceof HTMLInputElement)) return;
 
         let timer = 0;
@@ -511,7 +541,20 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         let page = 0;
         let hasMore = false;
         let loaded = false;
-        const close = () => { panel.hidden = true; toggle.setAttribute('aria-expanded', 'false'); };
+        let sequence = 0;
+        // HR: Zatvaranje poništava zakašnjele odgovore i po potrebi vraća fokus.
+        // EN: Closing invalidates late responses and restores focus when needed.
+        const close = (restoreFocus = false) => {
+            window.clearTimeout(timer);
+            sequence++;
+            controller?.abort();
+            if (restoreFocus && !panel.hidden) toggle.focus();
+            panel.hidden = true;
+            toggle.setAttribute('aria-expanded', 'false');
+            results.removeAttribute('aria-busy');
+            loadMore.removeAttribute('aria-disabled');
+        };
+        picker.addEventListener('identity-picker-close', () => close(panel.contains(document.activeElement)));
         const positionPanel = () => {
             const padding = 8;
             const gap = 4;
@@ -529,11 +572,14 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                 : Math.max(padding, rect.top - gap - height);
             panel.style.top = `${top}px`;
         };
-        const choose = (id, label) => { value.value = String(id || ''); toggle.textContent = String(label || ''); close(); };
+        const choose = (id, label) => { value.value = String(id || ''); toggle.textContent = String(label || ''); close(true); };
         const loadPage = async (requestedPage, append = false) => {
             if (controller instanceof AbortController) controller.abort();
             controller = new AbortController();
-            loadMore.disabled = true;
+            const requestSequence = ++sequence;
+            loadMore.setAttribute('aria-disabled', 'true');
+            results.setAttribute('aria-busy', 'true');
+            status.textContent = config.userSearchLoading;
             const url = new URL(config.userSearch, window.location.href);
             url.searchParams.set('type', 'user');
             url.searchParams.set('mode', 'creator');
@@ -543,6 +589,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
             try {
                 const response = await fetch(url, {headers: {Accept: 'application/json'}, credentials: 'same-origin', signal: controller.signal});
                 const data = await responsePayload(response);
+                if (requestSequence !== sequence || panel.hidden) return;
                 if (!response.ok || data.ok !== true || !Array.isArray(data.results)) throw new Error(config.userSearchFailed);
                 if (!append) results.replaceChildren();
                 if (data.results.length === 0 && !append) {
@@ -554,23 +601,35 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                 }
                 page = Number(data.page || requestedPage);
                 hasMore = data.hasMore === true;
+                if (append && document.activeElement === loadMore) {
+                    const firstNew = results.querySelectorAll('button')[results.querySelectorAll('button').length - data.results.length];
+                    (firstNew || search).focus();
+                }
                 loadMore.hidden = !hasMore;
+                status.textContent = results.querySelectorAll('button').length === 0 ? config.userSearchEmpty
+                    : config.userSearchCount.replace('%d', String(results.querySelectorAll('button').length));
                 loaded = true;
                 positionPanel();
             } catch (error) {
-                if (error instanceof DOMException && error.name === 'AbortError') return;
+                if (requestSequence !== sequence || panel.hidden || (error instanceof DOMException && error.name === 'AbortError')) return;
                 const failed = document.createElement('div'); failed.className = 'list-group-item text-danger'; failed.textContent = config.userSearchFailed;
                 if (!append) results.replaceChildren(failed); else results.appendChild(failed);
                 hasMore = false;
+                if (document.activeElement === loadMore) search.focus();
                 loadMore.hidden = true;
+                status.textContent = config.userSearchFailed;
             } finally {
-                loadMore.disabled = false;
+                if (requestSequence === sequence) {
+                    loadMore.removeAttribute('aria-disabled');
+                    results.removeAttribute('aria-busy');
+                }
             }
         };
         toggle.addEventListener('click', () => {
-            document.querySelectorAll('[data-identity-picker-panel]').forEach((other) => { if (other !== panel) other.hidden = true; });
-            panel.hidden = !panel.hidden;
-            toggle.setAttribute('aria-expanded', panel.hidden ? 'false' : 'true');
+            document.querySelectorAll('[data-identity-picker]').forEach((other) => { if (other !== picker) other.dispatchEvent(new Event('identity-picker-close')); });
+            if (!panel.hidden) { close(); return; }
+            panel.hidden = false;
+            toggle.setAttribute('aria-expanded', 'true');
             if (!panel.hidden) {
                 positionPanel();
                 search.focus();
@@ -584,10 +643,20 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         });
         search.addEventListener('input', () => {
             window.clearTimeout(timer);
+            sequence++;
+            controller?.abort();
             loaded = false;
+            results.replaceChildren();
+            loadMore.hidden = true;
             timer = window.setTimeout(() => { void loadPage(1); }, 180);
         });
-        loadMore.addEventListener('click', () => { if (hasMore) void loadPage(page + 1, true); });
+        loadMore.addEventListener('click', () => {
+            if (hasMore && loadMore.getAttribute('aria-disabled') !== 'true') void loadPage(page + 1, true);
+        });
+        picker.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && !panel.hidden) { event.preventDefault(); event.stopPropagation(); close(true); }
+        });
+        picker.addEventListener('focusout', (event) => { if (!picker.contains(event.relatedTarget)) close(); });
         document.addEventListener('click', (event) => { if (event.target instanceof Node && !picker.contains(event.target)) close(); });
     });
 

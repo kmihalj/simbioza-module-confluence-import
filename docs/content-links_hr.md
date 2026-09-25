@@ -2,6 +2,14 @@
 
 English version: [content-links_en.md](content-links_en.md)
 
+## Pristupačnost mapiranja
+
+Svaki odabir ciljnog korisnika ima oznaku izvornog identiteta. Otvaranje premješta
+fokus u pretragu; Tab prolazi stvarne gumbe rezultata, Enter bira, a Escape zatvara
+i vraća fokus. Otvaranje drugog birača zatvara prvi i ažurira njegovo stanje.
+Zakašnjeli odgovori ne otvaraju zatvoren birač. Učitavanje, broj rezultata i
+pogreške imaju statusnu regiju; poruke postupka ostaju dostupne do zatvaranja.
+
 ## Stranice i verzije
 
 Importer grupira Confluence objekte stranica prema logičkom ID-u sadržaja. Najnovija objavljena verzija postaje aktualni Simbioza dokument. Odnos roditelja ponovno gradi stablo stranica područja. Kada su odabrane, ranije objavljene verzije ulaze u povijest, nacrti ostaju nacrti, a obrisane stranice ostaju soft-obrisane kako bi ih administrator mogao vratiti.
@@ -84,6 +92,13 @@ prikaz.
   skripta ne izvršava se i cijeli makro ulazi u izvještaj za ručnu provjeru.
   HTML makro koji sadrži samo sigurnu HTTP(S) poveznicu s gumbom postaje običan
   tematski Simbioza gumb; izvorni stilovi i JavaScript događaji ne prenose se.
+  HTML makro koji sadrži samo sigurnu statičnu tablicu zadržava naslov i izričite
+  opsege zaglavlja. Jedinstveni ID-ovi zaglavlja i valjane veze `headers` preslikavaju
+  se unutar pojedine tablice, uključujući ugniježđene, bez sudara između makroa.
+  Višeznačne, vanjske i samoreferentne veze ne kopiraju se; vidljivi sadržaj ćelija
+  ostaje sačuvan. Importer ne zaključuje nedostajuća zaglavlja, ne izmišlja opise
+  slika niti dodaje proizvoljne ARIA oznake. Postojeći uvezeni dokumenti ne
+  prepisuju se automatski.
 - `profile` postaje statički prikaz mapiranog Auth imena. Ako je administrator
   izradio neaktivan predračun, importer koristi sigurno izvedeno ime umjesto
   sirove login oznake. Prikaz ne oponaša Confluence profil ni njegovu autorizaciju.
