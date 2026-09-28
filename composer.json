@@ -71,7 +71,7 @@
         "aaieduhr/heartphrame-module-editor-html": "^0.1.37",
         "aaieduhr/heartphrame-module-menu": "^0.1.19",
         "aaieduhr/heartphrame-module-orm": "^0.1.7",
-        "aaieduhr/simbioza-module-workspace": "^0.1.36",
+        "aaieduhr/simbioza-module-workspace": "^0.1.37",
         "aaieduhr/simbioza-module-user": "^0.1.11"
     },
     "suggest": {
