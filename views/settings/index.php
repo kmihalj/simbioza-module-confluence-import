@@ -384,6 +384,8 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                             ?><a class="btn btn-sm btn-secondary" href="<?= $this->escape($recent['workspace_url']) ?>" title="<?= $this->escape(__('Otvori područje')) ?>">↗</a><?php
                         endif; ?><?php if (is_string($recent['report_url'] ?? null)) :
     ?><a class="btn btn-sm btn-secondary" href="<?= $this->escape($recent['report_url']) ?>" title="<?= $this->escape(__('Otvori izvještaj importa')) ?>" aria-label="<?= $this->escape(__('Otvori izvještaj importa')) ?>"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg></a><?php
+                        endif; ?><?php if (($recent['can_resume'] ?? false) === true) :
+    ?><button class="btn btn-sm btn-primary" type="button" data-resume-job="<?= $this->escape((string)($recent['uuid'] ?? '')) ?>"><?= $this->escape(__('Nastavi import')) ?></button><?php
                         endif; ?><?php if (($recent['can_cancel'] ?? false) === true) :
     ?><button class="btn btn-sm btn-danger" type="button" data-cancel-job="<?= $this->escape((string)($recent['uuid'] ?? '')) ?>" title="<?= $this->escape(__('Odustani od importa')) ?>" aria-label="<?= $this->escape(__('Odustani od importa')) ?>">×</button><?php
                         endif; ?></div></td></tr><?php
@@ -428,6 +430,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         'confirmCancel' => __('Odustati od importa? Prenesena arhiva i podaci pripreme ovog nedovršenog posla bit će trajno obrisani.'),
         'cancelled' => __('Confluence import je otkazan, a prenesena arhiva obrisana.'),
         'importing' => __('Import je u tijeku. Velika područja mogu potrajati nekoliko minuta.'),
+        'importFinished' => __('Confluence import je dovršen.'),
         'confirmBatch' => __('Pokrenuti sekvencijalni import svih pronađenih batch arhiva?'),
         'batchRunning' => __('Batch import: {name} ({current} / {total})'),
         'batchFinished' => __('Batch import je dovršen. Uspješno: {success}; neuspjelo: {failed}.'),
@@ -440,6 +443,8 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         'processingAttachments' => __('Uvoz privitaka: {done} / {total}'),
         'processingPages' => __('Uvoz stranica: {done} / {total}'),
         'finalizing' => __('Završavam ovlasti, komentare, poveznice i indeks pretrage…'),
+        'reconnecting' => __('Veza je prekinuta; provjeravam i nastavljam isti import…'),
+        'stillRunning' => __('Import je i dalje u tijeku. Nastavite ga iz popisa poslova; nemojte pokretati novi import.'),
         'failed' => __('Zahtjev nije uspio.'),
         'failedHttp' => __('Poslužitelj je prekinuo zahtjev (HTTP {status}). Pogledajte pogrešku u popisu poslova ili tehničkom logu.'),
         'successTitle' => __('Uspjeh'),
@@ -448,6 +453,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         'openMapping' => __('Otvori mapiranje'),
         'openWorkspace' => __('Otvori područje'),
         'openReport' => __('Otvori izvještaj importa'),
+        'resumeImport' => __('Nastavi import'),
         'cancelImport' => __('Odustani od importa'),
     ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
     const query = (selector) => document.querySelector(selector);
@@ -522,7 +528,11 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         await refreshCsrf();
         const response = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json', Accept: 'application/json', [config.csrfHeader]: config.csrfToken}, body: JSON.stringify(data)});
         const payload = await responsePayload(response);
-        if (!response.ok) throw new Error(payload.error || config.failed);
+        if (!response.ok) {
+            const error = new Error(payload.error || config.failed);
+            error.httpStatus = response.status;
+            throw error;
+        }
         return payload;
     };
 
@@ -664,17 +674,64 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         const percent = Math.max(0, Math.min(100, Number(data.progress || 0)));
         progress.style.width = `${percent}%`;
         progress.parentElement?.setAttribute('aria-valuenow', String(percent));
+        if (data.reconnecting === true) return config.reconnecting;
         if (data.phase === 'attachments') return config.processingAttachments.replace('{done}', String(data.attachments_done || 0)).replace('{total}', String(data.attachments_total || 0));
         if (data.phase === 'pages') return config.processingPages.replace('{done}', String(data.pages_done || 0)).replace('{total}', String(data.pages_total || 0));
         if (data.phase === 'finalizing') return config.finalizing;
         return status;
     };
 
+    const waitForImport = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+    const retryableImportError = (error) => error instanceof TypeError || [502, 503, 504].includes(Number(error?.httpStatus || 0));
+    const currentImportJob = async (uuid) => {
+        const response = await fetch(config.jobs, {headers: {Accept: 'application/json'}, cache: 'no-store', credentials: 'same-origin'});
+        const data = await responsePayload(response);
+        if (!response.ok || !Array.isArray(data.jobs)) throw new Error(data.error || config.failed);
+        return data.jobs.find((job) => job.uuid === uuid) || null;
+    };
+    // HR: Nakon proxy prekida nastavljamo samo isti posao. Poslužitelj
+    //     zaključavanjem sprječava da dva zahtjeva obrade isti korak.
+    // EN: After a proxy timeout, resume only the same job. The server lock
+    //     prevents two requests from processing the same step.
+    const processImportStep = async (uuid, onReconnect = () => {}) => {
+        let retries = 0;
+        while (true) {
+            try {
+                const data = await post(config.process, {uuid});
+                if (data.busy === true) { await waitForImport(1500); continue; }
+                return data;
+            } catch (error) {
+                if (!retryableImportError(error)) throw error;
+                onReconnect();
+                retries++;
+                await waitForImport(Math.min(5000, 1500 * retries));
+                let job = null;
+                try { job = await currentImportJob(uuid); } catch (_checkError) { /* Try again after a network interruption. */ }
+                if (job?.status === 'failed') throw new Error(job.error || config.failed);
+                if (job && !['running', 'completed'].includes(job.status)) throw error;
+                if (retries >= 20) throw new Error(config.stillRunning);
+            }
+        }
+    };
+    const startQueuedImport = async (payload) => {
+        try {
+            return await post(config.run, payload);
+        } catch (error) {
+            if (!retryableImportError(error)) throw error;
+            await waitForImport(1500);
+            const job = await currentImportJob(payload.uuid);
+            if (job?.status === 'failed') throw new Error(job.error || config.failed);
+            if (job?.status === 'completed') return processImportStep(payload.uuid);
+            if (job?.status === 'running') return {completed: false, phase: 'attachments', progress: 2};
+            throw error;
+        }
+    };
+
     const finishQueuedImport = async (data, uuid, onProgress) => {
         let current = data;
         while (current.completed !== true) {
             onProgress(current);
-            current = await post(config.process, {uuid});
+            current = await processImportStep(uuid, () => onProgress({...current, reconnecting: true}));
         }
         onProgress(current);
         return current;
@@ -833,24 +890,14 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         progress.classList.remove('d-none');
         status.textContent = config.importing;
         try {
-            let data = await post(config.run, payload);
-            while (data.completed !== true) {
-                const percent = Math.max(0, Math.min(100, Number(data.progress || 0)));
-                progress.querySelector('.progress-bar').style.width = `${percent}%`;
-                progress.setAttribute('aria-valuenow', String(percent));
-                if (data.phase === 'attachments') {
-                    status.textContent = config.processingAttachments
-                        .replace('{done}', String(data.attachments_done || 0))
-                        .replace('{total}', String(data.attachments_total || 0));
-                } else if (data.phase === 'pages') {
-                    status.textContent = config.processingPages
-                        .replace('{done}', String(data.pages_done || 0))
-                        .replace('{total}', String(data.pages_total || 0));
-                } else if (data.phase === 'finalizing') {
-                    status.textContent = config.finalizing;
-                }
-                data = await post(config.process, {uuid: payload.uuid});
-            }
+            const started = await startQueuedImport(payload);
+            const data = await finishQueuedImport(started, payload.uuid, (current) => {
+                status.textContent = updateImportProgress(
+                    current,
+                    status.textContent,
+                    progress.querySelector('.progress-bar'),
+                );
+            });
             status.textContent = data.message || config.ready;
             result.classList.remove('d-none');
             result.textContent = JSON.stringify(data.summary || data, null, 2);
@@ -908,6 +955,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
             const url = job.mapping_url || job.workspace_url;
             if (url) { const link = document.createElement('a'); link.className = 'btn btn-sm btn-secondary'; link.href = url; link.title = job.mapping_url ? config.openMapping : config.openWorkspace; link.textContent = '↗'; actions.appendChild(link); }
             if (job.report_url) { const report = document.createElement('a'); report.className = 'btn btn-sm btn-secondary'; report.href = job.report_url; report.title = config.openReport; report.setAttribute('aria-label', config.openReport); report.innerHTML = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"></path><path d="M8 9h8M8 13h8M8 17h5"></path></svg>'; actions.appendChild(report); }
+            if (job.can_resume) { const resume = document.createElement('button'); resume.className = 'btn btn-sm btn-primary'; resume.type = 'button'; resume.dataset.resumeJob = String(job.uuid || ''); resume.textContent = config.resumeImport; actions.appendChild(resume); }
             if (job.can_cancel) { const cancel = document.createElement('button'); cancel.className = 'btn btn-sm btn-danger'; cancel.type = 'button'; cancel.dataset.cancelJob = String(job.uuid || ''); cancel.title = config.cancelImport; cancel.setAttribute('aria-label', config.cancelImport); cancel.textContent = '×'; actions.appendChild(cancel); }
             action.appendChild(actions);
             row.appendChild(action); body.appendChild(row);
@@ -916,6 +964,23 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
     const refreshJobs = async () => {
         try { const response = await fetch(config.jobs, {headers: {Accept: 'application/json'}, cache: 'no-store'}); const data = await responsePayload(response); if (response.ok && Array.isArray(data.jobs)) renderJobs(data.jobs); } catch (_error) { /* The next refresh retries. */ }
     };
+    document.addEventListener('click', async (event) => {
+        const button = event.target instanceof Element ? event.target.closest('[data-resume-job]') : null;
+        if (!(button instanceof HTMLButtonElement)) return;
+        const uuid = button.dataset.resumeJob || '';
+        if (uuid === '') return;
+
+        button.disabled = true;
+        try {
+            const result = await finishQueuedImport({completed: false, phase: 'finalizing', progress: 0}, uuid, () => {});
+            toast(result.message || config.importFinished, 'success');
+            await refreshJobs();
+        } catch (error) {
+            toast(error instanceof Error ? error.message : config.failed, 'danger');
+            button.disabled = false;
+            await refreshJobs();
+        }
+    });
     document.addEventListener('click', async (event) => {
         const button = event.target instanceof Element ? event.target.closest('[data-cancel-job]') : null;
         if (!(button instanceof HTMLButtonElement)) return;

@@ -67,11 +67,15 @@ Interni paketi koriste kompatibilna izdanja `^0.1.0`; ovaj modul ne sprema `comp
   identitet kalendara, ali ne i njegove događaje; kalendar se ne traži niti
   izrađuje automatski;
 - omogućuje odustajanje od nedovršenog importa uz trenutačno brisanje prenesene arhive i podataka pripreme;
-- nakon uspješnog importa briše prenesenu izvornu arhivu.
+- nakon uspješnog importa briše prenesenu izvornu arhivu;
 - veliki potvrđeni import obrađuje u ograničenim faznim koracima koji se mogu
   nastaviti; veliki nepromjenjivi manifest zapisuje jednom, unaprijed priprema
-  kontekst stranica i aktualne verzije privitaka te tek jednom na kraju usklađuje
-  poveznice, izvještaj i indeks pretrage.
+  kontekst stranica i aktualne verzije privitaka te na kraju u malim nastavivim
+  koracima usklađuje poveznice i uključene stranice prije dovršetka izvještaja
+  i indeksa pretrage;
+- nakon proxy prekida provjerava i nastavlja isti posao; posao u tijeku može
+  se nakon osvježavanja stranice nastaviti i iz popisa **Nedavni Confluence
+  importi**. Nemojte pokretati drugi import dok je prvi posao u tijeku.
 
 Pretvarač prikazuje `children` i `pagetree` kao lokalne ACL-zaštićene poveznice,
 popise privitaka i multimediju iz nativnih Editor privitaka, responzivne

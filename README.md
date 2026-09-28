@@ -71,8 +71,11 @@ Internal packages use compatible `^0.1.0` releases; this module does not commit 
 - never treats a stored attachment as disposable merely because its local page target is not yet set, because another imported space may still reference it.
 - processes a large confirmed import in bounded resumable batches; it writes
   the large immutable manifest once, precomputes page context and current
-  attachment versions, and reconciles links, the report, and search index
-  exactly once at the end.
+  attachment versions, then reconciles links and included pages in small
+  resumable finalization steps before completing the report and search index;
+- checks and resumes the same job after a proxy timeout; a running job can
+  also be resumed from **Recent Confluence imports** after a page refresh.
+  Do not start a second import while the first job is still running.
 
 The converter renders `children` and `pagetree` as local ACL-protected page
 links, attachment lists and multimedia from native Editor attachments, responsive

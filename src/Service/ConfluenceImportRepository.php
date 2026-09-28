@@ -9,17 +9,21 @@ use AaiEduHr\SimbiozaModuleConfluenceImport\Exception\ConfluenceImportException;
 use AaiEduHr\SimbiozaModuleConfluenceImport\ModuleSimbiozaConfluenceImport;
 
 use function array_chunk;
+use function array_fill;
 use function array_filter;
 use function array_map;
 use function array_unique;
 use function array_values;
 use function bin2hex;
 use function gmdate;
+use function implode;
 use function is_array;
 use function is_numeric;
 use function is_scalar;
 use function json_decode;
 use function json_encode;
+use function max;
+use function min;
 use function preg_match;
 use function random_bytes;
 use function strtolower;
@@ -974,6 +978,56 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
+     * HR: Čita sljedeći ograničeni skup veza po ID-u; promjena statusa već
+     *     obrađenih veza ne smije pomaknuti stranicu rezultata.
+     * EN: Reads the next bounded link batch by ID; changing processed link
+     *     statuses must not shift the following result page.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function linksForReconciliationBatch(string $destinationSpaceKey, int $afterId, int $limit): array
+    {
+        $destinationSpaceKey = trim($destinationSpaceKey);
+        $query = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_LINKS)
+            ->where('id', '>', max(0, $afterId));
+        if ($destinationSpaceKey === '') {
+            $query->where('status', '=', 'unresolved');
+        } else {
+            $query->whereRaw(
+                "(status = 'unresolved' OR (LOWER(destination_space_key) = LOWER(?) AND status <> 'manually_resolved'))",
+                [$destinationSpaceKey],
+            );
+        }
+
+        $result = [];
+        foreach ($query->orderBy('id', 'ASC')->limit(max(1, min(1000, $limit)))->get() as $row) {
+            if (is_array($row)) {
+                $result[] = $this->normalizeRow($row);
+            }
+        }
+
+        return $result;
+    }
+
+    /** HR: Broji veze za prikaz završnog napretka. EN: Counts links for finalization progress. */
+    public function countLinksForReconciliation(string $destinationSpaceKey): int
+    {
+        $destinationSpaceKey = trim($destinationSpaceKey);
+        $where = "status = 'unresolved'";
+        $bindings = [];
+        if ($destinationSpaceKey !== '') {
+            $where = "(status = 'unresolved' OR (LOWER(destination_space_key) = LOWER(?) AND status <> 'manually_resolved'))";
+            $bindings[] = $destinationSpaceKey;
+        }
+        $row = $this->database->fetchOne(
+            'SELECT COUNT(*) AS total FROM ' . ModuleSimbiozaConfluenceImport::TABLE_LINKS . ' WHERE ' . $where,
+            $bindings,
+        );
+
+        return is_array($row) ? (int)($row['total'] ?? 0) : 0;
+    }
+
+    /**
      * HR: Vraća samo trenutačno nerazriješene poveznice jednog izvještaja.
      * EN: Returns only the currently unresolved links for one report.
      *
@@ -1013,6 +1067,50 @@ final readonly class ConfluenceImportRepository
                 'status' => $target !== '' ? 'resolved' : 'unresolved',
                 'updated_at' => gmdate('Y-m-d H:i:s'),
             ]);
+    }
+
+    /**
+     * HR: Jednim SQL upitom sprema mali skup razrješenja, bez tisuća
+     *     pojedinačnih UPDATE upita tijekom velikog importa.
+     * EN: Persists a small set of resolutions in one SQL statement instead
+     *     of thousands of individual UPDATE statements during a large import.
+     *
+     * @param array<int,?string> $targetsById
+     */
+    public function updateLinkResolutions(array $targetsById): void
+    {
+        foreach (array_chunk($targetsById, 100, true) as $batch) {
+            $targetCases = [];
+            $statusCases = [];
+            $targetBindings = [];
+            $statusBindings = [];
+            $ids = [];
+            foreach ($batch as $id => $target) {
+                $id = (int)$id;
+                if ($id <= 0) {
+                    continue;
+                }
+                $target = trim((string)$target);
+                $ids[] = $id;
+                $targetCases[] = 'WHEN ? THEN ?';
+                $targetBindings[] = $id;
+                $targetBindings[] = $target !== '' ? $target : null;
+                $statusCases[] = 'WHEN ? THEN ?';
+                $statusBindings[] = $id;
+                $statusBindings[] = $target !== '' ? 'resolved' : 'unresolved';
+            }
+            if ($ids === []) {
+                continue;
+            }
+
+            $this->database->execute(
+                'UPDATE ' . ModuleSimbiozaConfluenceImport::TABLE_LINKS
+                    . ' SET resolved_target = CASE id ' . implode(' ', $targetCases) . ' END,'
+                    . ' status = CASE id ' . implode(' ', $statusCases) . ' END,'
+                    . ' updated_at = ? WHERE id IN (' . implode(', ', array_fill(0, count($ids), '?')) . ')',
+                [...$targetBindings, ...$statusBindings, gmdate('Y-m-d H:i:s'), ...$ids],
+            );
+        }
     }
 
     /**

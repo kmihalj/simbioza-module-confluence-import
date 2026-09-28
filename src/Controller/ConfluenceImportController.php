@@ -640,6 +640,8 @@ final readonly class ConfluenceImportController
                 'error' => $this->text($job['error_message'] ?? ''),
                 'can_cancel' => $this->integer($job['actor_user_id'] ?? 0) === $actorUserId
                     && $this->uploads->canCancel($job),
+                'can_resume' => $this->integer($job['actor_user_id'] ?? 0) === $actorUserId
+                    && ($job['status'] ?? '') === 'running',
                 'mapping_url' => in_array(($job['status'] ?? ''), ['ready', 'running'], true)
                     ? $this->path('simbioza-confluence-import.settings', '/settings/confluence-import')
                         . '?job=' . rawurlencode($this->text($job['uuid'] ?? ''))

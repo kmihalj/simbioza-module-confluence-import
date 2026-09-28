@@ -70,6 +70,47 @@ final class ConfluenceLinkBatchPersistenceTest extends TestCase
         self::assertNull($updated['resolved_target']);
     }
 
+    /** HR: Kursor ostaje stabilan nakon skupne promjene statusa veza. EN: The cursor remains stable after bulk link-status changes. */
+    public function testReconciliationUsesStableBatchesAndBulkUpdates(): void
+    {
+        [$repository] = $this->environment();
+        $uuids = [];
+        foreach (
+            [
+                ['TARGET', 'unresolved'],
+                ['TARGET', 'resolved'],
+                ['OTHER', 'unresolved'],
+                ['TARGET', 'unresolved'],
+                ['OTHER', 'resolved'],
+            ] as [$spaceKey, $status]
+        ) {
+            $uuids[] = $repository->recordLink([
+                'source_page_id' => 'source',
+                'source_space_key' => 'SOURCE',
+                'destination_space_key' => $spaceKey,
+                'destination_page_id' => 'target',
+                'status' => $status,
+                'resolved_target' => $status === 'resolved' ? '/old' : null,
+            ], 1);
+        }
+
+        self::assertSame(4, $repository->countLinksForReconciliation('target'));
+        $first = $repository->linksForReconciliationBatch('target', 0, 2);
+        self::assertSame([$uuids[0], $uuids[1]], array_column($first, 'uuid'));
+        $repository->updateLinkResolutions([
+            (int)$first[0]['id'] => '/new',
+            (int)$first[1]['id'] => null,
+        ]);
+        self::assertSame('resolved', $repository->linkByUuid($uuids[0])['status']);
+        self::assertSame('/new', $repository->linkByUuid($uuids[0])['resolved_target']);
+        self::assertSame('unresolved', $repository->linkByUuid($uuids[1])['status']);
+        self::assertNull($repository->linkByUuid($uuids[1])['resolved_target']);
+
+        $second = $repository->linksForReconciliationBatch('target', (int)$first[1]['id'], 3);
+        self::assertSame([$uuids[2], $uuids[3]], array_column($second, 'uuid'));
+        self::assertSame([], $repository->linksForReconciliationBatch('target', (int)$second[1]['id'], 3));
+    }
+
     /** HR: Ključevi područja nisu osjetljivi na velika slova, a korijen vodi na uvezenu naslovnicu. EN: Space keys are case-insensitive and a root reference resolves to the imported homepage. */
     public function testSpaceAndHomepageMappingsAreCaseInsensitive(): void
     {

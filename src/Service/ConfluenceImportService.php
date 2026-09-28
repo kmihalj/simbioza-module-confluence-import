@@ -34,6 +34,7 @@ use function array_key_exists;
 use function array_keys;
 use function array_pad;
 use function array_reverse;
+use function array_slice;
 use function array_unique;
 use function array_values;
 use function basename;
@@ -62,6 +63,7 @@ use function is_object;
 use function is_scalar;
 use function is_string;
 use function max;
+use function min;
 use function mkdir;
 use function parse_url;
 use function preg_match;
@@ -101,6 +103,16 @@ use const PHP_URL_SCHEME;
  */
 final readonly class ConfluenceImportService
 {
+    // HR: Paketi ostaju kraći od tipičnog 30-sekundnog proxy limita.
+    // EN: Batches remain shorter than a typical 30-second proxy timeout.
+    private const ATTACHMENT_BATCH_SIZE = 100;
+
+    private const PAGE_BATCH_SIZE = 10;
+
+    private const LINK_BATCH_SIZE = 100;
+
+    private const INCLUDE_BATCH_SIZE = 100;
+
     private const COMMENT_SERVICE = \AaiEduHr\HeartPhrameModuleComment\Service\CommentService::class;
 
     private const AUDIT_LOG = \AaiEduHr\HeartPhrameModuleAudit\Service\AuditLogService::class;
@@ -513,7 +525,7 @@ final readonly class ConfluenceImportService
                     is_array($state['workspace'] ?? null) ? $state['workspace'] : [],
                     (int)$state['job_id'],
                     (int)($state['attachment_offset'] ?? 0),
-                    25,
+                    self::ATTACHMENT_BATCH_SIZE,
                     $this->scalarMap($state['options']['_replacement_attachment_uuids'] ?? []),
                 );
                 $stored = is_array($state['attachment_result'] ?? null) ? $state['attachment_result'] : [];
@@ -556,7 +568,7 @@ final readonly class ConfluenceImportService
                         is_array($state['options'] ?? null) ? $state['options'] : [],
                         is_array($pageResult['nodes_by_source'] ?? null) ? $pageResult['nodes_by_source'] : [],
                         is_array($pageResult['documents_by_source'] ?? null) ? $pageResult['documents_by_source'] : [],
-                        5,
+                        self::PAGE_BATCH_SIZE,
                         is_array($state['render_context'] ?? null) ? $state['render_context'] : [],
                     ),
                 ));
@@ -809,63 +821,106 @@ final readonly class ConfluenceImportService
         $pageResult = is_array($state['page_result'] ?? null) ? $state['page_result'] : [];
         $workspaceId = (int)($workspace['id'] ?? 0);
         $workspaceManagerUserId = (int)($state['workspace_manager_user_id'] ?? 0);
-
-        $contentResult = $this->workspaceChanges->run(function () use (
-            $workspaceId,
-            $workspaceManagerUserId,
-            $dataset,
-            $pageResult,
-            $options,
-            $jobId,
-            $space,
-            $actorUserId,
-        ): array {
-            $this->repository->setStage($jobId, 'acl');
-            $this->applyNodeAcl(
+        $mappingSpaceKey = $this->text($options['mapping_space_key'] ?? $space['source_key'] ?? '');
+        $step = $this->text($state['finalization_step'] ?? 'setup');
+        if ($step === 'setup') {
+            $contentResult = $this->workspaceChanges->run(function () use (
                 $workspaceId,
                 $workspaceManagerUserId,
                 $dataset,
-                is_array($pageResult['nodes_by_source'] ?? null) ? $pageResult['nodes_by_source'] : [],
+                $pageResult,
                 $options,
-            );
-            $this->repository->setStage($jobId, 'comments');
-            $comments = ($options['include_comments'] ?? false)
-                ? $this->importComments(
-                    $dataset,
-                    is_array($pageResult['documents_by_source'] ?? null) ? $pageResult['documents_by_source'] : [],
-                    $jobId,
-                    $this->text($options['mapping_space_key'] ?? $space['source_key'] ?? ''),
+                $jobId,
+                $mappingSpaceKey,
+                $actorUserId,
+            ): array {
+                $this->repository->setStage($jobId, 'acl');
+                $this->applyNodeAcl(
                     $workspaceId,
-                    $this->text($options['language'] ?? $this->config->defaultLanguage()),
-                )
-                : ['imported' => 0, 'skipped' => 0];
+                    $workspaceManagerUserId,
+                    $dataset,
+                    is_array($pageResult['nodes_by_source'] ?? null) ? $pageResult['nodes_by_source'] : [],
+                    $options,
+                );
+                $this->repository->setStage($jobId, 'comments');
+                $comments = ($options['include_comments'] ?? false)
+                    ? $this->importComments(
+                        $dataset,
+                        is_array($pageResult['documents_by_source'] ?? null) ? $pageResult['documents_by_source'] : [],
+                        $jobId,
+                        $mappingSpaceKey,
+                        $workspaceId,
+                        $this->text($options['language'] ?? $this->config->defaultLanguage()),
+                    )
+                    : ['imported' => 0, 'skipped' => 0];
 
-            // HR: Nastavivi koraci namjerno su odbacili međusignale. Ovaj
-            // završni signal jednom obnavlja Search i druge izvedene indekse.
-            // EN: Resumable steps intentionally discarded intermediate
-            // signals. This final signal rebuilds Search and other indexes once.
-            $this->workspaceChanges->publish(new WorkspaceContentChanged(
-                $workspaceId,
-                'bulk_content_changed',
-                null,
-                null,
-                $actorUserId > 0 ? $actorUserId : null,
-            ));
+                // HR: Jedan završni signal obnavlja Search nakon svih stranica.
+                // EN: One final signal rebuilds Search after all pages exist.
+                $this->workspaceChanges->publish(new WorkspaceContentChanged(
+                    $workspaceId,
+                    'bulk_content_changed',
+                    null,
+                    null,
+                    $actorUserId > 0 ? $actorUserId : null,
+                ));
 
-            return ['comments' => $comments];
-        });
+                return ['comments' => $comments];
+            });
+            $state['comments_result'] = $contentResult['comments'];
+            $state['links_total'] = $this->repository->countLinksForReconciliation($mappingSpaceKey);
+            $state['links_done'] = 0;
+            $state['links_reconciled'] = 0;
+            $state['link_cursor'] = 0;
+            $state['finalization_step'] = 'links';
+            $this->repository->setStage($jobId, 'links_and_search');
+            $this->stateStore->save($staging, $state);
 
-        $this->repository->setStage($jobId, 'links_and_search');
-        $reconciled = $this->reconcileLinks(
-            $this->text($options['mapping_space_key'] ?? $space['source_key'] ?? ''),
-        );
-        $includesReconciled = $this->reconcileIncludes(
-            $this->text($space['source_key'] ?? ''),
-            is_array($state['targets'] ?? null) ? $state['targets'] : [],
-            is_array($pageResult['documents_by_source'] ?? null) ? $pageResult['documents_by_source'] : [],
-        );
+            return $this->progress($state);
+        }
+        if ($step === 'links') {
+            $batch = $this->reconcileLinkBatch(
+                $mappingSpaceKey,
+                (int)($state['link_cursor'] ?? 0),
+                self::LINK_BATCH_SIZE,
+            );
+            $state['link_cursor'] = $batch['cursor'];
+            $state['links_done'] = (int)($state['links_done'] ?? 0) + $batch['processed'];
+            $state['links_reconciled'] = (int)($state['links_reconciled'] ?? 0) + $batch['resolved'];
+            if (!$batch['has_more']) {
+                $state['finalization_step'] = 'includes';
+            }
+            $this->stateStore->save($staging, $state);
+
+            return $this->progress($state);
+        }
+        if ($step === 'includes') {
+            $documents = is_array($pageResult['documents_by_source'] ?? null)
+                ? $pageResult['documents_by_source']
+                : [];
+            $offset = (int)($state['include_offset'] ?? 0);
+            $batch = array_slice($documents, $offset, self::INCLUDE_BATCH_SIZE, true);
+            $state['includes_reconciled'] = (int)($state['includes_reconciled'] ?? 0)
+                + $this->reconcileIncludes(
+                    $this->text($space['source_key'] ?? ''),
+                    is_array($state['targets'] ?? null) ? $state['targets'] : [],
+                    $batch,
+                );
+            $state['include_offset'] = $offset + count($batch);
+            if ($state['include_offset'] >= count($documents)) {
+                $state['finalization_step'] = 'complete';
+            }
+            $this->stateStore->save($staging, $state);
+
+            return $this->progress($state);
+        }
+        if ($step !== 'complete') {
+            throw new ConfluenceImportException(__('Spremljena faza Confluence importa nije valjana.'));
+        }
+
+        $reconciled = (int)($state['links_reconciled'] ?? 0);
+        $includesReconciled = (int)($state['includes_reconciled'] ?? 0);
         $attachments = is_array($state['attachment_result'] ?? null) ? $state['attachment_result'] : [];
-        $comments = is_array($contentResult['comments'] ?? null) ? $contentResult['comments'] : [];
+        $comments = is_array($state['comments_result'] ?? null) ? $state['comments_result'] : [];
         $summary = [
             'workspace_id' => $workspaceId,
             'workspace_slug' => $this->text($workspace['slug'] ?? ''),
@@ -996,7 +1051,7 @@ final readonly class ConfluenceImportService
         $percent = match ($phase) {
             'attachments' => 5 + (int)round(30 * $attachmentDone / $attachmentTotal),
             'pages' => 35 + (int)round(55 * min($pageTotal, $pageDone) / $pageTotal),
-            'finalizing' => 95,
+            'finalizing' => $this->finalizationProgress($state),
             'completed' => 100,
             default => 2,
         };
@@ -1009,7 +1064,34 @@ final readonly class ConfluenceImportService
             'attachments_total' => (int)($state['attachment_result']['total'] ?? 0),
             'pages_done' => $pageDone,
             'pages_total' => count(is_array($state['pages'] ?? null) ? $state['pages'] : []),
+            'finalization_step' => $this->text($state['finalization_step'] ?? ''),
+            'links_done' => (int)($state['links_done'] ?? 0),
+            'links_total' => (int)($state['links_total'] ?? 0),
+            'includes_done' => (int)($state['include_offset'] ?? 0),
+            'includes_total' => count(is_array($state['page_result']['documents_by_source'] ?? null)
+                ? $state['page_result']['documents_by_source']
+                : []),
         ];
+    }
+
+    /**
+     * HR: Završna faza sada pokazuje i napredak poveznica.
+     * EN: Finalization now shows link progress too.
+     *
+     * @param array<string,mixed> $state
+     */
+    private function finalizationProgress(array $state): int
+    {
+        $step = $this->text($state['finalization_step'] ?? 'setup');
+        if ($step === 'links') {
+            $total = max(1, (int)($state['links_total'] ?? 0));
+            return 92 + (int)round(5 * min($total, (int)($state['links_done'] ?? 0)) / $total);
+        }
+        if ($step === 'includes') {
+            return 98;
+        }
+
+        return $step === 'complete' ? 99 : 91;
     }
 
     /** HR: Zaključava jedan procesni korak bez čekanja. EN: Locks one processing step without waiting. */
@@ -1797,6 +1879,16 @@ final readonly class ConfluenceImportService
 
         $dataset['attachment_versions'] = $attachments;
         $dataset['attachments'] = array_values(ConfluenceAttachmentSelector::latestCurrent($attachments));
+        $currentVersions = [];
+        foreach ($dataset['attachments'] as $currentAttachment) {
+            $currentVersions[
+                $this->text($currentAttachment['source_id'] ?? '')
+                . ':' . max(1, (int)($currentAttachment['version'] ?? 1))
+            ] = true;
+        }
+        // HR: Mapu računamo jednom, ne pri svakom HTTP paketu od velikog arhiva.
+        // EN: Compute the map once, not for every HTTP batch of a large archive.
+        $dataset['current_attachment_versions'] = $currentVersions;
         $dataset['attachment_pages_by_source'] = $attachmentPages;
         $dataset['attachments_prepared'] = true;
 
@@ -1828,17 +1920,20 @@ final readonly class ConfluenceImportService
         $workspaceId = (int)($workspace['id'] ?? 0);
         $properties = is_array($dataset['properties'] ?? null) ? $dataset['properties'] : [];
         $all = ($dataset['attachments_prepared'] ?? false) === true
-            ? $this->rows($dataset['attachment_versions'] ?? $dataset['attachments'] ?? [])
+            ? (is_array($dataset['attachment_versions'] ?? null) ? $dataset['attachment_versions'] : [])
             : array_values(ConfluenceAttachmentSelector::latestCurrent(
                 $this->rows($dataset['attachments'] ?? []),
             ));
-        $currentVersions = [];
-        foreach (ConfluenceAttachmentSelector::latestCurrent($all) as $currentAttachment) {
-            $currentVersions[
-                $this->text($currentAttachment['source_id'] ?? '')
-                . ':'
-                . max(1, (int)($currentAttachment['version'] ?? 1))
-            ] = true;
+        $currentVersions = is_array($dataset['current_attachment_versions'] ?? null)
+            ? $dataset['current_attachment_versions']
+            : [];
+        if ($currentVersions === []) {
+            foreach (ConfluenceAttachmentSelector::latestCurrent($all) as $currentAttachment) {
+                $currentVersions[
+                    $this->text($currentAttachment['source_id'] ?? '')
+                    . ':' . max(1, (int)($currentAttachment['version'] ?? 1))
+                ] = true;
+            }
         }
         $total = count($all);
         $slice = array_slice($all, max(0, $offset), max(1, $limit));
@@ -3087,12 +3182,54 @@ final readonly class ConfluenceImportService
         return $attachmentPagesBySource[$containerId] ?? $containerId;
     }
 
-    /** HR: Pokušava razriješiti stare cross-space poveznice nakon svakog novog importa. EN: Attempts to resolve old cross-space links after each new import. */
+    /** HR: Sinkroni poziv također obrađuje veze u ograničenim skupovima. EN: The synchronous path also handles links in bounded batches. */
     private function reconcileLinks(string $changedSpaceKey): int
     {
+        $cursor = 0;
         $resolved = 0;
+        do {
+            $batch = $this->reconcileLinkBatch($changedSpaceKey, $cursor, self::LINK_BATCH_SIZE);
+            $cursor = $batch['cursor'];
+            $resolved += $batch['resolved'];
+        } while ($batch['has_more']);
+
+        return $resolved;
+    }
+
+    /**
+     * HR: Kursor omogućuje zaseban HTTP zahtjev za svaki mali skup poveznica.
+     * EN: The cursor lets each small link batch run in its own HTTP request.
+     *
+     * @return array{cursor:int,processed:int,resolved:int,has_more:bool}
+     */
+    private function reconcileLinkBatch(string $changedSpaceKey, int $afterId, int $limit): array
+    {
+        $rows = $this->repository->linksForReconciliationBatch($changedSpaceKey, $afterId, $limit + 1);
+        $batch = array_slice($rows, 0, $limit);
+        $cursor = $batch === [] ? $afterId : (int)($batch[count($batch) - 1]['id'] ?? $afterId);
+
+        return [
+            'cursor' => $cursor,
+            'processed' => count($batch),
+            'resolved' => $this->reconcileLinkRows($batch),
+            'has_more' => count($rows) > $limit,
+        ];
+    }
+
+    /**
+     * HR: Razrješava i skupno sprema točno predane veze.
+     * EN: Resolves and bulk-persists exactly the supplied links.
+     *
+     * @param list<array<string,mixed>> $links
+     */
+    private function reconcileLinkRows(array $links): int
+    {
+        $resolved = 0;
+        $updates = [];
         $replacementsByDocument = [];
-        foreach ($this->repository->linksForReconciliation($changedSpaceKey) as $link) {
+        $sourceMappings = [];
+        $spaces = [];
+        foreach ($links as $link) {
             $spaceKey = $this->text($link['destination_space_key'] ?? '');
             $pageId = $this->text($link['destination_page_id'] ?? '');
             $title = $this->text($link['destination_page_title'] ?? '');
@@ -3110,14 +3247,22 @@ final readonly class ConfluenceImportService
                     : null;
             }
             if (!is_array($mapping)) {
-                $this->repository->updateLinkResolution((int)$link['id'], null);
+                if (($link['status'] ?? '') !== 'unresolved' || $link['resolved_target'] !== null) {
+                    $updates[(int)$link['id']] = null;
+                }
                 continue;
             }
-            $space = $this->repository->spaceByWorkspaceId((int)($mapping['target_workspace_id'] ?? 0));
+            $workspaceId = (int)($mapping['target_workspace_id'] ?? 0);
+            if (!array_key_exists($workspaceId, $spaces)) {
+                $spaces[$workspaceId] = $this->repository->spaceByWorkspaceId($workspaceId);
+            }
+            $space = $spaces[$workspaceId];
             $spaceSlug = is_array($space) ? $this->text($space['target_workspace_slug'] ?? '') : '';
             $nodeSlug = $this->text($mapping['target_slug'] ?? '');
             if ($spaceSlug === '' || $nodeSlug === '') {
-                $this->repository->updateLinkResolution((int)$link['id'], null);
+                if (($link['status'] ?? '') !== 'unresolved' || $link['resolved_target'] !== null) {
+                    $updates[(int)$link['id']] = null;
+                }
                 continue;
             }
             $target = $this->nodePath($spaceSlug, $nodeSlug);
@@ -3127,11 +3272,16 @@ final readonly class ConfluenceImportService
                 $safeFragment = $this->safeFragment($fragment);
                 $target .= $safeFragment !== '' ? '#' . $safeFragment : '';
             }
-            $this->repository->updateLinkResolution((int)$link['id'], $target);
-            $sourceMapping = $this->repository->contentBySourceReference(
-                $this->text($link['source_space_key'] ?? ''),
-                $this->text($link['source_page_id'] ?? ''),
-            );
+            if (($link['status'] ?? '') !== 'resolved' || $this->text($link['resolved_target'] ?? '') !== $target) {
+                $updates[(int)$link['id']] = $target;
+            }
+            $sourceKey = $this->text($link['source_space_key'] ?? '');
+            $sourcePageId = $this->text($link['source_page_id'] ?? '');
+            $sourceLookup = $sourceKey . ':' . $sourcePageId;
+            if (!array_key_exists($sourceLookup, $sourceMappings)) {
+                $sourceMappings[$sourceLookup] = $this->repository->contentBySourceReference($sourceKey, $sourcePageId);
+            }
+            $sourceMapping = $sourceMappings[$sourceLookup];
             $documentKey = is_array($sourceMapping)
                 ? $this->text($sourceMapping['target_document_key'] ?? '')
                 : '';
@@ -3142,7 +3292,10 @@ final readonly class ConfluenceImportService
             ++$resolved;
         }
 
-        $this->editorMaintenance->replaceContentReferences($replacementsByDocument);
+        if ($replacementsByDocument !== []) {
+            $this->editorMaintenance->replaceContentReferences($replacementsByDocument);
+        }
+        $this->repository->updateLinkResolutions($updates);
 
         return $resolved;
     }
