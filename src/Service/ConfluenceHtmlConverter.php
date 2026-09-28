@@ -2356,6 +2356,13 @@ final readonly class ConfluenceHtmlConverter
                 $this->elements($xpath->query('./ac:layout-cell', $section)),
                 $this->hasMeaningfulLayoutContent(...),
             ));
+            // HR: Prazan Confluence redak nema sadržaja, ali Bootstrapov negativni
+            //     gornji razmak može povući sljedeći redak pod alatnu traku dokumenta.
+            // EN: An empty Confluence row has no content, yet Bootstrap's negative
+            //     top gutter can pull the next row under the document toolbar.
+            if ($cells === []) {
+                continue;
+            }
             foreach ($cells as $index => $cell) {
                 $column = $document->createElement('div');
                 $column->setAttribute(

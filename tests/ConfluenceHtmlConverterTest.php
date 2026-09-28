@@ -825,6 +825,24 @@ XML;
         self::assertStringContainsString('Namjerni <br> prijelom ostaje.', $result->html);
     }
 
+    /** HR: Prazan početni layout redak ne smije pomaknuti kartice pod alatnu traku. EN: An empty leading layout row must not pull cards under the toolbar. */
+    public function testOmitsEmptyLeadingConfluenceLayoutRow(): void
+    {
+        $body = <<<'XML'
+<ac:layout>
+<ac:layout-section ac:type="single"><ac:layout-cell><p class="auto-cursor-target"><br /></p></ac:layout-cell></ac:layout-section>
+<ac:layout-section ac:type="two_equal"><ac:layout-cell><p>Prva</p></ac:layout-cell><ac:layout-cell><p>Druga</p></ac:layout-cell></ac:layout-section>
+</ac:layout>
+XML;
+
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'CEU', '10551307');
+
+        self::assertSame(1, substr_count($result->html, 'class="row g-3"'), $result->html);
+        self::assertStringNotContainsString('<div class="row g-3"></div>', $result->html);
+        self::assertStringContainsString('Prva', $result->html);
+        self::assertStringContainsString('Druga', $result->html);
+    }
+
     /** HR: Nepoznati JavaScript ostaje vidljiv u izvještaju umjesto tihog odbacivanja. EN: Unknown JavaScript remains visible in the report instead of being silently discarded. */
     public function testReportsHtmlMacroWithUnknownJavascript(): void
     {
