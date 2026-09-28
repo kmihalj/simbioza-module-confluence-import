@@ -73,7 +73,10 @@ final readonly class PurgeConfluenceWorkspaceImport
 
         $managedFiles = [];
         $attachmentQuery = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS)
-            ->where('target_workspace_id', '=', $event->workspaceId);
+            ->select(['storage_path'])
+            ->where('target_workspace_id', '=', $event->workspaceId)
+            ->whereNotNull('storage_path')
+            ->where('storage_path', '!=', '');
         foreach ($attachmentQuery->get() as $row) {
             if (is_array($row) && is_scalar($row['storage_path'] ?? null)) {
                 $managedFiles[] = (string)$row['storage_path'];
@@ -82,6 +85,7 @@ final readonly class PurgeConfluenceWorkspaceImport
         if ($jobIds !== []) {
             foreach (
                 $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
+                ->select(['archive_path', 'uuid'])
                 ->whereIn('id', $jobIds)
                 ->get() as $row
             ) {
@@ -94,7 +98,10 @@ final readonly class PurgeConfluenceWorkspaceImport
             }
             foreach (
                 $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS)
+                ->select(['storage_path'])
                 ->whereIn('job_id', $jobIds)
+                ->whereNotNull('storage_path')
+                ->where('storage_path', '!=', '')
                 ->get() as $row
             ) {
                 if (is_array($row) && is_scalar($row['storage_path'] ?? null)) {
