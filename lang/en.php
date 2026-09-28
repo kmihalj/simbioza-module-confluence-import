@@ -351,4 +351,5 @@ return array (
   'Poveznica više nije nerazriješena ili nije pronađena.' => 'The link is no longer unresolved or could not be found.',
   'Upozorenje više nije otvoreno ili nije pronađeno.' => 'The warning is no longer open or could not be found.',
   'kopija' => 'copy',
+  'Za Confluence import potreban je PHP memory_limit od najmanje %d MB.' => 'Confluence import requires a PHP memory_limit of at least %d MB.',
 );

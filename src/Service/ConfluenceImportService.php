@@ -51,6 +51,8 @@ use function flock;
 use function fopen;
 use function function_exists;
 use function in_array;
+use function ini_get;
+use function ini_set;
 use function is_array;
 use function is_dir;
 use function is_file;
@@ -62,6 +64,7 @@ use function is_string;
 use function max;
 use function mkdir;
 use function parse_url;
+use function preg_match;
 use function preg_replace;
 use function preg_split;
 use function rawurlencode;
@@ -75,6 +78,7 @@ use function str_contains;
 use function str_starts_with;
 use function strip_tags;
 use function strtolower;
+use function strtoupper;
 use function trim;
 use function unlink;
 use function usort;
@@ -143,6 +147,7 @@ final readonly class ConfluenceImportService
      */
     public function preparation(string $jobUuid, int $actorUserId): array
     {
+        $this->ensureImportMemory();
         $job = $this->repository->jobByUuid($jobUuid, $actorUserId);
         $scan = is_array($job['summary'] ?? null) ? $job['summary'] : [];
         $targetUsersById = [];
@@ -339,6 +344,8 @@ final readonly class ConfluenceImportService
      */
     public function queue(string $jobUuid, array $options, array $actor): array
     {
+        $this->ensureImportMemory();
+        $this->extendExecutionTime();
         $actorUserId = $this->positiveInt($actor['id'] ?? null, __('Prijavljeni administrator nije pronađen.'));
         $job = $this->repository->jobByUuid($jobUuid, $actorUserId);
         $staging = $this->stagingDirectory($jobUuid);
@@ -360,7 +367,6 @@ final readonly class ConfluenceImportService
         $jobId = (int)$job['id'];
         $workspace = null;
         try {
-            $this->extendExecutionTime();
             $normalized = $this->prepareReimport($space, $normalized, $actorUserId, $jobId);
             $this->repository->startImport($jobId, $normalized);
             $this->repository->setStage($jobId, 'identity_mapping');
@@ -455,6 +461,8 @@ final readonly class ConfluenceImportService
      */
     public function process(string $jobUuid, array $actor): array
     {
+        $this->ensureImportMemory();
+        $this->extendExecutionTime();
         $actorUserId = $this->positiveInt($actor['id'] ?? null, __('Prijavljeni administrator nije pronađen.'));
         $job = $this->repository->jobByUuid($jobUuid, $actorUserId);
         if (($job['status'] ?? '') === 'completed') {
@@ -586,6 +594,7 @@ final readonly class ConfluenceImportService
      */
     public function import(string $jobUuid, array $options, array $actor): array
     {
+        $this->ensureImportMemory();
         $actorUserId = $this->positiveInt($actor['id'] ?? null, __('Prijavljeni administrator nije pronađen.'));
         $job = $this->repository->jobByUuid($jobUuid, $actorUserId);
         if (($job['status'] ?? '') !== 'ready') {
@@ -1113,6 +1122,54 @@ final readonly class ConfluenceImportService
                 'error_line' => $error['line'],
             ]);
         });
+    }
+
+    /**
+     * HR: Podiže limit samo za administratorski korak koji učitava veliki manifest.
+     *     Ako FPM zabranjuje promjenu, prijavljuje jasan problem prije izmjene sadržaja.
+     * EN: Raises the limit only for an administrator step loading a large manifest.
+     *     If FPM disallows it, reports the requirement before changing content.
+     */
+    private function ensureImportMemory(): void
+    {
+        $requiredMb = $this->config->importMemoryLimitMb();
+        $requiredBytes = $requiredMb * 1048576;
+        if ($this->memoryLimitBytes(ini_get('memory_limit')) >= $requiredBytes) {
+            return;
+        }
+
+        @ini_set('memory_limit', $requiredMb . 'M');
+        if ($this->memoryLimitBytes(ini_get('memory_limit')) < $requiredBytes) {
+            throw new ConfluenceImportException(sprintf(
+                __('Za Confluence import potreban je PHP memory_limit od najmanje %d MB.'),
+                $requiredMb,
+            ));
+        }
+    }
+
+    /** HR: Pretvara PHP memorijski zapis u bajtove. EN: Converts a PHP memory setting to bytes. */
+    private function memoryLimitBytes(string|false $limit): int
+    {
+        if ($limit === false) {
+            return 0;
+        }
+        $limit = trim($limit);
+        if ($limit === '-1') {
+            return PHP_INT_MAX;
+        }
+        if (preg_match('/^([0-9]+)([KMG]?)$/i', $limit, $matches) !== 1) {
+            return 0;
+        }
+
+        $factor = match (strtoupper($matches[2])) {
+            'K' => 1024,
+            'M' => 1048576,
+            'G' => 1073741824,
+            default => 1,
+        };
+        $number = (int)$matches[1];
+
+        return $number > intdiv(PHP_INT_MAX, $factor) ? PHP_INT_MAX : $number * $factor;
     }
 
     /**

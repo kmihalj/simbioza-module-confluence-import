@@ -16,6 +16,9 @@ return [
     // HR: Stvarni import velikog područja smije trajati do 15 minuta.
     // EN: A real large-Workspace import may run for up to 15 minutes.
     'import_execution_time_limit' => 900,
+    // HR: Veliki manifesti traže više memorije samo tijekom administratorskog importa.
+    // EN: Large manifests need more memory only during administrator import steps.
+    'import_memory_limit_mb' => 512,
     'default_language' => 'hr',
     // HR: Samo početna vrijednost administratorskog odabira po importu.
     // EN: Only the initial value of the administrator's per-import choice.

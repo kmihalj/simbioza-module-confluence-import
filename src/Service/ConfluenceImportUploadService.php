@@ -347,6 +347,15 @@ final readonly class ConfluenceImportUploadService
                 'stage' => 'preflight',
             ]);
             $scan = $this->scanner->scan($finalPath);
+            /*
+             * HR: Pojedinačne stranice i privitke ponovno čitamo iz arhive tek
+             *     pri importu. Za mapiranje su potrebni samo sažeci; spremanje
+             *     desetaka tisuća zapisa u posao bi iscrpilo FPM memoriju.
+             * EN: Individual pages and attachments are read from the archive
+             *     again during import. Mapping only needs summaries; retaining
+             *     tens of thousands of records in the job exhausts FPM memory.
+             */
+            unset($scan['pages'], $scan['attachments']);
             $this->repository->saveScan((int)$job['id'], $scan);
         } catch (\Throwable $throwable) {
             $this->repository->failImport((int)$job['id'], $throwable->getMessage());

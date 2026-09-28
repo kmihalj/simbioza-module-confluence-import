@@ -114,6 +114,46 @@ final class ConfluenceImportUploadServiceTest extends TestCase
         $this->repository->jobByUuid((string)$job['uuid'], 42);
     }
 
+    /** HR: Velik preflight čuva sažetak, a ne popis svih stranica i privitaka. EN: A large preflight retains the summary, not every page and attachment. */
+    public function testFinishedPreflightStoresOnlyMappingInventory(): void
+    {
+        $fixture = $this->directory . '/source.zip';
+        $this->createSpaceArchive($fixture);
+        $size = filesize($fixture);
+        self::assertIsInt($size);
+        $job = $this->uploads->start('source.zip', $size, 42);
+        self::assertTrue(copy($fixture, (string)$job['archive_path']));
+        $this->repository->updateJob((int)$job['id'], ['next_offset' => $size]);
+
+        $ready = $this->uploads->finish((string)$job['uuid'], 42);
+
+        self::assertSame('ready', $ready['status']);
+        self::assertSame(1, $ready['scan']['counts']['Page'] ?? null);
+        self::assertArrayNotHasKey('pages', $ready['scan']);
+        self::assertArrayNotHasKey('attachments', $ready['scan']);
+        self::assertArrayNotHasKey('pages', $ready['summary']);
+        self::assertArrayNotHasKey('attachments', $ready['summary']);
+        self::assertArrayNotHasKey('summary_json', $this->repository->recentJobs()[0]);
+    }
+
+    /** HR: Stari veliki sažetak ne smije se učitati pri popisu i odustajanju. EN: A legacy large summary must not be loaded while listing or cancelling. */
+    public function testLegacyLargeSummaryIsNotLoadedForListOrCancellation(): void
+    {
+        $job = $this->uploads->start('large.xml.zip', 6, 42);
+        $this->repository->updateJob((int)$job['id'], [
+            'status' => 'ready',
+            'summary_json' => json_encode(['pages' => array_fill(0, 5000, ['title' => str_repeat('x', 100)])], JSON_THROW_ON_ERROR),
+        ]);
+
+        $listed = $this->repository->recentJobs()[0];
+        self::assertSame($job['uuid'], $listed['uuid']);
+        self::assertArrayNotHasKey('summary', $listed);
+        self::assertArrayNotHasKey('summary_json', $listed);
+
+        self::assertSame($job['uuid'], $this->uploads->cancel((string)$job['uuid'], 42)['uuid']);
+        self::assertFileDoesNotExist((string)$job['archive_path']);
+    }
+
     /** HR: Dokazuje da se posao koji je počeo mijenjati sadržaj ne može ukloniti kao privremeni upload. EN: Proves that a content-mutating job cannot be removed as a transient upload. */
     public function testRunningImportCannotBeCancelled(): void
     {

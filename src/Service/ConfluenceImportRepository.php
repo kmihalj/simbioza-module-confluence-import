@@ -122,6 +122,8 @@ final readonly class ConfluenceImportRepository
     {
         return $this->database->transaction(function (Database $database) use ($uuid, $actorUserId, $callback): array {
             $row = $database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
+                ->select(['id', 'uuid', 'original_name', 'status', 'stage', 'archive_path', 'archive_size', 'next_offset', 'chunk_size',
+                    'actor_user_id', 'expires_at', 'options_json', 'workspace_id'])
                 ->where('uuid', '=', trim($uuid))
                 ->where('actor_user_id', '=', $actorUserId)
                 ->lockForUpdate()
@@ -157,6 +159,7 @@ final readonly class ConfluenceImportRepository
     public function activeBatchJob(int $actorUserId): ?array
     {
         $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
+            ->select(['id', 'uuid', 'status', 'original_name', 'options_json'])
             ->where('operation', '=', 'batch_import')
             ->where('actor_user_id', '=', $actorUserId)
             ->whereRaw("status IN ('uploading', 'scanning', 'ready', 'running')")
@@ -180,6 +183,9 @@ final readonly class ConfluenceImportRepository
      */
     public function saveScan(int $jobId, array $scan): void
     {
+        // HR: Posao u bazi čuva samo inventar; velike zapise ponovno čitamo iz ZIP-a.
+        // EN: The database job retains only the inventory; large records are read from the ZIP again.
+        unset($scan['pages'], $scan['attachments']);
         $space = is_array($scan['spaces'][0] ?? null) ? $scan['spaces'][0] : [];
         $this->updateJob($jobId, [
             'status' => 'ready',
@@ -249,6 +255,7 @@ final readonly class ConfluenceImportRepository
     public function completedJobsForStorageCleanup(): array
     {
         $rows = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
+            ->select(['id', 'uuid', 'archive_path'])
             ->where('status', '=', 'completed')
             ->orderBy('id', 'ASC')
             ->get();
@@ -283,6 +290,7 @@ final readonly class ConfluenceImportRepository
     public function expiredTransientJobs(string $now): array
     {
         $rows = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
+            ->select(['id', 'status', 'archive_path', 'options_json', 'workspace_id'])
             ->where('expires_at', '<', trim($now))
             ->orderBy('id', 'ASC')
             ->get();
@@ -302,6 +310,7 @@ final readonly class ConfluenceImportRepository
     public function deleteTransientJob(int $jobId): void
     {
         $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
+            ->select(['status', 'options_json', 'workspace_id'])
             ->where('id', '=', $jobId)
             ->first();
         if (!is_array($row) || !$this->isTransientJobRow($row)) {
@@ -1364,6 +1373,11 @@ final readonly class ConfluenceImportRepository
     public function recentJobs(int $limit = 100): array
     {
         $rows = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
+            // HR: Popis ne treba preflight JSON; velik posao može imati desetke MB.
+            // EN: The list never needs preflight JSON, which can span tens of MB.
+            ->select(['id', 'uuid', 'original_name', 'source_space_name', 'source_space_key',
+                'status', 'stage', 'archive_size', 'next_offset', 'chunk_size', 'created_at',
+                'error_message', 'actor_user_id', 'workspace_id', 'options_json'])
             ->orderBy('id', 'DESC')
             ->limit(max(1, min(100, $limit)))
             ->get();

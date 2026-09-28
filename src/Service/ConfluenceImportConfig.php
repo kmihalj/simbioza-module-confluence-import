@@ -106,6 +106,12 @@ final readonly class ConfluenceImportConfig
         return $this->integer('import_execution_time_limit', 900);
     }
 
+    /** HR: Memorijski limit jednog administratorskog koraka importa u MB. EN: Memory limit for one administrator import step in MB. */
+    public function importMemoryLimitMb(): int
+    {
+        return $this->integer('import_memory_limit_mb', 512);
+    }
+
     /** HR: Jezik sadržaja kada Confluence export nema jezični metapodatak. EN: Content locale when the export has no locale metadata. */
     public function defaultLanguage(): string
     {
