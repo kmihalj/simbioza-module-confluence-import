@@ -1411,6 +1411,23 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
+     * HR: Čita ishode privitaka bez promjene starog izvještaja ili uvezenog sadržaja.
+     * EN: Reads attachment outcomes without modifying an old report or imported content.
+     *
+     * @return array<string,mixed>
+     */
+    public function attachmentReport(int $jobId): array
+    {
+        $rows = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS)
+            ->select(['source_attachment_id', 'logical_source_id', 'source_version', 'original_name', 'status', 'error_message'])
+            ->where('job_id', '=', $jobId)
+            ->orderBy('id', 'ASC')
+            ->get();
+
+        return ConfluenceAttachmentReport::summarize($rows);
+    }
+
+    /**
      * HR: Nakon sigurnog prijenosa predaje vlasništvo nad datotekom Editor modulu.
      * EN: Transfers file ownership to the Editor module after safe registration.
      */

@@ -203,16 +203,30 @@ final readonly class ConfluenceHtmlConverter
             //     decorative images from acquiring a fake visible caption in Editor.
             $replacement->setAttribute('alt', $alternative);
             $classes = ['img-fluid'];
-            if (strtolower($this->attribute($image, self::AC_NAMESPACE, 'align')) === 'center') {
+            $alignment = strtolower($this->attribute($image, self::AC_NAMESPACE, 'align'));
+            if (in_array($alignment, ['center', 'right'], true)) {
                 $classes[] = 'd-block';
-                $classes[] = 'mx-auto';
+                $classes[] = $alignment === 'center' ? 'mx-auto' : 'ms-auto';
             }
             $replacement->setAttribute('class', implode(' ', $classes));
+            $dimensions = [];
             foreach (['width', 'height'] as $dimension) {
                 $value = $this->attribute($image, self::AC_NAMESPACE, $dimension);
                 if (preg_match('/^[1-9][0-9]*$/', $value) === 1) {
                     $replacement->setAttribute($dimension, $value);
+                    $dimensions[$dimension] = $value;
                 }
+            }
+            // HR: img-fluid poništava HTML visinu. Ograničenje visine čuva
+            //     izvorni prikaz kada Confluence ne navodi širinu slike.
+            // EN: img-fluid overrides HTML height. A height constraint preserves
+            //     the source presentation when Confluence omits image width.
+            if (isset($dimensions['width'])) {
+                $replacement->setAttribute('style', 'width:' . $dimensions['width'] . 'px;max-width:100%;height:auto');
+            } elseif (isset($dimensions['height'])) {
+                $replacement->setAttribute('style', 'width:auto;max-width:100%;height:auto;max-height:' . $dimensions['height'] . 'px');
+            } else {
+                $replacement->setAttribute('style', 'width:auto;max-width:100%;height:auto');
             }
             $parent = $image->parentNode;
             if (!$parent instanceof DOMNode) {

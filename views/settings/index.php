@@ -274,7 +274,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                                 <div class="row g-2">
                                     <div class="col-md-4"><label class="form-check confluence-import-option h-100"><input class="form-check-input" type="checkbox" name="include_attachments" checked><span class="form-check-label"><strong><?= $this->escape(__('Privitci')) ?></strong><span class="d-block small text-body-secondary"><?= $this->escape(__('Uvozi aktualne datoteke svih MIME tipova u privatnu pohranu.')) ?></span></span></label></div>
                                     <div class="col-md-4"><label class="form-check confluence-import-option h-100"><input class="form-check-input" type="checkbox" name="include_comments" checked><span class="form-check-label"><strong><?= $this->escape(__('Komentari')) ?></strong><span class="d-block small text-body-secondary"><?= $this->escape(__('Komentari se uvoze samo kada su autor i ciljna stranica mapirani.')) ?></span></span></label></div>
-                                    <div class="col-md-4"><label class="form-check confluence-import-option h-100"><input class="form-check-input" type="checkbox" name="include_history"><span class="form-check-label"><strong><?= $this->escape(__('Povijest stranica')) ?></strong><span class="d-block small text-body-secondary"><?= $this->escape(__('Opcionalno uvozi i ranije objavljene verzije.')) ?></span></span></label></div>
+                                    <div class="col-md-4"><label class="form-check confluence-import-option h-100"><input class="form-check-input" type="checkbox" name="include_history"><span class="form-check-label"><strong><?= $this->escape(__('Povijest stranica i privitaka')) ?></strong><span class="d-block small text-body-secondary"><?= $this->escape(__('Ranije verzije stranica i privitaka uvoze se samo kada je ova opcija uključena.')) ?></span></span></label></div>
                                     <div class="col-md-4"><label class="form-check confluence-import-option h-100"><input class="form-check-input" type="checkbox" name="include_deleted"><span class="form-check-label"><strong><?= $this->escape(__('Obrisane stranice')) ?></strong><span class="d-block small text-body-secondary"><?= $this->escape(__('Opcionalno ih sprema kao soft-obrisani sadržaj koji administrator može vratiti.')) ?></span></span></label></div>
                                     <div class="col-md-4"><label class="form-check confluence-import-option h-100"><input class="form-check-input" type="checkbox" name="include_drafts"><span class="form-check-label"><strong><?= $this->escape(__('Nacrti')) ?></strong><span class="d-block small text-body-secondary"><?= $this->escape(__('Opcionalno uvozi zadnji Confluence nacrt bez objave.')) ?></span></span></label></div>
                                 </div>
@@ -361,7 +361,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                                 </div>
                             </div>
                         </form>
-                        <pre class="alert alert-info confluence-import-result mt-3 d-none" id="confluence-import-result"></pre>
+                        <div class="confluence-import-result mt-3 d-none" id="confluence-import-result" role="status"></div>
                     </div>
                 </details>
             <?php endif; ?>
@@ -455,8 +455,71 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         'openReport' => __('Otvori izvještaj importa'),
         'resumeImport' => __('Nastavi import'),
         'cancelImport' => __('Odustani od importa'),
+        'pagesLabel' => __('Stranice'),
+        'currentAttachments' => __('Aktualni privitci'),
+        'attachmentHistory' => __('Povijest privitaka'),
+        'currentAttachmentsOk' => __('Svi aktualni privitci uspješno su preneseni.'),
+        'currentAttachmentsFailed' => __('Nisu preneseni svi aktualni privitci.'),
+        'historicalAttachmentsFailed' => __('Neke ranije verzije privitaka nisu prenesene. To ne znači da nedostaju aktualne datoteke.'),
+        'technicalDetails' => __('Tehnički detalji'),
+        'versionLabel' => __('Verzija'),
     ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
     const query = (selector) => document.querySelector(selector);
+    // HR: Odvojeni sažetak ne predstavlja povijesne greške kao nestale aktualne datoteke.
+    // EN: A separate summary does not present historical failures as missing current files.
+    const renderImportResult = (result, summary) => {
+        result.replaceChildren();
+        const counts = document.createElement('p');
+        counts.textContent = config.pagesLabel + ': ' + Number(summary.pages_imported || 0);
+        result.append(counts);
+        const report = summary.attachment_report;
+        if (report && typeof report === 'object') {
+            for (const kind of ['current', 'historical']) {
+                const total = Number(report[kind + '_total'] || 0);
+                if (total === 0) continue;
+                const imported = Number(report[kind + '_imported'] || 0);
+                const failed = Number(report[kind + '_failed'] || 0);
+                const section = document.createElement('section');
+                section.dataset.attachmentReport = kind;
+                section.className = 'alert alert-' + (failed > 0 ? (kind === 'current' ? 'danger' : 'warning') : 'info');
+                const heading = document.createElement('h3');
+                heading.className = 'h6';
+                heading.textContent = (kind === 'current' ? config.currentAttachments : config.attachmentHistory)
+                    + ': ' + imported + ' / ' + total;
+                section.append(heading);
+                const message = document.createElement('p');
+                message.className = 'mb-0';
+                if (failed > 0) {
+                    message.textContent = kind === 'current' ? config.currentAttachmentsFailed : config.historicalAttachmentsFailed;
+                } else if (kind === 'current' && imported === total) {
+                    section.className = 'alert alert-success';
+                    message.textContent = config.currentAttachmentsOk;
+                }
+                section.append(message);
+                if (Array.isArray(report[kind + '_failures']) && failed > 0) {
+                    const list = document.createElement('ul');
+                    list.className = 'mb-0 mt-2';
+                    for (const failure of report[kind + '_failures']) {
+                        const item = document.createElement('li');
+                        item.className = 'text-break';
+                        item.textContent = String(failure.name || '') + ' — ' + config.versionLabel + ' '
+                            + Number(failure.version || 1) + ': ' + String(failure.error || '');
+                        list.append(item);
+                    }
+                    section.append(list);
+                }
+                result.append(section);
+            }
+        }
+        const details = document.createElement('details');
+        const label = document.createElement('summary');
+        label.textContent = config.technicalDetails;
+        const data = document.createElement('pre');
+        data.className = 'small mt-2';
+        data.textContent = JSON.stringify(summary, null, 2);
+        details.append(label, data);
+        result.append(details);
+    };
     const uploadStorageKey = 'simbioza.confluenceImport.upload';
     let upload = null;
     try {
@@ -900,8 +963,8 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
             });
             status.textContent = data.message || config.ready;
             result.classList.remove('d-none');
-            result.textContent = JSON.stringify(data.summary || data, null, 2);
-            toast(status.textContent, 'success');
+            renderImportResult(result, data.summary || data);
+            toast(status.textContent, Number(data.summary?.attachment_report?.current_failed || 0) > 0 ? 'danger' : 'success');
             if (typeof data.workspace_url === 'string' && data.workspace_url !== '') {
                 const link = document.createElement('a');
                 link.className = 'btn btn-secondary ms-2'; link.href = data.workspace_url; link.textContent = config.openWorkspace;

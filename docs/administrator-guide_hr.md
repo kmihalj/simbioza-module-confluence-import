@@ -22,7 +22,11 @@ Izradite XML izvoz točno jednog Confluence spacea. ZIP nemojte raspakirati ni m
    identitete izvora i privitaka. Zamjena čuva javne poveznice na stranice i
    privitke te u završnoj fazi ponovno provjerava reference iz drugih uvezenih
    područja.
-6. Ostavite zadani aktualni sadržaj ili izričito uključite povijest, nacrte ili obrisane stranice.
+6. Ostavite zadani aktualni sadržaj ili izričito uključite povijest, nacrte ili
+   obrisane stranice. **Povijest stranica i privitaka** uvozi ranije verzije
+   stranica i datoteka. Kada je isključena, stare verzije privitaka ne kopiraju
+   se niti se prijavljuju kao nedostajuće. Greške aktualnih datoteka i povijesnih
+   verzija prikazuju se odvojeno u rezultatu i trajnom izvještaju.
 7. Pregledajte svako predloženo mapiranje korisnika i grupa. Pretraživi
    korisnički izbornik dohvaća samo mali broj podudaranja pa ostaje upotrebljiv
    i s velikim Auth imenikom. Za nemapiranog korisnika zadano se autorstvo i
@@ -128,5 +132,8 @@ aktivnog jezika ili vrijednost primarnog jezika kada prijevod nedostaje.
 - potvrdite da se privitci preuzimaju, a ne izvršavaju unutar preglednika;
 - provjerite učitavaju li velike uvezene slike svoju web-verziju, dok klik na
   sliku i dalje otvara netaknuti original;
+- provjerite poravnanje i izvorne dimenzije slika; slike kojima je zadana samo
+  visina zadržavaju to ograničenje, a na uskom ekranu smanjuju se proporcionalno.
+  Otvaranje i spremanje u editoru čuva taj raspored;
 - uvezite vanjski space na koji postoje poveznice kako bi se neriješene poveznice mogle uskladiti;
 - provjerite Audit log kada je opcionalni Audit modul uključen.

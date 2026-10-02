@@ -5,6 +5,14 @@ declare(strict_types=1);
 // HR: Izvorni hrvatski ključevi i prijevodi jezika hr.
 // EN: Canonical Croatian source keys and hr translations.
 return array (
+  'Povijest stranica i privitaka' => 'Povijest stranica i privitaka',
+  'Ranije verzije stranica i privitaka uvoze se samo kada je ova opcija uključena.' => 'Ranije verzije stranica i privitaka uvoze se samo kada je ova opcija uključena.',
+  'Aktualni privitci' => 'Aktualni privitci',
+  'Povijest privitaka' => 'Povijest privitaka',
+  'Svi aktualni privitci uspješno su preneseni.' => 'Svi aktualni privitci uspješno su preneseni.',
+  'Nisu preneseni svi aktualni privitci.' => 'Nisu preneseni svi aktualni privitci.',
+  'Neke ranije verzije privitaka nisu prenesene. To ne znači da nedostaju aktualne datoteke.' => 'Neke ranije verzije privitaka nisu prenesene. To ne znači da nedostaju aktualne datoteke.',
+  'Tehnički detalji' => 'Tehnički detalji',
   'Učitavanje...' => 'Učitavanje...',
   'Pronađeno rezultata: %d' => 'Pronađeno rezultata: %d',
   'Prikaži sadržaj' => 'Prikaži sadržaj',

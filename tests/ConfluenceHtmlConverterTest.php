@@ -15,6 +15,22 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(ConfluenceHtmlConverter::class)]
 final class ConfluenceHtmlConverterTest extends TestCase
 {
+    /** HR: Visina bez širine i centriranje ostaju vidljivi nakon sanitizacije. EN: Height-only sizing and centering remain effective after sanitization. */
+    public function testPreservesResponsiveSourceImageDimensions(): void
+    {
+        $body = '<p><ac:image ac:align="center" ac:height="400"><ri:attachment ri:filename="height.png" /></ac:image></p>'
+            . '<p><ac:image ac:width="432" ac:height="400"><ri:attachment ri:filename="width.png" /></ac:image></p>'
+            . '<p><ac:image ac:width="100%;color:red"><ri:attachment ri:filename="unsafe.png" /></ac:image></p>';
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'TEST', '10');
+        $html = (new EditorHtmlSanitizer())->sanitize($result->html);
+        self::assertStringContainsString('max-height: 400px', $html);
+        self::assertStringContainsString('width: 432px', $html);
+        self::assertStringContainsString('max-width: 100%', $html);
+        self::assertStringContainsString('img-fluid d-block mx-auto', $html);
+        self::assertStringNotContainsString('color:', $html);
+        self::assertSame($html, (new EditorHtmlSanitizer())->sanitize($html));
+    }
+
     /** HR: Datumi postaju vidljivi prije čišćenja HTML-a, uključujući ćelije i makroe. EN: Dates become visible before HTML sanitization, including cells and macros. */
     public function testPreservesEmptyConfluenceDatesAfterEditorSanitization(): void
     {

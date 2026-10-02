@@ -2,7 +2,9 @@
 
 English version: [README.md](README.md)
 
-Modul specifičan za Simbiozu koji sigurno uvozi Confluence XML backup jednog spacea u područje. Čuva stablo stranica, aktualni sadržaj, privitke, unutarnje poveznice i izričito mapirane ovlasti. Povijest stranica, nacrti i obrisane stranice opcionalni su i zadano isključeni.
+Modul specifičan za Simbiozu koji sigurno uvozi Confluence XML backup jednog spacea u područje. Čuva stablo stranica, aktualni sadržaj, privitke, unutarnje poveznice i izričito mapirane ovlasti. Povijest stranica i privitaka, nacrti i obrisane stranice opcionalni su i zadano isključeni.
+
+Uz isključenu opciju **Povijest stranica i privitaka** kopiraju se samo aktualne verzije privitaka; prijenos starijih verzija ne pokušava se niti se one prijavljuju kao nedostajuće. Uključivanje opcije izričito uvozi povijest stranica i privitaka. Rezultat razlikuje greške aktualnih datoteka od grešaka ranijih verzija. Slike zadržavaju izvorne širine u pikselima ili ograničenje samo visine te poravnanje, uz prilagodbu uskim ekranima.
 
 ## Ovisnosti
 

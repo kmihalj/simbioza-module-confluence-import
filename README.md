@@ -2,7 +2,9 @@
 
 Croatian version: [README_hr.md](README_hr.md)
 
-Simbioza-specific module for safely importing a Confluence XML space backup into a Workspace. It preserves the page tree, current content, attachments, internal links and explicitly mapped access rules. Page history, drafts and deleted pages are optional and disabled by default.
+Simbioza-specific module for safely importing a Confluence XML space backup into a Workspace. It preserves the page tree, current content, attachments, internal links and explicitly mapped access rules. Page and attachment history, drafts and deleted pages are optional and disabled by default.
+
+With **Page and attachment history** off, only current attachment versions are copied; older versions are neither attempted nor reported as missing. Enabling it explicitly imports both page history and attachment history. Import results distinguish failures of current files from failures of historical versions. Images retain source pixel widths or height-only constraints and alignment, while shrinking to fit narrow screens.
 
 ## Dependencies
 

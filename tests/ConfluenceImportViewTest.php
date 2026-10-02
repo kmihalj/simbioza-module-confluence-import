@@ -8,6 +8,20 @@ use PHPUnit\Framework\TestCase;
 
 final class ConfluenceImportViewTest extends TestCase
 {
+    /** HR: Izvještaj razdvaja stare verzije od aktualnih grešaka i sigurno prikazuje nazive. EN: The report separates historical versions from current failures and safely displays filenames. */
+    public function testAttachmentReportSeparatesHistoryAndEscapesNames(): void
+    {
+        $view = file_get_contents(__DIR__ . '/../views/settings/index.php');
+        $report = file_get_contents(__DIR__ . '/../views/settings/report.php');
+        self::assertIsString($view);
+        self::assertIsString($report);
+        self::assertStringContainsString("__('Povijest stranica i privitaka')", $view);
+        self::assertStringContainsString("for (const kind of ['current', 'historical'])", $view);
+        self::assertStringContainsString('item.textContent = String(failure.name', $view);
+        self::assertStringContainsString("\$this->escape((string)(\$failure['name']", $report);
+        self::assertStringContainsString('To ne znači da nedostaju aktualne datoteke.', $report);
+    }
+
     /** HR: Mapiranja imaju vlastite oznake bez nepotpunog combobox ugovora. EN: Mappings have their own labels without an incomplete combobox contract. */
     public function testMappingPickersExposeNativeControlsAndStatus(): void
     {

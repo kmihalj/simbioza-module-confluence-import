@@ -136,6 +136,7 @@ final readonly class ConfluenceImportController
             }
 
             $summary = is_array($job['summary'] ?? null) ? $job['summary'] : [];
+            $summary['attachment_report'] = $this->repository->attachmentReport((int)($job['id'] ?? 0));
             $reviewPages = [];
             foreach (is_array($summary['review_pages'] ?? null) ? $summary['review_pages'] : [] as $page) {
                 if (is_array($page)) {

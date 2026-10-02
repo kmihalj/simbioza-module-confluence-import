@@ -37,6 +37,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
     }
 }
 $number = static fn(mixed $value): int => is_numeric($value) ? (int)$value : 0;
+$attachmentReport = is_array($summary['attachment_report'] ?? null) ? $summary['attachment_report'] : [];
 $unresolvedReviewPages = array_values(array_filter(array_map(
     static function (array $page): array {
         $page['issues'] = array_values(array_filter(
@@ -117,11 +118,40 @@ $normalizeCalendarName = static function (string $name): string {
 
                 <div class="row g-3 mb-4">
                     <div class="col-sm-6 col-xl"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Stranice')) ?></span><strong><?= $number($summary['pages_imported'] ?? 0) ?></strong></div></div>
-                    <div class="col-sm-6 col-xl"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Privitci')) ?></span><strong><?= $number($summary['attachments_imported'] ?? 0) ?></strong></div></div>
+                    <div class="col-sm-6 col-xl"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Aktualni privitci')) ?></span><strong><?= $number($attachmentReport['current_imported'] ?? $summary['attachments_imported'] ?? 0) ?></strong></div></div>
                     <div class="col-sm-6 col-xl"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Komentari')) ?></span><strong><?= $number($summary['comments_imported'] ?? 0) ?></strong></div></div>
                     <div class="col-sm-6 col-xl"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Nerazriješene poveznice')) ?></span><strong><?= $unresolvedLinkCount ?></strong></div></div>
                     <div class="col-sm-6 col-xl"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Stranice za provjeru')) ?></span><strong><?= count($unresolvedReviewPages) ?></strong></div></div>
                 </div>
+
+                <?php foreach (['current', 'historical'] as $kind) : ?>
+                    <?php
+                    $attachmentTotal = $number($attachmentReport[$kind . '_total'] ?? 0);
+                    $attachmentImported = $number($attachmentReport[$kind . '_imported'] ?? 0);
+                    $attachmentFailed = $number($attachmentReport[$kind . '_failed'] ?? 0);
+                    $attachmentFailures = is_array($attachmentReport[$kind . '_failures'] ?? null)
+                        ? $attachmentReport[$kind . '_failures'] : [];
+                    $severity = $attachmentFailed > 0 ? ($kind === 'current' ? 'danger' : 'warning')
+                        : ($attachmentImported === $attachmentTotal ? 'success' : 'info');
+                    ?>
+                    <?php if ($attachmentTotal > 0) : ?>
+                        <section class="alert alert-<?= $severity ?> mb-4" data-attachment-report="<?= $kind ?>">
+                            <h2 class="h5"><?= $this->escape($kind === 'current' ? __('Aktualni privitci') : __('Povijest privitaka')) ?>: <?= $attachmentImported ?> / <?= $attachmentTotal ?></h2>
+                            <?php if ($attachmentFailed > 0) : ?>
+                                <p><?= $this->escape($kind === 'current' ? __('Nisu preneseni svi aktualni privitci.') : __('Neke ranije verzije privitaka nisu prenesene. To ne znači da nedostaju aktualne datoteke.')) ?></p>
+                                <ul class="mb-0">
+                                    <?php foreach ($attachmentFailures as $failure) : ?>
+                                        <?php if (is_array($failure)) : ?>
+                                            <li class="text-break"><?= $this->escape((string)($failure['name'] ?? '')) ?> — <?= $this->escape(__('Verzija')) ?> <?= $number($failure['version'] ?? 1) ?>: <?= $this->escape((string)($failure['error'] ?? '')) ?></li>
+                                        <?php endif; ?>
+                                    <?php endforeach; ?>
+                                </ul>
+                            <?php elseif ($kind === 'current' && $attachmentImported === $attachmentTotal) : ?>
+                                <p class="mb-0"><?= $this->escape(__('Svi aktualni privitci uspješno su preneseni.')) ?></p>
+                            <?php endif; ?>
+                        </section>
+                    <?php endif; ?>
+                <?php endforeach; ?>
 
                 <h2 class="h4 mb-2"><?= $this->escape(__('Nerazriješene Confluence poveznice')) ?></h2>
                 <p class="text-body-secondary"><?= $this->escape(__('Popis se automatski osvježava nakon svakog importa područja. Uspješno lokalno razriješene poveznice više se ne prikazuju.')) ?></p>

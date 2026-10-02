@@ -5,6 +5,14 @@ declare(strict_types=1);
 // HR: Izvorni hrvatski ključevi i prijevodi jezika en.
 // EN: Canonical Croatian source keys and en translations.
 return array (
+  'Povijest stranica i privitaka' => 'Page and attachment history',
+  'Ranije verzije stranica i privitaka uvoze se samo kada je ova opcija uključena.' => 'Earlier versions of pages and attachments are imported only when this option is enabled.',
+  'Aktualni privitci' => 'Current attachments',
+  'Povijest privitaka' => 'Attachment history',
+  'Svi aktualni privitci uspješno su preneseni.' => 'All current attachments were transferred successfully.',
+  'Nisu preneseni svi aktualni privitci.' => 'Not all current attachments were transferred.',
+  'Neke ranije verzije privitaka nisu prenesene. To ne znači da nedostaju aktualne datoteke.' => 'Some earlier attachment versions were not transferred. This does not mean current files are missing.',
+  'Tehnički detalji' => 'Technical details',
   'Učitavanje...' => 'Loading...',
   'Pronađeno rezultata: %d' => 'Results found: %d',
   'Prikaži sadržaj' => 'Show content',

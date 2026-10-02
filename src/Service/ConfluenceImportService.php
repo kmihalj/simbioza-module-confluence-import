@@ -439,7 +439,9 @@ final readonly class ConfluenceImportService
                     'imported' => 0,
                     'failed' => 0,
                     'warnings' => [],
-                    'total' => $normalized['include_attachments'] ? count($dataset['attachments']) : 0,
+                    'total' => $normalized['include_attachments']
+                        ? count($this->rows($dataset[$normalized['include_history']
+                            ? 'attachment_versions' : 'attachments'] ?? [])) : 0,
                 ],
                 'page_result' => [
                     'imported' => 0,
@@ -478,11 +480,13 @@ final readonly class ConfluenceImportService
         $actorUserId = $this->positiveInt($actor['id'] ?? null, __('Prijavljeni administrator nije pronađen.'));
         $job = $this->repository->jobByUuid($jobUuid, $actorUserId);
         if (($job['status'] ?? '') === 'completed') {
+            $summary = is_array($job['summary'] ?? null) ? $job['summary'] : [];
+            $summary['attachment_report'] = $this->repository->attachmentReport((int)($job['id'] ?? 0));
             return [
                 'completed' => true,
                 'progress' => 100,
                 'phase' => 'completed',
-                'summary' => is_array($job['summary'] ?? null) ? $job['summary'] : [],
+                'summary' => $summary,
             ];
         }
         if (($job['status'] ?? '') !== 'running') {
@@ -527,6 +531,7 @@ final readonly class ConfluenceImportService
                     (int)($state['attachment_offset'] ?? 0),
                     self::ATTACHMENT_BATCH_SIZE,
                     $this->scalarMap($state['options']['_replacement_attachment_uuids'] ?? []),
+                    includeHistory: (bool)($state['options']['include_history'] ?? false),
                 );
                 $stored = is_array($state['attachment_result'] ?? null) ? $state['attachment_result'] : [];
                 $state['attachment_result'] = [
@@ -665,6 +670,7 @@ final readonly class ConfluenceImportService
                     $workspace,
                     $jobId,
                     preferredUuids: $this->scalarMap($normalized['_replacement_attachment_uuids'] ?? []),
+                    includeHistory: $normalized['include_history'],
                 )
                 : ['urls' => [], 'imported' => 0, 'failed' => 0, 'warnings' => []];
             $attachments = $attachmentResult['urls'];
@@ -748,6 +754,7 @@ final readonly class ConfluenceImportService
                 'deleted_pages_imported' => $pageResult['deleted'],
                 'attachments_imported' => $attachmentResult['imported'],
                 'attachments_failed' => $attachmentResult['failed'],
+                'attachment_report' => $this->repository->attachmentReport($jobId),
                 'comments_imported' => $commentResult['imported'],
                 'comments_skipped' => $commentResult['skipped'],
                 'links_reconciled' => $reconciled,
@@ -930,6 +937,7 @@ final readonly class ConfluenceImportService
             'deleted_pages_imported' => (int)($pageResult['deleted'] ?? 0),
             'attachments_imported' => (int)($attachments['imported'] ?? 0),
             'attachments_failed' => (int)($attachments['failed'] ?? 0),
+            'attachment_report' => $this->repository->attachmentReport($jobId),
             'comments_imported' => (int)($comments['imported'] ?? 0),
             'comments_skipped' => (int)($comments['skipped'] ?? 0),
             'links_reconciled' => $reconciled,
@@ -1896,8 +1904,8 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Kopira aktualne privitke u privatnu pohranu i bilježi neuspjele vrste.
-     * EN: Copies current attachments into private storage and records failed types.
+     * HR: Kopira odabrane verzije privitaka u privatnu pohranu i bilježi neuspjele prijenose.
+     * EN: Copies selected attachment versions into private storage and records failed transfers.
      *
      * @param array<string,mixed> $dataset
      * @param array<string,mixed> $workspace
@@ -1912,6 +1920,7 @@ final readonly class ConfluenceImportService
         int $offset = 0,
         int $limit = PHP_INT_MAX,
         array $preferredUuids = [],
+        bool $includeHistory = false,
     ): array {
         $urls = [];
         $imported = 0;
@@ -1919,11 +1928,11 @@ final readonly class ConfluenceImportService
         $warnings = [];
         $workspaceId = (int)($workspace['id'] ?? 0);
         $properties = is_array($dataset['properties'] ?? null) ? $dataset['properties'] : [];
+        // HR: Pripremljeni odabir čuva velike importe od ponovnog grupiranja u svakom batchu.
+        // EN: The prepared selection avoids regrouping large imports in every batch.
         $all = ($dataset['attachments_prepared'] ?? false) === true
-            ? (is_array($dataset['attachment_versions'] ?? null) ? $dataset['attachment_versions'] : [])
-            : array_values(ConfluenceAttachmentSelector::latestCurrent(
-                $this->rows($dataset['attachments'] ?? []),
-            ));
+            ? $this->rows($dataset[$includeHistory ? 'attachment_versions' : 'attachments'] ?? [])
+            : ConfluenceAttachmentSelector::forImport($this->rows($dataset['attachments'] ?? []), $includeHistory);
         $currentVersions = is_array($dataset['current_attachment_versions'] ?? null)
             ? $dataset['current_attachment_versions']
             : [];

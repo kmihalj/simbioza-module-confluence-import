@@ -22,7 +22,11 @@ Create an XML export of exactly one Confluence space. Do not unpack or change th
    existing Workspace unchanged and uses isolated source and attachment
    identities. Replacement preserves public page and attachment links and
    rechecks references from other imported Workspaces during finalization.
-6. Keep the default current-content selection or explicitly enable history, drafts or deleted pages.
+6. Keep the default current-content selection or explicitly enable history,
+   drafts or deleted pages. **Page and attachment history** imports older
+   versions of both pages and files. With it off, older attachment versions are
+   not copied or reported as missing. Current-file failures and historical-file
+   failures are shown separately in the result and durable report.
 7. Review every proposed user and group mapping. The searchable user picker
    retrieves only a small result set and remains usable with a large Auth
    directory. For an unmapped user, creator/editor attribution defaults to the
@@ -127,5 +131,8 @@ language translation or falls back to the primary language when needed.
 - confirm attachments download but do not execute inline;
 - confirm large imported images load their web-sized cache while selecting the
   image still opens the untouched original;
+- verify image alignment and source dimensions; images with only a source
+  height keep that height constraint, and all images shrink proportionally on
+  narrow screens. Opening and saving them in the editor preserves this layout;
 - import any referenced external space so unresolved cross-space links can reconcile;
 - check the Audit log when the optional Audit module is enabled.

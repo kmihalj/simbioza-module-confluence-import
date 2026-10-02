@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.43 - 2026-10-02
+
+- Imports only current attachment versions by default. Earlier page and
+  attachment versions require the explicit history option.
+- Separates current attachment outcomes from historical-version failures in
+  the completion summary and durable report, including older import jobs.
+- Preserves source image dimensions and center/right alignment through import
+  and subsequent editing, with responsive scaling on narrow screens.
+- Updates import guidance and translations and requires HTML Editor 0.1.39.
+
 ## 0.1.42 - 2026-10-02
 
 - Preserves dates stored in empty Confluence `time` elements as visible text

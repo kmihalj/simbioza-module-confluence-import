@@ -15,6 +15,27 @@ use function trim;
 final class ConfluenceAttachmentSelector
 {
     /**
+     * HR: Povijest privitaka prenosi se samo uz izričit odabir povijesti.
+     * EN: Attachment history is transferred only when history is explicitly selected.
+     *
+     * @param iterable<array<string,mixed>> $attachments
+     * @return list<array<string,mixed>>
+     */
+    public static function forImport(iterable $attachments, bool $includeHistory = false): array
+    {
+        if (!$includeHistory) {
+            return array_values(self::latestCurrent($attachments));
+        }
+
+        $versions = [];
+        foreach ($attachments as $attachment) {
+            $versions[] = $attachment;
+        }
+
+        return $versions;
+    }
+
+    /**
      * HR: Grupira zapise preko izvornog logičkog ID-a i zadržava najnoviju aktualnu verziju.
      * EN: Groups records by source logical ID and retains the newest current version.
      *
