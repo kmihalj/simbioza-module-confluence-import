@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.42 - 2026-10-02
+
+- Preserves dates stored in empty Confluence `time` elements as visible text
+  before HTML sanitization, without changing existing labels or time zones.
+- Resolves historical attachment binaries using the original logical attachment
+  ID, while retaining support for exports using the historical record ID.
+- Adds regression coverage for date preservation, safe attribute handling, and
+  exact historical attachment version selection.
+
 ## 0.1.32 - 2026-09-16
 
 - Normalizes test fixture paths for the current supported Rector release used

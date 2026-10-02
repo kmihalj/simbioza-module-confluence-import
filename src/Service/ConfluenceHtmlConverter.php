@@ -158,6 +158,7 @@ final readonly class ConfluenceHtmlConverter
         $hasTableOfContents = false;
         $sourceHost = strtolower(Utf8Url::component($sourceBaseUrl, PHP_URL_HOST) ?? '');
 
+        $this->materializeDates($xpath);
         $this->removeConfluencePlaceholders($xpath);
 
         foreach ($this->elements($xpath->query('//ac:image')) as $image) {
@@ -2859,6 +2860,20 @@ final readonly class ConfluenceHtmlConverter
                     $taskIndex,
                     $depth + 1,
                 );
+            }
+        }
+    }
+
+    /** HR: Prikazuje datume koje Confluence čuva samo u atributu, prije čišćenja HTML-a. EN: Displays dates stored only in a Confluence attribute before HTML sanitization. */
+    private function materializeDates(DOMXPath $xpath): void
+    {
+        foreach ($xpath->query('//time[@datetime]') ?: [] as $date) {
+            if (!$date instanceof DOMElement || trim($date->textContent) !== '') {
+                continue;
+            }
+            $value = trim($date->getAttribute('datetime'));
+            if ($value !== '') {
+                $date->appendChild($date->ownerDocument->createTextNode($value));
             }
         }
     }

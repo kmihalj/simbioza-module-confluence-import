@@ -50,6 +50,41 @@ final class ConfluenceArchiveTest extends TestCase
         self::assertSame('attachment-body', file_get_contents($target));
     }
 
+    /** HR: Povijesni XML zapis čita traženu verziju iz direktorija izvornog privitka. EN: A historical XML record reads the requested version from the original attachment directory. */
+    public function testHistoricalAttachmentUsesLogicalIdAndExactVersion(): void
+    {
+        $path = $this->archive([
+            'attachments/10/20/2' => 'current-body',
+            'attachments/10/20/1' => 'historical-body',
+        ]);
+        $target = $this->directory . '/history.bin';
+        $this->service()->copyAttachment($path, '10', '21', 1, $target, '20');
+
+        self::assertSame('historical-body', file_get_contents($target));
+    }
+
+    /** HR: Točna verzija zapisa ima prednost pred najnovijom zamjenskom verzijom. EN: An exact record version takes precedence over the newest fallback version. */
+    public function testHistoricalAttachmentSupportsPhysicalRecordDirectory(): void
+    {
+        $path = $this->archive([
+            'attachments/10/20/2' => 'current-body',
+            'attachments/10/21/1' => 'historical-body',
+        ]);
+        $target = $this->directory . '/history.bin';
+        $this->service()->copyAttachment($path, '10', '21', 1, $target, '20');
+
+        self::assertSame('historical-body', file_get_contents($target));
+    }
+
+    /** HR: Ni logički ID privitka ne može izaći iz sigurnog puta. EN: The logical attachment ID cannot escape the safe path either. */
+    public function testRejectsUnsafeLogicalAttachmentId(): void
+    {
+        $path = $this->archive(['attachments/10/21/1' => 'body']);
+
+        $this->expectException(ConfluenceImportException::class);
+        $this->service()->copyAttachment($path, '10', '21', 1, $this->directory . '/unsafe.bin', '../20');
+    }
+
     /** HR: Odbija traversal zapis prije ikakva izdvajanja. EN: Rejects a traversal entry before extracting anything. */
     public function testRejectsTraversalEntry(): void
     {

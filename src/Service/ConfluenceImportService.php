@@ -1990,7 +1990,14 @@ final readonly class ConfluenceImportService
                 'status' => 'failed',
             ];
             try {
-                $this->archive->copyAttachment($archivePath, $pageId, $sourceId, $version, $path);
+                $this->archive->copyAttachment(
+                    $archivePath,
+                    $pageId,
+                    $sourceId,
+                    $version,
+                    $path,
+                    $record['logical_source_id'],
+                );
                 $record['storage_path'] = $path;
                 $record['file_size'] = filesize($path) ?: 0;
                 $record['mime_type'] = $this->detectedMime($path, $record['mime_type']);

@@ -6,6 +6,7 @@ namespace AaiEduHr\SimbiozaModuleConfluenceImport\Tests;
 
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorHtmlChartService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorHtmlRoadmapService;
+use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorHtmlSanitizer;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceHtmlConverter;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Value\ConfluenceMacroContext;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -14,6 +15,42 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(ConfluenceHtmlConverter::class)]
 final class ConfluenceHtmlConverterTest extends TestCase
 {
+    /** HR: Datumi postaju vidljivi prije čišćenja HTML-a, uključujući ćelije i makroe. EN: Dates become visible before HTML sanitization, including cells and macros. */
+    public function testPreservesEmptyConfluenceDatesAfterEditorSanitization(): void
+    {
+        $body = '<table><tbody><tr><td>Activated</td><td><time datetime="2023-05-10" /></td>'
+            . '<td><time datetime="2025-09-30" /></td></tr></tbody></table>'
+            . '<p>Deadline: <time datetime="2026-10-02T09:11:11+02:00" /></p>'
+            . '<ac:structured-macro ac:name="info"><ac:rich-text-body>'
+            . '<p><time datetime="2024-11-28"> </time></p>'
+            . '</ac:rich-text-body></ac:structured-macro>';
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'TEST', '10');
+        $sanitizer = new EditorHtmlSanitizer();
+        $html = $sanitizer->sanitize($result->html);
+
+        self::assertStringContainsString('<td>2023-05-10</td>', $html);
+        self::assertStringContainsString('<td>2025-09-30</td>', $html);
+        self::assertStringContainsString('Deadline: 2026-10-02T09:11:11+02:00', $html);
+        self::assertStringContainsString('2024-11-28', $html);
+        self::assertSame($html, $sanitizer->sanitize($html));
+        self::assertSame([], $result->unsupportedMacros);
+    }
+
+    /** HR: Ne zamjenjuje postojeće oznake niti pretvara atribut datuma u izvršni HTML. EN: Does not replace existing labels or turn date attributes into executable HTML. */
+    public function testPreservesDateLabelsAndEscapesAttributeText(): void
+    {
+        $body = '<p><time datetime="2023-05-10"><strong>10 May 2023</strong></time></p>'
+            . '<p><time datetime="&lt;img src=x onerror=alert(1)&gt;" /></p>'
+            . '<p><time datetime="" /></p>';
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'TEST', '10');
+        $html = (new EditorHtmlSanitizer())->sanitize($result->html);
+
+        self::assertStringContainsString('<strong>10 May 2023</strong>', $html);
+        self::assertStringNotContainsString('2023-05-10', $html);
+        self::assertStringContainsString('&lt;img src=x onerror=alert(1)&gt;', $html);
+        self::assertStringNotContainsString('<img', $html);
+    }
+
     /** HR: Makroi s istim izvornim ID-ovima zadržavaju odvojene veze ćelija. EN: Macros with identical source IDs retain separate cell associations. */
     public function testHtmlTableHeadersAreRemappedWithinEachMacro(): void
     {

@@ -199,8 +199,10 @@ final readonly class ConfluenceArchive
     /**
      * HR: Kopira traženu ili najnoviju dostupnu binarnu verziju privitka.
      * Confluence ponekad u XML-u zadrži broj koji ne odgovara fizičkom zapisu.
+     * Povijesni zapisi mogu koristiti direktorij logičkog (izvornog) privitka.
      * EN: Copies the requested or newest available binary attachment version.
      * Confluence may retain an XML version that differs from the physical entry.
+     * Historical records may use the logical (original) attachment directory.
      */
     public function copyAttachment(
         string $archivePath,
@@ -208,25 +210,37 @@ final readonly class ConfluenceArchive
         string $attachmentId,
         int $preferredVersion,
         string $targetPath,
+        string $logicalAttachmentId = '',
     ): void {
         if (
             preg_match('/^[A-Za-z0-9._-]+$/', $pageId) !== 1
             || preg_match('/^[A-Za-z0-9._-]+$/', $attachmentId) !== 1
+            || ($logicalAttachmentId !== '' && preg_match('/^[A-Za-z0-9._-]+$/', $logicalAttachmentId) !== 1)
         ) {
             throw new ConfluenceImportException(__('Identifikator Confluence privitka nije valjan.'));
         }
 
-        $prefix = 'attachments/' . $pageId . '/' . $attachmentId . '/';
-        $preferred = $prefix . max(1, $preferredVersion);
+        $prefixes = ['attachments/' . $pageId . '/' . $attachmentId . '/'];
+        if ($logicalAttachmentId !== '' && $logicalAttachmentId !== $attachmentId) {
+            $prefixes = ['attachments/' . $pageId . '/' . $logicalAttachmentId . '/', ...$prefixes];
+        }
         $zip = $this->open($archivePath);
         $selected = '';
         $selectedVersion = 0;
         try {
-            $preferredIndex = $zip->locateName($preferred, ZipArchive::FL_UNCHANGED);
-            if (is_int($preferredIndex) && $preferredIndex >= 0) {
-                $this->assertSafeEntry($zip, $preferredIndex, $preferred);
-                $selected = $preferred;
-            } else {
+            foreach ($prefixes as $prefix) {
+                $preferred = $prefix . max(1, $preferredVersion);
+                $preferredIndex = $zip->locateName($preferred, ZipArchive::FL_UNCHANGED);
+                if (is_int($preferredIndex) && $preferredIndex >= 0) {
+                    $this->assertSafeEntry($zip, $preferredIndex, $preferred);
+                    $selected = $preferred;
+                    break;
+                }
+            }
+            foreach ($prefixes as $prefix) {
+                if ($selected !== '') {
+                    break;
+                }
                 for ($index = 0; $index < $zip->numFiles; ++$index) {
                     $stat = $zip->statIndex($index, ZipArchive::FL_UNCHANGED);
                     if (!is_array($stat)) {
