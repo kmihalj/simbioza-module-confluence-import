@@ -183,6 +183,16 @@ final class ConfluenceImportViewTest extends TestCase
         self::assertStringNotContainsString('listUsersForSetup()', substr($service, 0, (int)strpos($service, 'public function queue(')));
     }
 
+    /** HR: Oznaka verzije ne ovisi o prijevodima drugih modula. EN: The version label does not depend on other modules' translations. */
+    public function testAttachmentReportVersionLabelHasModuleTranslations(): void
+    {
+        $english = require __DIR__ . '/../lang/en.php';
+        $croatian = require __DIR__ . '/../lang/hr.php';
+
+        self::assertSame('Version', $english['Verzija'] ?? null);
+        self::assertSame('Verzija', $croatian['Verzija'] ?? null);
+    }
+
     /** HR: Veliki import ne ponavlja globalnu pripremu ni optimizaciju svih slika u svakom koraku. EN: A large import does not repeat global preparation or eager image optimization in every step. */
     public function testLargeImportDefersRepeatedGlobalWork(): void
     {

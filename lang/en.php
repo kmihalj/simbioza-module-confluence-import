@@ -13,6 +13,7 @@ return array (
   'Nisu preneseni svi aktualni privitci.' => 'Not all current attachments were transferred.',
   'Neke ranije verzije privitaka nisu prenesene. To ne znači da nedostaju aktualne datoteke.' => 'Some earlier attachment versions were not transferred. This does not mean current files are missing.',
   'Tehnički detalji' => 'Technical details',
+  'Verzija' => 'Version',
   'Učitavanje...' => 'Loading...',
   'Pronađeno rezultata: %d' => 'Results found: %d',
   'Prikaži sadržaj' => 'Show content',

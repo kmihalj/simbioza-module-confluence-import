@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.44 - 2026-10-02
+
+- Includes the attachment report's version label in the module's own English
+  and Croatian dictionaries, keeping standalone module translation audits complete.
+- Adds a regression check for both translations; all six catalogue languages
+  already contain this shared label.
+
 ## 0.1.43 - 2026-10-02
 
 - Imports only current attachment versions by default. Earlier page and
