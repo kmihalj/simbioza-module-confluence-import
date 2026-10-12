@@ -36,7 +36,11 @@ final class ConfluenceImportStateStoreTest extends TestCase
         rmdir($this->directory);
     }
 
-    /** HR: Veliki manifest se ne prepisuje pri svakom koraku. EN: Large manifest is not rewritten on every step. */
+    /**
+     * EN: Large manifest is not rewritten on every step.
+     *
+     * HR: Veliki manifest se ne prepisuje pri svakom koraku.
+     */
     public function testSeparatesImmutableManifestFromMutableProgress(): void
     {
         $store = new ConfluenceImportStateStore();
@@ -78,24 +82,18 @@ final class ConfluenceImportStateStoreTest extends TestCase
         self::assertCount(100, $resumed['dataset']['attachments'] ?? []);
     }
 
-    /** HR: Nedovršeni posao starog izdanja ostaje nastaviv. EN: An unfinished legacy job remains resumable. */
-    public function testLoadsAndSavesLegacySingleFileState(): void
+    /**
+     * EN: Historical unfinished internal jobs cannot resume in the fresh baseline.
+     *
+     * HR: Povijesni nedovršeni interni poslovi ne nastavljaju se u novoj početnoj verziji.
+     */
+    public function testRejectsOldInternalJobState(): void
     {
         $store = new ConfluenceImportStateStore();
         $directory = $this->temporaryDirectory();
-        file_put_contents($store->statePath($directory), json_encode([
-            'version' => 1,
-            'phase' => 'pages',
-            'dataset' => ['pages' => ['legacy']],
-        ], JSON_THROW_ON_ERROR));
-
-        $loaded = $store->load($directory);
-        self::assertSame(['pages' => ['legacy']], $loaded['dataset'] ?? null);
-        $loaded['phase'] = 'finalizing';
-        $store->save($directory, $loaded);
-
-        self::assertSame('finalizing', $store->load($directory)['phase'] ?? null);
-        self::assertFileDoesNotExist($store->manifestPath($directory));
+        file_put_contents($store->statePath($directory), '{"version":1,"phase":"pages"}');
+        $this->expectException(\AaiEduHr\SimbiozaModuleConfluenceImport\Exception\ConfluenceImportException::class);
+        $store->load($directory);
     }
 
     private function temporaryDirectory(): string

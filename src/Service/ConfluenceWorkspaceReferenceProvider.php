@@ -11,27 +11,37 @@ use function is_scalar;
 use function trim;
 
 /**
- * HR: Povezuje prijenosni Confluence `spaceKey` s lokalnim područjem tek nakon
- *     što je njegovo mapiranje stvarno spremljeno uvoznim postupkom.
  * EN: Connects a portable Confluence `spaceKey` to a local Workspace only after
  *     the importer has actually persisted that mapping.
+ *
+ * HR: Povezuje prijenosni Confluence `spaceKey` s lokalnim područjem tek nakon
+ *     što je njegovo mapiranje stvarno spremljeno uvoznim postupkom.
  */
 final readonly class ConfluenceWorkspaceReferenceProvider implements WorkspaceExternalReferenceProviderInterface
 {
-    /** HR: Prima spremište spremljenih mapiranja importa. EN: Receives the persisted import-mapping repository. */
+    /**
+     * EN: Receives the persisted import-mapping repository.
+     *
+     * HR: Prima spremište spremljenih mapiranja importa.
+     */
     public function __construct(private ConfluenceImportRepository $repository)
     {
     }
 
-    /** HR: Vraća stabilni identifikator izvornog sustava. EN: Returns the stable source-system identifier. */
+    /**
+     * EN: Returns the stable source-system identifier.
+     *
+     * HR: Vraća stabilni identifikator izvornog sustava.
+     */
     public function provider(): string
     {
         return 'confluence';
     }
 
     /**
-     * HR: Razrješava Confluence ključ tek kada postoji lokalno mapiranje područja.
      * EN: Resolves a Confluence key only after its local Workspace mapping exists.
+     *
+     * HR: Razrješava Confluence ključ tek kada postoji lokalno mapiranje područja.
      *
      * @return array{slug:string,title:string}|null
      */

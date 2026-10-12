@@ -51,8 +51,9 @@ final class ConfluenceImportWorkspaceBackupProviderTest extends TestCase
             ],
         ], $this->directory) extends Config {
             /**
-             * HR: Prima testnu konfiguraciju i izolirani korijen.
              * EN: Receives test configuration and an isolated root.
+             *
+             * HR: Prima testnu konfiguraciju i izolirani korijen.
              *
              * @param array<string,mixed> $data
              */
@@ -61,7 +62,11 @@ final class ConfluenceImportWorkspaceBackupProviderTest extends TestCase
                 parent::__construct($helper, $data);
             }
 
-            /** HR: Vraća izolirani aplikacijski korijen. EN: Returns the isolated application root. */
+            /**
+             * EN: Returns the isolated application root.
+             *
+             * HR: Vraća izolirani aplikacijski korijen.
+             */
             public function getAppRootDir(): string
             {
                 return $this->root;
@@ -82,8 +87,9 @@ final class ConfluenceImportWorkspaceBackupProviderTest extends TestCase
     }
 
     /**
-     * HR: Dokazuje da selektivni backup područja sadrži privatni blob, ali ne i lokalnu putanju.
      * EN: Proves that a scoped Workspace backup contains the private blob but not its local path.
+     *
+     * HR: Dokazuje da selektivni backup područja sadrži privatni blob, ali ne i lokalnu putanju.
      */
     public function testWorkspaceExportContainsPortableAttachment(): void
     {
@@ -123,8 +129,9 @@ final class ConfluenceImportWorkspaceBackupProviderTest extends TestCase
     }
 
     /**
-     * HR: Dokazuje da obnova kao kopija stvara novi privitak i prepisuje URL u dokumentu.
      * EN: Proves that a copy restore creates a new attachment and rewrites its document URL.
+     *
+     * HR: Dokazuje da obnova kao kopija stvara novi privitak i prepisuje URL u dokumentu.
      */
     public function testCopyRestoreRegeneratesAttachmentAndRewritesDocument(): void
     {
@@ -215,7 +222,11 @@ final class ConfluenceImportWorkspaceBackupProviderTest extends TestCase
         $reader->close();
     }
 
-    /** HR: Kreira minimalne Workspace tablice koje provider čita. EN: Creates the minimal Workspace tables read by the provider. */
+    /**
+     * EN: Creates the minimal Workspace tables read by the provider.
+     *
+     * HR: Kreira minimalne Workspace tablice koje provider čita.
+     */
     private function createWorkspaceTables(): void
     {
         $this->database->schema()->create(ModuleWorkspace::TABLE_WORKSPACES, static function (Blueprint $table): void {
@@ -244,7 +255,11 @@ final class ConfluenceImportWorkspaceBackupProviderTest extends TestCase
         );
     }
 
-    /** HR: Sprema jedno uvezeno područje i njegov privatni privitak. EN: Stores one imported Workspace and its private attachment. */
+    /**
+     * EN: Stores one imported Workspace and its private attachment.
+     *
+     * HR: Sprema jedno uvezeno područje i njegov privatni privitak.
+     */
     private function seedImportedWorkspace(): void
     {
         $now = '2026-08-20 12:00:00';

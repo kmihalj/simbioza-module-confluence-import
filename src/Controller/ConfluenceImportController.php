@@ -34,12 +34,17 @@ use function time;
 use const UPLOAD_ERR_OK;
 
 /**
- * HR: Administratorsko sučelje za nastavivi upload, pregled mapiranja i kontrolirani Confluence import.
  * EN: Administration UI for resumable upload, mapping review, and controlled Confluence import.
+ *
+ * HR: Administratorsko sučelje za nastavivi upload, pregled mapiranja i kontrolirani Confluence import.
  */
 final readonly class ConfluenceImportController
 {
-    /** HR: Prima javne servise vlasničkih modula i zajedničke HTTP servise. EN: Receives public owner-module services and shared HTTP services. */
+    /**
+     * EN: Receives public owner-module services and shared HTTP services.
+     *
+     * HR: Prima javne servise vlasničkih modula i zajedničke HTTP servise.
+     */
     public function __construct(
         private ResponseFactory $responses,
         private ConfluenceImportModuleViewRenderer $views,
@@ -58,7 +63,11 @@ final readonly class ConfluenceImportController
     ) {
     }
 
-    /** HR: Prikazuje upload, preflight, mapiranja i zadnje poslove. EN: Shows upload, preflight, mappings, and recent jobs. */
+    /**
+     * EN: Shows upload, preflight, mappings, and recent jobs.
+     *
+     * HR: Prikazuje upload, preflight, mapiranja i zadnje poslove.
+     */
     public function index(ServerRequestInterface $request): ResponseInterface
     {
         if (!$this->access->isAdministrator()) {
@@ -112,7 +121,11 @@ final readonly class ConfluenceImportController
         ]);
     }
 
-    /** HR: Vraća kratki lokalizirani status poslova za pozadinsko osvježavanje. EN: Returns concise localized job status for background refreshes. */
+    /**
+     * EN: Returns concise localized job status for background refreshes.
+     *
+     * HR: Vraća kratki lokalizirani status poslova za pozadinsko osvježavanje.
+     */
     public function jobs(): ResponseInterface
     {
         if (!$this->access->isAdministrator()) {
@@ -122,7 +135,11 @@ final readonly class ConfluenceImportController
         return $this->responses->json(['jobs' => $this->jobPayloads()]);
     }
 
-    /** HR: Prikazuje trajni izvještaj jednog dovršenog importa. EN: Shows the durable report for one completed import. */
+    /**
+     * EN: Shows the durable report for one completed import.
+     *
+     * HR: Prikazuje trajni izvještaj jednog dovršenog importa.
+     */
     public function report(ServerRequestInterface $request): ResponseInterface
     {
         if (!$this->access->isAdministrator()) {
@@ -156,6 +173,11 @@ final readonly class ConfluenceImportController
                 'job' => $job,
                 'summary' => $summary,
                 'reviewPages' => $reviewPages,
+                'externalScriptStatuses' => $this->imports->externalScriptStatuses(),
+                'externalScriptDecisionPath' => $this->path(
+                    'simbioza-confluence-import.report.script',
+                    '/settings/confluence-import/report/' . $this->text($job['uuid'] ?? '') . '/script',
+                ),
                 'unresolvedLinkPages' => $unresolvedLinkPages,
                 'calendarAvailable' => $calendarAvailable,
                 'calendarOptions' => $calendarAvailable
@@ -182,7 +204,11 @@ final readonly class ConfluenceImportController
         }
     }
 
-    /** HR: Ručno uvozi ili povezuje kalendar iz trajnog izvještaja. EN: Manually imports or links a calendar from the durable report. */
+    /**
+     * EN: Manually imports or links a calendar from the durable report.
+     *
+     * HR: Ručno uvozi ili povezuje kalendar iz trajnog izvještaja.
+     */
     public function resolveCalendar(ServerRequestInterface $request): ResponseInterface
     {
         if (!$this->access->isAdministrator()) {
@@ -202,12 +228,13 @@ final readonly class ConfluenceImportController
                 : '';
 
             /*
-             * HR: Nakon CSRF-a, ovlasti i uploada više ne mijenjamo session. Dugi
-             *     ICS uvoz zato ne smije držati PHP session lock i blokirati sve
-             *     ostale tabove istoga administratora.
              * EN: After CSRF, authorization, and upload parsing, the session is no
              *     longer mutated. Release its PHP lock before the potentially long
              *     ICS import so the administrator's other tabs remain responsive.
+             *
+             * HR: Nakon CSRF-a, ovlasti i uploada više ne mijenjamo session. Dugi
+             *     ICS uvoz zato ne smije držati PHP session lock i blokirati sve
+             *     ostale tabove istoga administratora.
              */
             $this->session->close();
             $result = $this->calendarResolution->resolve($uuid, $body, $ics, $actor);
@@ -224,7 +251,11 @@ final readonly class ConfluenceImportController
         }
     }
 
-    /** HR: Potvrđuje da je administrator korigirao jednu grupu nerazriješenih poveznica. EN: Confirms that an administrator corrected one unresolved-link group. */
+    /**
+     * EN: Confirms that an administrator corrected one unresolved-link group.
+     *
+     * HR: Potvrđuje da je administrator korigirao jednu grupu nerazriješenih poveznica.
+     */
     public function markLinkCorrected(ServerRequestInterface $request): ResponseInterface
     {
         if (!$this->access->isAdministrator()) {
@@ -262,7 +293,11 @@ final readonly class ConfluenceImportController
         }
     }
 
-    /** HR: Potvrđuje da je administrator ručno korigirao nepodržani Confluence makro. EN: Confirms that an administrator manually corrected an unsupported Confluence macro. */
+    /**
+     * EN: Confirms that an administrator manually corrected an unsupported Confluence macro.
+     *
+     * HR: Potvrđuje da je administrator ručno korigirao nepodržani Confluence makro.
+     */
     public function markReviewCorrected(ServerRequestInterface $request): ResponseInterface
     {
         if (!$this->access->isAdministrator()) {
@@ -300,21 +335,61 @@ final readonly class ConfluenceImportController
         }
     }
 
-    /** HR: Vraća svježi CSRF token za svaki korak uploada. EN: Returns a fresh CSRF token for every upload step. */
+    /**
+     * EN: Only an administrator may decide on a script already recorded by this import.
+     *
+     * HR: Samo administrator smije odlučiti o skripti koju je ovaj import već zabilježio.
+     */
+    public function decideExternalScript(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->access->isAdministrator()) {
+            return $this->denied();
+        }
+        $uuid = $this->text($request->getAttribute('uuid'));
+        $body = $this->body($request);
+        try {
+            $actor = $this->access->currentUser();
+            if (!is_array($actor)) {
+                throw new ConfluenceImportException(__('Prijavljeni administrator nije pronađen.'));
+            }
+            $this->imports->decideExternalScript(
+                $uuid,
+                $this->text($body['script_id'] ?? ''),
+                $this->text($body['decision'] ?? ''),
+                $this->text($body['scope'] ?? 'none'),
+                $this->text($body['source_page_id'] ?? ''),
+                $actor,
+            );
+            return $this->responses->redirect($this->manualCorrectionRedirect($uuid, 'success', __('Odluka je spremljena.')));
+        } catch (Throwable $error) {
+            return $this->responses->redirect($this->manualCorrectionRedirect($uuid, 'error', $error->getMessage()));
+        }
+    }
+
+    /**
+     * EN: Refreshes the CSRF token for chunked uploads.
+     *
+     * HR: Osvježava CSRF token za upload po dijelovima.
+     */
     public function csrf(): ResponseInterface
     {
         if (!$this->access->isAdministrator()) {
             return $this->deniedJson();
         }
 
-        // HR: Izričita promjena jamči osvježavanje vremena PHP sesije i kada se CSRF token ne mijenja.
         // EN: An explicit mutation refreshes the PHP session timestamp even when the CSRF token is unchanged.
+        //
+        // HR: Izričita promjena jamči osvježavanje vremena PHP sesije i kada se CSRF token ne mijenja.
         $this->session->set('simbioza_confluence_import_activity', time());
 
         return $this->responses->json(['csrf_token' => $this->session->getOrGenerateCsrfToken()]);
     }
 
-    /** HR: Otvara nastavivi upload nakon provjere naziva i veličine. EN: Starts resumable upload after validating name and size. */
+    /**
+     * EN: Starts resumable upload after validating name and size.
+     *
+     * HR: Otvara nastavivi upload nakon provjere naziva i veličine.
+     */
     public function uploadStart(ServerRequestInterface $request): ResponseInterface
     {
         if (!$this->access->isAdministrator()) {
@@ -335,7 +410,11 @@ final readonly class ConfluenceImportController
         }
     }
 
-    /** HR: Sprema sljedeći binarni dio samo na dogovoreni offset. EN: Stores the next binary chunk only at the negotiated offset. */
+    /**
+     * EN: Stores the next binary chunk only at the negotiated offset.
+     *
+     * HR: Sprema sljedeći binarni dio samo na dogovoreni offset.
+     */
     public function uploadChunk(ServerRequestInterface $request): ResponseInterface
     {
         if (!$this->access->isAdministrator()) {
@@ -360,7 +439,11 @@ final readonly class ConfluenceImportController
         }
     }
 
-    /** HR: Provjerava dovršeni ZIP i radi preflight bez promjene aplikacijskih podataka. EN: Validates the completed ZIP and performs preflight without changing application data. */
+    /**
+     * EN: Validates the completed ZIP and performs preflight without changing application data.
+     *
+     * HR: Provjerava dovršeni ZIP i radi preflight bez promjene aplikacijskih podataka.
+     */
     public function uploadFinish(ServerRequestInterface $request): ResponseInterface
     {
         if (!$this->access->isAdministrator()) {
@@ -384,7 +467,11 @@ final readonly class ConfluenceImportController
         }
     }
 
-    /** HR: Preuzima ili nastavlja sljedeću serversku batch arhivu i odmah pokreće njezin zasebni import. EN: Adopts or resumes the next server-side batch archive and immediately starts its separate import. */
+    /**
+     * EN: Adopts or resumes the next server-side batch archive and immediately starts its separate import.
+     *
+     * HR: Preuzima ili nastavlja sljedeću serversku batch arhivu i odmah pokreće njezin zasebni import.
+     */
     public function batchStart(ServerRequestInterface $request): ResponseInterface
     {
         if (!$this->access->isAdministrator()) {
@@ -435,8 +522,9 @@ final readonly class ConfluenceImportController
     }
 
     /**
-     * HR: Otkazuje vlastiti nedovršeni import i odmah briše prenesenu arhivu.
      * EN: Cancels the actor's unfinished import and immediately deletes its uploaded archive.
+     *
+     * HR: Otkazuje vlastiti nedovršeni import i odmah briše prenesenu arhivu.
      */
     public function cancel(ServerRequestInterface $request): ResponseInterface
     {
@@ -461,7 +549,11 @@ final readonly class ConfluenceImportController
         }
     }
 
-    /** HR: Priprema potvrđeni nastavivi import. EN: Prepares a confirmed resumable import. */
+    /**
+     * EN: Prepares a confirmed resumable import.
+     *
+     * HR: Priprema potvrđeni nastavivi import.
+     */
     public function run(ServerRequestInterface $request): ResponseInterface
     {
         if (!$this->access->isAdministrator()) {
@@ -491,8 +583,9 @@ final readonly class ConfluenceImportController
     }
 
     /**
-     * HR: Izvodi sljedeći ograničeni korak importa i vraća stvarni napredak.
      * EN: Runs the next bounded import step and returns actual progress.
+     *
+     * HR: Izvodi sljedeći ograničeni korak importa i vraća stvarni napredak.
      */
     public function process(ServerRequestInterface $request): ResponseInterface
     {
@@ -527,7 +620,11 @@ final readonly class ConfluenceImportController
         }
     }
 
-    /** HR: Preuzima uvezeni privitak tek nakon ponovne provjere aktualnog Workspace/page ACL-a. EN: Downloads an imported attachment only after rechecking current Workspace/page ACL. */
+    /**
+     * EN: Downloads an imported attachment only after rechecking current Workspace/page ACL.
+     *
+     * HR: Preuzima uvezeni privitak tek nakon ponovne provjere aktualnog Workspace/page ACL-a.
+     */
     public function attachment(ServerRequestInterface $request): ResponseInterface
     {
         try {
@@ -558,7 +655,11 @@ final readonly class ConfluenceImportController
         }
     }
 
-    /** HR: Razrješava međupodručnu poveznicu ili daje jasnu neriješenu poruku. EN: Resolves a cross-space link or returns a clear unresolved message. */
+    /**
+     * EN: Resolves a cross-space link or returns a clear unresolved message.
+     *
+     * HR: Razrješava međupodručnu poveznicu ili daje jasnu neriješenu poruku.
+     */
     public function link(ServerRequestInterface $request): ResponseInterface
     {
         try {
@@ -585,7 +686,11 @@ final readonly class ConfluenceImportController
         }
     }
 
-    /** HR: Poslužuje mali CSS koji koristi Bootstrap i varijable aktivne teme. EN: Serves small CSS that uses Bootstrap and active-theme variables. */
+    /**
+     * EN: Serves small CSS that uses Bootstrap and active-theme variables.
+     *
+     * HR: Poslužuje mali CSS koji koristi Bootstrap i varijable aktivne teme.
+     */
     public function styles(): ResponseInterface
     {
         $path = dirname(__DIR__, 2) . '/resources/assets/confluence-import.css';
@@ -596,8 +701,9 @@ final readonly class ConfluenceImportController
     }
 
     /**
-     * HR: Ponovno provjerava aktualni ACL ciljne stranice.
      * EN: Rechecks the target page's current ACL.
+     *
+     * HR: Ponovno provjerava aktualni ACL ciljne stranice.
      *
      * @param array<string,mixed> $target
      */
@@ -615,8 +721,9 @@ final readonly class ConfluenceImportController
     }
 
     /**
-     * HR: Priprema lokalizirane podatke nedavnih poslova.
      * EN: Prepares localized recent-job payloads.
+     *
+     * HR: Priprema lokalizirane podatke nedavnih poslova.
      *
      * @return list<array<string,mixed>>
      */
@@ -660,8 +767,9 @@ final readonly class ConfluenceImportController
     }
 
     /**
-     * HR: Pretvara posao u odgovor nastavivog uploada.
      * EN: Converts a job into a resumable-upload response.
+     *
+     * HR: Pretvara posao u odgovor nastavivog uploada.
      *
      * @param array<string,mixed> $job
      * @return array<string,mixed>
@@ -680,8 +788,9 @@ final readonly class ConfluenceImportController
     }
 
     /**
-     * HR: Čita podatke forme ili JSON tijelo zahtjeva.
      * EN: Reads form data or a JSON request body.
+     *
+     * HR: Čita podatke forme ili JSON tijelo zahtjeva.
      *
      * @return array<string,mixed>
      */
@@ -698,7 +807,11 @@ final readonly class ConfluenceImportController
         return is_array($decoded) ? $decoded : (is_array($body) ? $body : []);
     }
 
-    /** HR: Vraća ID prijavljenog administratora. EN: Returns the authenticated administrator ID. */
+    /**
+     * EN: Returns the authenticated administrator ID.
+     *
+     * HR: Vraća ID prijavljenog administratora.
+     */
     private function actorUserId(): int
     {
         $user = $this->access->currentUser();
@@ -710,7 +823,11 @@ final readonly class ConfluenceImportController
         return $id;
     }
 
-    /** HR: Gradi putanju naslovnice područja. EN: Builds a Workspace homepage path. */
+    /**
+     * EN: Builds a Workspace homepage path.
+     *
+     * HR: Gradi putanju naslovnice područja.
+     */
     private function workspacePath(string $slug): string
     {
         if ($this->urls->namedRouteExists('workspace.show')) {
@@ -720,7 +837,11 @@ final readonly class ConfluenceImportController
         return rtrim($this->urls->getBasePath(), '/') . '/workspace/' . rawurlencode($slug);
     }
 
-    /** HR: Gradi putanju područja iz njegova ID-a. EN: Builds a Workspace path from its ID. */
+    /**
+     * EN: Builds a Workspace path from its ID.
+     *
+     * HR: Gradi putanju područja iz njegova ID-a.
+     */
     private function workspacePathById(int $workspaceId): ?string
     {
         $workspace = $workspaceId > 0 ? $this->workspaces->findWorkspaceById($workspaceId) : null;
@@ -730,8 +851,9 @@ final readonly class ConfluenceImportController
     }
 
     /**
-     * HR: Grupira trenutačno nerazriješene poveznice po izvornoj stranici izvještaja.
      * EN: Groups currently unresolved report links by their source page.
+     *
+     * HR: Grupira trenutačno nerazriješene poveznice po izvornoj stranici izvještaja.
      *
      * @return list<array{source_page_id:string,title:string,url:string,links:list<array{target:string,destination:string,uuids:list<string>}>}>
      */
@@ -801,8 +923,9 @@ final readonly class ConfluenceImportController
     }
 
     /**
-     * HR: Gradi lokalnu putanju jednog uvezenog čvora iz trajnog mapiranja.
      * EN: Builds a local imported-node path from its durable mapping.
+     *
+     * HR: Gradi lokalnu putanju jednog uvezenog čvora iz trajnog mapiranja.
      *
      * @param array<string,mixed> $mapping
      */
@@ -825,7 +948,11 @@ final readonly class ConfluenceImportController
             . rawurlencode($workspaceSlug) . '/' . rawurlencode($nodeSlug);
     }
 
-    /** HR: Gradi administratorsku putanju trajnog izvještaja. EN: Builds the administrator path for a durable report. */
+    /**
+     * EN: Builds the administrator path for a durable report.
+     *
+     * HR: Gradi administratorsku putanju trajnog izvještaja.
+     */
     private function reportPath(string $uuid): string
     {
         if ($this->urls->namedRouteExists('simbioza-confluence-import.report')) {
@@ -836,7 +963,11 @@ final readonly class ConfluenceImportController
             . '/settings/confluence-import/report/' . rawurlencode($uuid);
     }
 
-    /** HR: Gradi putanju ručnog razrješenja kalendara. EN: Builds the manual calendar-resolution path. */
+    /**
+     * EN: Builds the manual calendar-resolution path.
+     *
+     * HR: Gradi putanju ručnog razrješenja kalendara.
+     */
     private function calendarResolutionPath(string $uuid): string
     {
         if ($this->urls->namedRouteExists('simbioza-confluence-import.report.calendar')) {
@@ -846,7 +977,11 @@ final readonly class ConfluenceImportController
         return $this->reportPath($uuid) . '/calendar';
     }
 
-    /** HR: Gradi putanju potvrde ručno korigirane poveznice. EN: Builds the manual link-correction confirmation path. */
+    /**
+     * EN: Builds the manual link-correction confirmation path.
+     *
+     * HR: Gradi putanju potvrde ručno korigirane poveznice.
+     */
     private function linkCorrectionPath(string $uuid): string
     {
         if ($this->urls->namedRouteExists('simbioza-confluence-import.report.link-corrected')) {
@@ -856,7 +991,11 @@ final readonly class ConfluenceImportController
         return $this->reportPath($uuid) . '/link-corrected';
     }
 
-    /** HR: Gradi putanju potvrde ručno korigiranog makroa. EN: Builds the manual macro-correction confirmation path. */
+    /**
+     * EN: Builds the manual macro-correction confirmation path.
+     *
+     * HR: Gradi putanju potvrde ručno korigiranog makroa.
+     */
     private function reviewCorrectionPath(string $uuid): string
     {
         if ($this->urls->namedRouteExists('simbioza-confluence-import.report.review-corrected')) {
@@ -866,7 +1005,11 @@ final readonly class ConfluenceImportController
         return $this->reportPath($uuid) . '/review-corrected';
     }
 
-    /** HR: Vraća na izvještaj s ishodom ručne korekcije. EN: Returns to the report with a manual-correction outcome. */
+    /**
+     * EN: Returns to the report with a manual-correction outcome.
+     *
+     * HR: Vraća na izvještaj s ishodom ručne korekcije.
+     */
     private function manualCorrectionRedirect(string $uuid, string $status, string $message): string
     {
         return $this->reportPath($uuid) . '?' . http_build_query([
@@ -875,7 +1018,11 @@ final readonly class ConfluenceImportController
         ]);
     }
 
-    /** HR: Vraća na izvještaj s kratkom porukom ishoda. EN: Returns to the report with a concise outcome message. */
+    /**
+     * EN: Returns to the report with a concise outcome message.
+     *
+     * HR: Vraća na izvještaj s kratkom porukom ishoda.
+     */
     private function calendarResolutionRedirect(string $uuid, string $status, string $message): string
     {
         return $this->reportPath($uuid) . '?' . http_build_query([
@@ -884,7 +1031,11 @@ final readonly class ConfluenceImportController
         ]);
     }
 
-    /** HR: Čita izričito odabranu ICS datoteku. EN: Reads the explicitly selected ICS file. */
+    /**
+     * EN: Reads the explicitly selected ICS file.
+     *
+     * HR: Čita izričito odabranu ICS datoteku.
+     */
     private function uploadedIcsContent(ServerRequestInterface $request): string
     {
         $file = $request->getUploadedFiles()['ics_file'] ?? null;
@@ -900,7 +1051,11 @@ final readonly class ConfluenceImportController
         return $content;
     }
 
-    /** HR: Razrješava imenovanu rutu uz lokalni fallback. EN: Resolves a named route with a local fallback. */
+    /**
+     * EN: Resolves a named route with a local fallback.
+     *
+     * HR: Razrješava imenovanu rutu uz lokalni fallback.
+     */
     private function path(string $route, string $fallback): string
     {
         try {
@@ -910,13 +1065,21 @@ final readonly class ConfluenceImportController
         }
     }
 
-    /** HR: Prihvaća samo lokalnu apsolutnu HTTP putanju. EN: Accepts only a local absolute HTTP path. */
+    /**
+     * EN: Accepts only a local absolute HTTP path.
+     *
+     * HR: Prihvaća samo lokalnu apsolutnu HTTP putanju.
+     */
     private function safeLocalPath(string $path): bool
     {
         return $path !== '' && str_starts_with($path, '/') && !str_starts_with($path, '//');
     }
 
-    /** HR: Lokalizira poslovni status importa. EN: Localizes an import business status. */
+    /**
+     * EN: Localizes an import business status.
+     *
+     * HR: Lokalizira poslovni status importa.
+     */
     private function statusLabel(string $status): string
     {
         return match ($status) {
@@ -930,7 +1093,11 @@ final readonly class ConfluenceImportController
         };
     }
 
-    /** HR: Lokalizira trenutačnu fazu importa. EN: Localizes the current import stage. */
+    /**
+     * EN: Localizes the current import stage.
+     *
+     * HR: Lokalizira trenutačnu fazu importa.
+     */
     private function stageLabel(string $stage): string
     {
         return match ($stage) {
@@ -951,7 +1118,11 @@ final readonly class ConfluenceImportController
         };
     }
 
-    /** HR: Pretvara spremljeni UTC datum u lokalni format jezika. EN: Converts a stored UTC date into the locale-specific format. */
+    /**
+     * EN: Converts a stored UTC date into the locale-specific format.
+     *
+     * HR: Pretvara spremljeni UTC datum u lokalni format jezika.
+     */
     private function formatUtcDateTime(mixed $value): string
     {
         if (!is_string($value) || trim($value) === '') {
@@ -970,7 +1141,11 @@ final readonly class ConfluenceImportController
         );
     }
 
-    /** HR: Vraća sigurnu vremensku zonu aplikacije. EN: Returns the application's safe time zone. */
+    /**
+     * EN: Returns the application's safe time zone.
+     *
+     * HR: Vraća sigurnu vremensku zonu aplikacije.
+     */
     private function timezone(): DateTimeZone
     {
         $configured = $this->applicationConfig->get('app.timezone');
@@ -983,8 +1158,9 @@ final readonly class ConfluenceImportController
     }
 
     /**
-     * HR: Vraća aktivne jezike aplikacije za ciljni sadržaj.
      * EN: Returns active application locales for target content.
+     *
+     * HR: Vraća aktivne jezike aplikacije za ciljni sadržaj.
      *
      * @return list<string>
      */
@@ -1008,31 +1184,51 @@ final readonly class ConfluenceImportController
         return array_values($languages);
     }
 
-    /** HR: Normalizira skalarnu tekstualnu vrijednost. EN: Normalizes a scalar text value. */
+    /**
+     * EN: Normalizes a scalar text value.
+     *
+     * HR: Normalizira skalarnu tekstualnu vrijednost.
+     */
     private function text(mixed $value): string
     {
         return is_scalar($value) ? trim((string)$value) : '';
     }
 
-    /** HR: Normalizira brojčanu vrijednost. EN: Normalizes a numeric value. */
+    /**
+     * EN: Normalizes a numeric value.
+     *
+     * HR: Normalizira brojčanu vrijednost.
+     */
     private function integer(mixed $value): int
     {
         return is_numeric($value) ? (int)$value : 0;
     }
 
-    /** HR: Vraća HTML odgovor zabranjenog pristupa. EN: Returns a forbidden HTML response. */
+    /**
+     * EN: Returns a forbidden HTML response.
+     *
+     * HR: Vraća HTML odgovor zabranjenog pristupa.
+     */
     private function denied(): ResponseInterface
     {
         return $this->responses->text(__('Pristup nije dozvoljen.'), 403);
     }
 
-    /** HR: Vraća JSON odgovor zabranjenog pristupa. EN: Returns a forbidden JSON response. */
+    /**
+     * EN: Returns a forbidden JSON response.
+     *
+     * HR: Vraća JSON odgovor zabranjenog pristupa.
+     */
     private function deniedJson(): ResponseInterface
     {
         return $this->responses->json(['error' => __('Pristup nije dozvoljen.')], 403);
     }
 
-    /** HR: Pretvara poslovnu ili tehničku pogrešku u JSON odgovor. EN: Converts a business or technical failure into a JSON response. */
+    /**
+     * EN: Converts a business or technical failure into a JSON response.
+     *
+     * HR: Pretvara poslovnu ili tehničku pogrešku u JSON odgovor.
+     */
     private function errorJson(Throwable $throwable): ResponseInterface
     {
         $status = $throwable instanceof ConfluenceImportException ? 422 : 500;

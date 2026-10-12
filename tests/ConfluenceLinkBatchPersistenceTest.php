@@ -18,7 +18,11 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(ConfluenceImportRepository::class)]
 final class ConfluenceLinkBatchPersistenceTest extends TestCase
 {
-    /** HR: Velika stranica sprema sve poveznice i preko SQLite granice parametara. EN: A large page persists every link beyond SQLite's parameter limit. */
+    /**
+     * EN: A large page persists every link beyond SQLite's parameter limit.
+     *
+     * HR: Velika stranica sprema sve poveznice i preko SQLite granice parametara.
+     */
     public function testManyLinksArePersistedInBoundedBatches(): void
     {
         [$repository, $database] = $this->environment();
@@ -47,7 +51,11 @@ final class ConfluenceLinkBatchPersistenceTest extends TestCase
         );
     }
 
-    /** HR: Ponovno usklađivanje obuhvaća i ranije razriješene veze. EN: Reconciliation includes links that were resolved previously. */
+    /**
+     * EN: Reconciliation includes links that were resolved previously.
+     *
+     * HR: Ponovno usklađivanje obuhvaća i ranije razriješene veze.
+     */
     public function testAllLinksCanBeRecheckedAndInvalidated(): void
     {
         [$repository] = $this->environment();
@@ -70,7 +78,11 @@ final class ConfluenceLinkBatchPersistenceTest extends TestCase
         self::assertNull($updated['resolved_target']);
     }
 
-    /** HR: Kursor ostaje stabilan nakon skupne promjene statusa veza. EN: The cursor remains stable after bulk link-status changes. */
+    /**
+     * EN: The cursor remains stable after bulk link-status changes.
+     *
+     * HR: Kursor ostaje stabilan nakon skupne promjene statusa veza.
+     */
     public function testReconciliationUsesStableBatchesAndBulkUpdates(): void
     {
         [$repository] = $this->environment();
@@ -111,7 +123,11 @@ final class ConfluenceLinkBatchPersistenceTest extends TestCase
         self::assertSame([], $repository->linksForReconciliationBatch('target', (int)$second[1]['id'], 3));
     }
 
-    /** HR: Ključevi područja nisu osjetljivi na velika slova, a korijen vodi na uvezenu naslovnicu. EN: Space keys are case-insensitive and a root reference resolves to the imported homepage. */
+    /**
+     * EN: Space keys are case-insensitive and a root reference resolves to the imported homepage.
+     *
+     * HR: Ključevi područja nisu osjetljivi na velika slova, a korijen vodi na uvezenu naslovnicu.
+     */
     public function testSpaceAndHomepageMappingsAreCaseInsensitive(): void
     {
         [$repository, $database] = $this->environment();
@@ -153,7 +169,11 @@ final class ConfluenceLinkBatchPersistenceTest extends TestCase
         self::assertSame('home', $repository->homepageContentBySpaceKey('target')['target_slug'] ?? null);
     }
 
-    /** HR: Povijesni ID verzije razrješava se preko stvarnog stupca izvornog sadržaja. EN: A historical version ID resolves through the real source-content column. */
+    /**
+     * EN: A historical version ID resolves through the real source-content column.
+     *
+     * HR: Povijesni ID verzije razrješava se preko stvarnog stupca izvornog sadržaja.
+     */
     public function testHistoricalVersionReferenceUsesSourceContentId(): void
     {
         [$repository, $database] = $this->environment();
@@ -182,7 +202,11 @@ final class ConfluenceLinkBatchPersistenceTest extends TestCase
         );
     }
 
-    /** HR: Izvještaj dobiva samo aktualne nerazriješene poveznice svojega importa. EN: A report receives only its import's currently unresolved links. */
+    /**
+     * EN: A report receives only its import's currently unresolved links.
+     *
+     * HR: Izvještaj dobiva samo aktualne nerazriješene poveznice svojega importa.
+     */
     public function testReportReadsOnlyCurrentUnresolvedLinks(): void
     {
         [$repository] = $this->environment();
@@ -211,7 +235,11 @@ final class ConfluenceLinkBatchPersistenceTest extends TestCase
         self::assertSame('https://wiki.example/x/MgL7Aw', $links[0]['original_target']);
     }
 
-    /** HR: Ručno korigirana poveznica više se ne prikazuje niti automatski usklađuje. EN: A manually corrected link is neither reported nor automatically reconciled again. */
+    /**
+     * EN: A manually corrected link is neither reported nor automatically reconciled again.
+     *
+     * HR: Ručno korigirana poveznica više se ne prikazuje niti automatski usklađuje.
+     */
     public function testManualCorrectionPermanentlyExcludesLinkFromReconciliation(): void
     {
         [$repository] = $this->environment();
@@ -230,7 +258,11 @@ final class ConfluenceLinkBatchPersistenceTest extends TestCase
         self::assertSame([], $repository->linksForReconciliation('TARGET'));
     }
 
-    /** HR: Ručno korigirani nepodržani makro ostaje razriješen u trajnom JSON izvještaju. EN: A manually corrected unsupported macro remains resolved in the durable JSON report. */
+    /**
+     * EN: A manually corrected unsupported macro remains resolved in the durable JSON report.
+     *
+     * HR: Ručno korigirani nepodržani makro ostaje razriješen u trajnom JSON izvještaju.
+     */
     public function testManualCorrectionPersistsUnsupportedMacroResolution(): void
     {
         [$repository, $database] = $this->environment();
@@ -275,7 +307,11 @@ final class ConfluenceLinkBatchPersistenceTest extends TestCase
         self::assertSame(9, $issue['resolved_by_user_id'] ?? null);
     }
 
-    /** HR: Semantička XML poveznica sprema odredište, ali nikada ne izlaže interni pretvorbeni token kao URL. EN: A semantic XML link stores its destination without ever exposing the internal conversion token as a URL. */
+    /**
+     * EN: A semantic XML link stores its destination without ever exposing the internal conversion token as a URL.
+     *
+     * HR: Semantička XML poveznica sprema odredište, ali nikada ne izlaže interni pretvorbeni token kao URL.
+     */
     public function testSemanticLinkDoesNotPersistInternalTokenAsOriginalUrl(): void
     {
         [$repository] = $this->environment();

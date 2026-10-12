@@ -16,7 +16,11 @@ use ReflectionClass;
 #[CoversClass(ConfluenceImportService::class)]
 final class ConfluenceImportMemoryTest extends TestCase
 {
-    /** HR: Veliki uvoz dobiva vlastiti limit, a test vraća prethodno PHP stanje. EN: A large import gets its own limit, and the test restores PHP state. */
+    /**
+     * EN: A large import gets its own limit, and the test restores PHP state.
+     *
+     * HR: Veliki uvoz dobiva vlastiti limit, a test vraća prethodno PHP stanje.
+     */
     public function testImportRaisesOnlyItsCurrentPhpRequestLimit(): void
     {
         $previous = ini_get('memory_limit');

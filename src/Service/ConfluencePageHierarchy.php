@@ -9,14 +9,16 @@ use function array_keys;
 use function is_scalar;
 
 /**
- * HR: Preslikava Confluence roditelje na najbliže stranice koje se stvarno uvoze.
  * EN: Maps Confluence parents to the nearest pages that are actually imported.
+ *
+ * HR: Preslikava Confluence roditelje na najbliže stranice koje se stvarno uvoze.
  */
 final readonly class ConfluencePageHierarchy
 {
     /**
-     * HR: Preskače izostavljene nacrte i obrisane posrednike bez izdizanja njihove djece u korijen.
      * EN: Skips excluded draft and deleted intermediates without promoting their children to the root.
+     *
+     * HR: Preskače izostavljene nacrte i obrisane posrednike bez izdizanja njihove djece u korijen.
      *
      * @param array<string,list<array<string,mixed>>> $selectedPages
      * @param list<array<string,mixed>> $allPages
@@ -59,8 +61,9 @@ final readonly class ConfluencePageHierarchy
     }
 
     /**
-     * HR: Odabire aktualnu objavljenu verziju stranice ili zadnju dostupnu verziju.
      * EN: Selects the current published page version or the last available version.
+     *
+     * HR: Odabire aktualnu objavljenu verziju stranice ili zadnju dostupnu verziju.
      *
      * @param list<array<string,mixed>> $versions
      * @return array<string,mixed>
@@ -76,7 +79,11 @@ final readonly class ConfluencePageHierarchy
         return $versions[array_key_last($versions)] ?? [];
     }
 
-    /** HR: Sigurno pretvara skalarnu vrijednost u obrezani tekst. EN: Safely converts a scalar value to trimmed text. */
+    /**
+     * EN: Safely converts a scalar value to trimmed text.
+     *
+     * HR: Sigurno pretvara skalarnu vrijednost u obrezani tekst.
+     */
     private function text(mixed $value): string
     {
         return is_scalar($value) ? trim((string)$value) : '';

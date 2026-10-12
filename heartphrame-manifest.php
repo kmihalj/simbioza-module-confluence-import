@@ -34,7 +34,11 @@ return new class extends AbstractModuleManifest {
         'aaieduhr/simbioza-module-user',
     ];
 
-    /** HR: Provjerava instalaciju i redoslijed svih vlasnika ciljnih podataka. EN: Checks installation and ordering of all target-data owners. */
+    /**
+     * EN: Checks installation and ordering of all target-data owners.
+     *
+     * HR: Provjerava instalaciju i redoslijed svih vlasnika ciljnih podataka.
+     */
     public function canLoad(ContainerInterface $container): bool
     {
         $composer = $container->get(ComposerBridge::class);
@@ -72,13 +76,21 @@ return new class extends AbstractModuleManifest {
         return true;
     }
 
-    /** HR: Čeka da vlasnički moduli registriraju javne servise. EN: Waits for owner modules to register their public services. */
+    /**
+     * EN: Waits for owner modules to register their public services.
+     *
+     * HR: Čeka da vlasnički moduli registriraju javne servise.
+     */
     public function requiresDeferredLoading(): bool
     {
         return true;
     }
 
-    /** HR: Vraća eksplicitne DI tvornice bez refleksijskog autowiringa. EN: Returns explicit DI factories without reflection autowiring. */
+    /**
+     * EN: Returns explicit DI factories without reflection autowiring.
+     *
+     * HR: Vraća eksplicitne DI tvornice bez refleksijskog autowiringa.
+     */
     public function getServices(): array
     {
         $services = require __DIR__ . '/config/services.php';
@@ -86,7 +98,11 @@ return new class extends AbstractModuleManifest {
         return is_array($services) ? $services : [];
     }
 
-    /** HR: Registrira administratorski tijek, privatne privitke i stabilne neriješene poveznice. EN: Registers the admin flow, private attachments, and stable unresolved links. */
+    /**
+     * EN: Registers the admin flow, private attachments, and stable unresolved links.
+     *
+     * HR: Registrira administratorski tijek, privatne privitke i stabilne neriješene poveznice.
+     */
     public function getBaseRoutes(): array
     {
         $authenticated = [RequireAuthenticatedUserMiddleware::class];
@@ -132,6 +148,13 @@ return new class extends AbstractModuleManifest {
                 '/settings/confluence-import/report/{uuid}/review-corrected',
                 ConfluenceImportController::class . '@markReviewCorrected',
                 'simbioza-confluence-import.report.review-corrected',
+                $authenticated,
+            ],
+            [
+                'POST',
+                '/settings/confluence-import/report/{uuid}/script',
+                ConfluenceImportController::class . '@decideExternalScript',
+                'simbioza-confluence-import.report.script',
                 $authenticated,
             ],
             [
@@ -214,13 +237,21 @@ return new class extends AbstractModuleManifest {
         ];
     }
 
-    /** HR: Izlaže direktorij prikaza. EN: Exposes the view directory. */
+    /**
+     * EN: Exposes the view directory.
+     *
+     * HR: Izlaže direktorij prikaza.
+     */
     public function getViewsPath(): string
     {
         return __DIR__ . '/views';
     }
 
-    /** HR: Registrira instalacijsku i read-only inspect naredbu. EN: Registers installation and read-only inspect commands. */
+    /**
+     * EN: Registers installation and read-only inspect commands.
+     *
+     * HR: Registrira instalacijsku i read-only inspect naredbu.
+     */
     public function getCommands(): array
     {
         return [
@@ -242,7 +273,11 @@ return new class extends AbstractModuleManifest {
         ];
     }
 
-    /** HR: Uklanja import metapodatke pri trajnom brisanju područja. EN: Removes import metadata when a Workspace is permanently deleted. */
+    /**
+     * EN: Removes import metadata when a Workspace is permanently deleted.
+     *
+     * HR: Uklanja import metapodatke pri trajnom brisanju područja.
+     */
     public function getEventListeners(): array
     {
         return [
@@ -257,7 +292,11 @@ return new class extends AbstractModuleManifest {
         ];
     }
 
-    /** HR: Dodaje samo vlastitu stavku u grupu Područja, uz čuvanje korisničkog redoslijeda. EN: Adds only its own item to Workspaces while preserving user ordering. */
+    /**
+     * EN: Adds only its own item to Workspaces while preserving user ordering.
+     *
+     * HR: Dodaje samo vlastitu stavku u grupu Područja, uz čuvanje korisničkog redoslijeda.
+     */
     public function getBootstrapCallables(): array
     {
         return [static function (ContainerInterface $container): void {

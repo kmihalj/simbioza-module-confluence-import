@@ -43,15 +43,20 @@ use const LIBXML_HTML_NOIMPLIED;
 use const LIBXML_NONET;
 
 /**
- * HR: Ručno razrješava Confluence calendar makro u nativni Editor Calendar blok.
  * EN: Manually resolves a Confluence calendar macro to a native Editor Calendar block.
+ *
+ * HR: Ručno razrješava Confluence calendar makro u nativni Editor Calendar blok.
  */
 final readonly class ConfluenceCalendarResolutionService
 {
     private const CALENDAR_MANAGER =
         'AaiEduHr\\HeartPhrameModuleCalendar\\Service\\CalendarManagerInterface';
 
-    /** HR: Prima samo javne granice vlasničkih modula. EN: Receives only public owner-module boundaries. */
+    /**
+     * EN: Receives only public owner-module boundaries.
+     *
+     * HR: Prima samo javne granice vlasničkih modula.
+     */
     public function __construct(
         private ConfluenceImportRepository $repository,
         private ConfluenceImportConfig $config,
@@ -63,15 +68,20 @@ final readonly class ConfluenceCalendarResolutionService
     ) {
     }
 
-    /** HR: Provjerava je li opcionalni Calendar modul dostupan. EN: Checks whether the optional Calendar module is available. */
+    /**
+     * EN: Checks whether the optional Calendar module is available.
+     *
+     * HR: Provjerava je li opcionalni Calendar modul dostupan.
+     */
     public function isAvailable(): bool
     {
         return $this->calendarManager() !== null;
     }
 
     /**
-     * HR: Vraća kalendare koje administrator smije čitati i ugraditi.
      * EN: Returns calendars the administrator may read and embed.
+     *
+     * HR: Vraća kalendare koje administrator smije čitati i ugraditi.
      *
      * @param array<string,mixed> $actor
      * @return list<array<string,mixed>>
@@ -105,8 +115,9 @@ final readonly class ConfluenceCalendarResolutionService
     }
 
     /**
-     * HR: Povezuje postojeći kalendar ili izričito uvozi ICS pa objavljuje novu verziju stranice.
      * EN: Links an existing calendar or explicitly imports ICS and publishes a new page version.
+     *
+     * HR: Povezuje postojeći kalendar ili izričito uvozi ICS pa objavljuje novu verziju stranice.
      *
      * @param array<string,mixed> $data
      * @param array<string,mixed> $actor
@@ -156,12 +167,13 @@ final readonly class ConfluenceCalendarResolutionService
         }
 
         /*
-         * HR: Resolver već ima provjerenog administratora pa sva Editor čitanja
-         *     izvodi u istom eksplicitnom kontekstu kao i kasniji zapis. Time
-         *     rezultat ne ovisi o redoslijedu učitavanja HTTP auth servisa.
          * EN: The resolver already has a verified administrator, so every
          *     Editor read uses the same explicit context as the later write.
          *     This keeps the result independent of HTTP auth service load order.
+         *
+         * HR: Resolver već ima provjerenog administratora pa sva Editor čitanja
+         *     izvodi u istom eksplicitnom kontekstu kao i kasniji zapis. Time
+         *     rezultat ne ovisi o redoslijedu učitavanja HTTP auth servisa.
          */
         [$currentVersionNumber, $version] = $this->editorActors->runAs(
             $actor,
@@ -273,8 +285,9 @@ final readonly class ConfluenceCalendarResolutionService
     }
 
     /**
-     * HR: Pronalazi točno kalendarsko upozorenje u spremljenom izvještaju importa.
      * EN: Finds the exact calendar issue in the persisted import report.
+     *
+     * HR: Pronalazi točno kalendarsko upozorenje u spremljenom izvještaju importa.
      *
      * @param array<string,mixed> $summary
      * @return array{0:int,1:int,2:array<string,mixed>}
@@ -304,7 +317,11 @@ final readonly class ConfluenceCalendarResolutionService
         throw new ConfluenceImportException(__('Confluence calendar makro nije pronađen u izvještaju importa.'));
     }
 
-    /** HR: Zamjenjuje samo točno označeni makro nativnim Calendar placeholderom. EN: Replaces only the exact marked macro with a native Calendar placeholder. */
+    /**
+     * EN: Replaces only the exact marked macro with a native Calendar placeholder.
+     *
+     * HR: Zamjenjuje samo točno označeni makro nativnim Calendar placeholderom.
+     */
     private function replaceMarker(string $html, string $marker, string $calendarUuid, string $calendarName): string
     {
         $document = new DOMDocument('1.0', 'UTF-8');
@@ -359,7 +376,11 @@ final readonly class ConfluenceCalendarResolutionService
         return trim($result);
     }
 
-    /** HR: Vraća dostupni i kompatibilni Calendar servis. EN: Returns the available compatible Calendar service. */
+    /**
+     * EN: Returns the available compatible Calendar service.
+     *
+     * HR: Vraća dostupni i kompatibilni Calendar servis.
+     */
     private function calendarManager(): ?object
     {
         if (!interface_exists(self::CALENDAR_MANAGER) || !$this->container->has(self::CALENDAR_MANAGER)) {
@@ -380,7 +401,11 @@ final readonly class ConfluenceCalendarResolutionService
             : null;
     }
 
-    /** HR: Zahtijeva dostupni Calendar servis za izmjenu. EN: Requires the Calendar service for a mutation. */
+    /**
+     * EN: Requires the Calendar service for a mutation.
+     *
+     * HR: Zahtijeva dostupni Calendar servis za izmjenu.
+     */
     private function requiredCalendarManager(): object
     {
         $manager = $this->calendarManager();
@@ -392,8 +417,9 @@ final readonly class ConfluenceCalendarResolutionService
     }
 
     /**
-     * HR: Poziva prethodno provjerenu metodu opcionalnog modula bez tvrde Composer ovisnosti.
      * EN: Calls a previously validated optional-module method without a hard Composer dependency.
+     *
+     * HR: Poziva prethodno provjerenu metodu opcionalnog modula bez tvrde Composer ovisnosti.
      *
      * @param list<mixed> $arguments
      */
@@ -407,13 +433,21 @@ final readonly class ConfluenceCalendarResolutionService
         return $callable(...$arguments);
     }
 
-    /** HR: Sigurno normalizira skalarnu tekstnu vrijednost. EN: Safely normalizes a scalar text value. */
+    /**
+     * EN: Safely normalizes a scalar text value.
+     *
+     * HR: Sigurno normalizira skalarnu tekstnu vrijednost.
+     */
     private function text(mixed $value): string
     {
         return is_scalar($value) ? trim((string)$value) : '';
     }
 
-    /** HR: Zahtijeva pozitivni cijeli broj ili prekida zadanom porukom. EN: Requires a positive integer or fails with the supplied message. */
+    /**
+     * EN: Requires a positive integer or fails with the supplied message.
+     *
+     * HR: Zahtijeva pozitivni cijeli broj ili prekida zadanom porukom.
+     */
     private function positiveInt(mixed $value, string $message): int
     {
         $number = is_numeric($value) ? (int)$value : 0;

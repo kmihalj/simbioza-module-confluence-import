@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-// HR: Glavni orijentir daje aplikacijski raspored; ovaj je prikaz samo njegov sadržaj.
 // EN: The host layout owns the main landmark; this view only supplies its content.
+//
+// HR: Glavni orijentir daje aplikacijski raspored; ovaj je prikaz samo njegov sadržaj.
 
 /**
  * @var string $title
@@ -129,7 +130,9 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                 <summary><?= $this->escape(__('1. Prenesi i provjeri Confluence arhivu')) ?></summary>
                 <div class="confluence-import-body">
                     <div class="mb-3">
-                        <?php // HR: Jedna oznaka i vidljiv fokus zadržavaju lokalizirani nativni birač. EN: One label and visible focus retain the localized native picker. ?>
+                        <?php // EN: One label and visible focus retain the localized native picker.
+//
+// HR: Jedna oznaka i vidljiv fokus zadržavaju lokalizirani nativni birač.?>
                         <div class="form-label" id="confluence-import-file-label"><?= $this->escape(__('Confluence XML ZIP arhiva')) ?></div>
                         <div class="input-group confluence-import-file-picker">
                             <input class="visually-hidden" id="confluence-import-file" type="file" accept=".zip,application/zip" aria-labelledby="confluence-import-file-label confluence-import-file-choice" aria-describedby="confluence-import-file-name confluence-import-file-help">

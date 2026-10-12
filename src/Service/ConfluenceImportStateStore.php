@@ -28,8 +28,9 @@ use const JSON_UNESCAPED_UNICODE;
 use const LOCK_EX;
 
 /**
- * HR: Odvaja veliki nepromjenjivi manifest importa od malog nastavivog stanja.
  * EN: Separates the large immutable import manifest from small resumable state.
+ *
+ * HR: Odvaja veliki nepromjenjivi manifest importa od malog nastavivog stanja.
  */
 final class ConfluenceImportStateStore
 {
@@ -53,8 +54,9 @@ final class ConfluenceImportStateStore
     ];
 
     /**
-     * HR: Prvi zapis sprema veliki manifest samo jednom, a napredak zasebno.
      * EN: The initial write stores the large manifest once and progress separately.
+     *
+     * HR: Prvi zapis sprema veliki manifest samo jednom, a napredak zasebno.
      *
      * @param array<string,mixed> $state
      */
@@ -69,23 +71,28 @@ final class ConfluenceImportStateStore
         $this->writeJson($this->statePath($staging), $dynamic);
     }
 
-    /** HR: Provjerava postoji li nastavivo stanje. EN: Checks whether resumable state exists. */
+    /**
+     * EN: Checks whether resumable state exists.
+     *
+     * HR: Provjerava postoji li nastavivo stanje.
+     */
     public function exists(string $staging): bool
     {
         return is_file($this->statePath($staging));
     }
 
     /**
-     * HR: Učitava novo podijeljeno ili staro jednodijelno stanje.
-     * EN: Loads either new split state or legacy single-file state.
+     * EN: Loads only current split state; external Confluence archive formats are unaffected.
+     *
+     * HR: Učitava samo aktualno podijeljeno stanje; vanjski formati Confluence arhiva ostaju podržani.
      *
      * @return array<string,mixed>
      */
     public function load(string $staging): array
     {
         $state = $this->readJson($this->statePath($staging));
-        if ((int)($state['version'] ?? 1) < self::STATE_VERSION) {
-            return $state;
+        if (($state['version'] ?? null) !== self::STATE_VERSION) {
+            throw new ConfluenceImportException('Unsupported import-job state version. Start a new import.');
         }
 
         $manifest = $this->readJson($this->manifestPath($staging));
@@ -94,36 +101,46 @@ final class ConfluenceImportStateStore
     }
 
     /**
-     * HR: Kod novog formata ponovno zapisuje samo promjenjivi napredak.
      * EN: For the new format, rewrites only mutable progress.
+     *
+     * HR: Kod novog formata ponovno zapisuje samo promjenjivi napredak.
      *
      * @param array<string,mixed> $state
      */
     public function save(string $staging, array $state): void
     {
-        if ((int)($state['version'] ?? 1) >= self::STATE_VERSION) {
-            $state = array_diff_key($state, array_fill_keys(self::IMMUTABLE_KEYS, true));
-            $state['version'] = self::STATE_VERSION;
+        if (($state['version'] ?? null) !== self::STATE_VERSION) {
+            throw new ConfluenceImportException('Unsupported import-job state version. Start a new import.');
         }
+        $state = array_diff_key($state, array_fill_keys(self::IMMUTABLE_KEYS, true));
 
         $this->writeJson($this->statePath($staging), $state);
     }
 
-    /** HR: Vraća putanju malog promjenjivog stanja. EN: Returns the mutable-state path. */
+    /**
+     * EN: Returns the mutable-state path.
+     *
+     * HR: Vraća putanju malog promjenjivog stanja.
+     */
     public function statePath(string $staging): string
     {
         return $staging . DIRECTORY_SEPARATOR . self::STATE_FILE;
     }
 
-    /** HR: Vraća putanju velikog nepromjenjivog manifesta. EN: Returns the immutable-manifest path. */
+    /**
+     * EN: Returns the immutable-manifest path.
+     *
+     * HR: Vraća putanju velikog nepromjenjivog manifesta.
+     */
     public function manifestPath(string $staging): string
     {
         return $staging . DIRECTORY_SEPARATOR . self::MANIFEST_FILE;
     }
 
     /**
-     * HR: Čita i provjerava JSON stanje ili manifest importa.
      * EN: Reads and validates an import state or manifest JSON file.
+     *
+     * HR: Čita i provjerava JSON stanje ili manifest importa.
      *
      * @return array<string,mixed>
      */
@@ -141,8 +158,9 @@ final class ConfluenceImportStateStore
     }
 
     /**
-     * HR: Atomski zapisuje JSON stanje ili manifest importa.
      * EN: Atomically writes an import state or manifest JSON file.
+     *
+     * HR: Atomski zapisuje JSON stanje ili manifest importa.
      *
      * @param array<string,mixed> $value
      */

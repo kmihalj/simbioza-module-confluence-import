@@ -7,10 +7,18 @@ namespace AaiEduHr\SimbiozaModuleConfluenceImport\Tests;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluencePageSlugger;
 use PHPUnit\Framework\TestCase;
 
-/** HR: Provjerava ograničenje i jedinstvenost URL slugova. EN: Verifies URL slug limits and uniqueness. */
+/**
+ * EN: Verifies URL slug limits and uniqueness.
+ *
+ * HR: Provjerava ograničenje i jedinstvenost URL slugova.
+ */
 final class ConfluencePageSluggerTest extends TestCase
 {
-    /** HR: Dugi DABAR naslov ostaje čitljiv i stane u shemu. EN: A long DABAR title remains readable and fits the schema. */
+    /**
+     * EN: A long DABAR title remains readable and fits the schema.
+     *
+     * HR: Dugi DABAR naslov ostaje čitljiv i stane u shemu.
+     */
     public function testShortensLongDabarSlugAtWordBoundary(): void
     {
         $slug = '2024-09-19-sastanak-urednika-repozitorija-koji-pohranjuju-multimedijalne-objekte-na-temu-revidiranja-metapodatkovnih-opisa-multimedijskih-objekata';
@@ -24,7 +32,11 @@ final class ConfluencePageSluggerTest extends TestCase
         self::assertLessThanOrEqual(ConfluencePageSlugger::MAX_LENGTH, strlen($short));
     }
 
-    /** HR: Nastavak za sudar također ostaje unutar 128 znakova. EN: A collision suffix also remains within 128 characters. */
+    /**
+     * EN: A collision suffix also remains within 128 characters.
+     *
+     * HR: Nastavak za sudar također ostaje unutar 128 znakova.
+     */
     public function testKeepsCollisionSuffixWithinSchemaLimit(): void
     {
         $slugger = new ConfluencePageSlugger();
@@ -43,7 +55,11 @@ final class ConfluencePageSluggerTest extends TestCase
         self::assertCount(3, array_unique([$first, $second, $third]));
     }
 
-    /** HR: Slug bez riječi sigurno se reže na tvrdo ograničenje. EN: A slug without words is safely cut at the hard limit. */
+    /**
+     * EN: A slug without words is safely cut at the hard limit.
+     *
+     * HR: Slug bez riječi sigurno se reže na tvrdo ograničenje.
+     */
     public function testHardCutsSingleSegmentAndUsesFallback(): void
     {
         $slugger = new ConfluencePageSlugger();
@@ -53,7 +69,11 @@ final class ConfluencePageSluggerTest extends TestCase
         self::assertSame('page-42', $slugger->unique('', 'page-42', $used));
     }
 
-    /** HR: Čista instalacija može izraditi slug servis iz modulske konfiguracije. EN: A clean installation can build the slug service from module configuration. */
+    /**
+     * EN: A clean installation can build the slug service from module configuration.
+     *
+     * HR: Čista instalacija može izraditi slug servis iz modulske konfiguracije.
+     */
     public function testModuleConfigurationRegistersSlugger(): void
     {
         $services = require __DIR__ . '/../config/services.php';

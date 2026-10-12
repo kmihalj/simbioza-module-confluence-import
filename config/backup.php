@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-// HR: Confluence metapodaci i privatni privitci pripadaju cjelini Područja.
 // EN: Confluence provenance metadata and private attachments belong to Workspaces.
+//
+// HR: Confluence metapodaci i privatni privitci pripadaju cjelini Područja.
 return ['providers' => [
     [
         'service' => 'heartphrame.backup.provider.simbioza-confluence-import',

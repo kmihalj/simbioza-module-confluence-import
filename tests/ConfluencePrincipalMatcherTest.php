@@ -9,7 +9,11 @@ use PHPUnit\Framework\TestCase;
 
 final class ConfluencePrincipalMatcherTest extends TestCase
 {
-    /** HR: Točan naziv ili ključ grupe daje prijedlog, sličan naziv ne. EN: An exact group name or key is suggested; a merely similar name is not. */
+    /**
+     * EN: An exact group name or key is suggested; a merely similar name is not.
+     *
+     * HR: Točan naziv ili ključ grupe daje prijedlog, sličan naziv ne.
+     */
     public function testGroupSuggestionUsesStrictNormalizedIdentity(): void
     {
         $matcher = new ConfluencePrincipalMatcher();
@@ -23,7 +27,11 @@ final class ConfluencePrincipalMatcherTest extends TestCase
         self::assertNull($matcher->suggestGroupId('srce-zaposlenik', $groups));
     }
 
-    /** HR: Neaktivni ciljni korisnici također se predlažu po točnom emailu. EN: Inactive target users are also suggested by exact email. */
+    /**
+     * EN: Inactive target users are also suggested by exact email.
+     *
+     * HR: Neaktivni ciljni korisnici također se predlažu po točnom emailu.
+     */
     public function testUserSuggestionIncludesInactiveExactEmailMatch(): void
     {
         $matcher = new ConfluencePrincipalMatcher();
@@ -39,7 +47,11 @@ final class ConfluencePrincipalMatcherTest extends TestCase
         self::assertSame(21, $matcher->suggestUserId(['email' => 'alias@example.test'], $users));
     }
 
-    /** HR: Dvosmisleni email ostaje bez automatskog mapiranja. EN: An ambiguous email remains unmapped. */
+    /**
+     * EN: An ambiguous email remains unmapped.
+     *
+     * HR: Dvosmisleni email ostaje bez automatskog mapiranja.
+     */
     public function testAmbiguousUserEmailIsNeverAutoMapped(): void
     {
         $matcher = new ConfluencePrincipalMatcher();
@@ -51,7 +63,11 @@ final class ConfluencePrincipalMatcherTest extends TestCase
         self::assertNull($matcher->suggestUserId(['email' => 'shared@example.test'], $users));
     }
 
-    /** HR: Izvor bez korisničkog imena ili emaila dobiva stabilnu tehničku oznaku. EN: A source without username or email receives a stable technical identifier. */
+    /**
+     * EN: A source without username or email receives a stable technical identifier.
+     *
+     * HR: Izvor bez korisničkog imena ili emaila dobiva stabilnu tehničku oznaku.
+     */
     public function testInactiveLoginIdentifierFallsBackToStableSourceHash(): void
     {
         $matcher = new ConfluencePrincipalMatcher();

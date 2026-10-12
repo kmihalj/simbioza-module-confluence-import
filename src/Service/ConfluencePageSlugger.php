@@ -11,17 +11,23 @@ use function substr;
 use function trim;
 
 /**
- * HR: Gradi prenosive i jedinstvene slugove uvezenih Confluence stranica.
  * EN: Builds portable and unique slugs for imported Confluence pages.
+ *
+ * HR: Gradi prenosive i jedinstvene slugove uvezenih Confluence stranica.
  */
 final class ConfluencePageSlugger
 {
-    /** HR: Duljina stupca workspace_nodes.slug. EN: Length of the workspace_nodes.slug column. */
+    /**
+     * EN: Length of the workspace_nodes.slug column.
+     *
+     * HR: Duljina stupca workspace_nodes.slug.
+     */
     public const MAX_LENGTH = 128;
 
     /**
-     * HR: Vraća prvi slobodan slug bez prekoračenja prenosive sheme.
      * EN: Returns the first available slug without exceeding the portable schema.
+     *
+     * HR: Vraća prvi slobodan slug bez prekoračenja prenosive sheme.
      *
      * @param array<string,true> $used
      */
@@ -45,8 +51,9 @@ final class ConfluencePageSlugger
     }
 
     /**
-     * HR: Skraćuje ASCII slug na granici riječi kada se time ne gubi previše čitljivosti.
      * EN: Shortens an ASCII slug at a word boundary when that preserves useful readability.
+     *
+     * HR: Skraćuje ASCII slug na granici riječi kada se time ne gubi previše čitljivosti.
      */
     public function shorten(string $slug, int $maximumLength = self::MAX_LENGTH): string
     {

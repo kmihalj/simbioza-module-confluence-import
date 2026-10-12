@@ -2,9 +2,29 @@
 
 declare(strict_types=1);
 
-// HR: Izvorni hrvatski ključevi i prijevodi jezika en.
 // EN: Canonical Croatian source keys and en translations.
+//
+// HR: Izvorni hrvatski ključevi i prijevodi jezika en.
 return array (
+  'Pronađene vanjske skripte' => 'Discovered external scripts',
+  'Točno podudaranje s lokalno odobrenom skriptom automatski se uključuje samo na uvezenim stranicama koje je sadrže. Nove i odbijene skripte ostaju neizvršive. Za novu skriptu odaberite jednu ili sve stranice ovog importa. Povijest ne izvršava skripte.' => 'An exact match with a locally approved script is automatically selected only on imported pages containing it. New and rejected scripts remain inert. For a new script, select one or all pages in this import. History does not execute scripts.',
+  'Odobreno' => 'Approved',
+  'Odbijeno' => 'Rejected',
+  'Čeka odobrenje' => 'Pending approval',
+  'Prepoznata postojeća lokalna dozvola' => 'Existing local approval recognized',
+  'Uključena kroz izvještaj' => 'Selected through the report',
+  'Odobri i uključi na ovoj stranici' => 'Approve and enable on this page',
+  'Odobri i uključi na svim stranicama ovog importa' => 'Approve and enable on all matching pages in this import',
+  'Zadrži u registru bez uključivanja' => 'Keep in the registry without enabling',
+  'Odaberite stranicu' => 'Select a page',
+  'Stranica ima neobjavljeni nacrt ili nije objavljena. Skriptu uključite nakon objave ili odbacivanja nacrta.' => 'The page has an unpublished draft or has not been published. Enable the script after publishing or discarding the draft.',
+  'Status' => 'Status',
+  'Vanjska skripta' => 'External script',
+  'Blokirana definicija' => 'Blocked definition',
+  'Odobrenje vrijedi za ovu točnu skriptu na cijelom siteu, samo na stranicama koje je uključuju. Skripta ima pristup sadržaju i sesiji čitatelja.' => 'Approval applies to this exact script across the site, only on pages selecting it. The script can access content and act with the reader’s session.',
+  'Odobri' => 'Approve',
+  'Odbij' => 'Reject',
+  'Odluka je spremljena.' => 'Decision saved.',
   'Povijest stranica i privitaka' => 'Page and attachment history',
   'Ranije verzije stranica i privitaka uvoze se samo kada je ova opcija uključena.' => 'Earlier versions of pages and attachments are imported only when this option is enabled.',
   'Aktualni privitci' => 'Current attachments',

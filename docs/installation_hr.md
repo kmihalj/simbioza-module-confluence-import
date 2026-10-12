@@ -1,6 +1,6 @@
 # Instalacija i konfiguracija
 
-English version: [installation_en.md](installation_en.md)
+Engleska verzija: [installation_en.md](installation_en.md)
 
 ## Preduvjeti
 
@@ -15,7 +15,7 @@ U `app.modules.enabled` ovaj modul mora biti iza ORM-a, Menija, Autha, HTML Edit
 ## Instalacija
 
 ```bash
-composer require aaieduhr/simbioza-module-confluence-import:^0.1.13
+composer require aaieduhr/simbioza-module-confluence-import:^0.3.0
 vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```
@@ -24,7 +24,13 @@ Instalacijska naredba kopira vremenski označenu reverzibilnu migraciju u host a
 
 ## Konfiguracija
 
-Aplikacijske vrijednosti pod `confluence_import.*` nadjačavaju zadane vrijednosti modula:
+Instalacijske postavke spremite u
+`HPH_CONFIG_PATH/confluence-import/confluence-import.php`. Bez varijable okruženja
+putanja je `<aplikacija>/config/confluence-import/confluence-import.php`.
+Nepromijenjeni framework učitava ova PHP polja i uređene
+`HPH_CONFIG_OVERRIDE_PATHS` slojeve prije izrade servisa modula. Izostavljeni
+ključevi zadržavaju paketne vrijednosti; prazno polje višeg sloja resetira ovu politiku.
+Staro ravno stablo `confluence_import` ne koristi se.
 
 | Ključ | Zadano | Namjena |
 | --- | ---: | --- |
@@ -37,23 +43,29 @@ Aplikacijske vrijednosti pod `confluence_import.*` nadjačavaju zadane vrijednos
 | `max_entry_size` | 4 GiB | Najveća pojedinačna raspakirana datoteka |
 | `max_compression_ratio` | 250 | Zaštita od ZIP bombi |
 | `import_execution_time_limit` | 900 sekundi | Gornja granica provjere velike arhive ili jednog procesnog koraka importa |
+| `import_memory_limit_mb` | 512 MiB | Memorija koja se traži samo tijekom administratorske obrade importa |
 | `default_language` | `hr` | Jezik sadržaja kada ga izvoz ne navodi |
 | `source_base_url` | prazno | Početna vrijednost URL-a izvornog Confluencea; administrator ga potvrđuje ili mijenja za svaki pojedinačni ili batch import |
 
-Primjer konfiguracije host aplikacije:
+Primjer datoteke (bez dodatnog vanjskog polja):
 
 ```php
-'confluence_import' => [
+<?php
+
+return [
     'chunk_size' => 16 * 1024 * 1024,
     'max_archive_size' => 8 * 1024 * 1024 * 1024,
     'import_execution_time_limit' => 1200,
     'default_language' => 'hr',
     'source_base_url' => 'https://wiki.example.org',
-],
+];
 ```
 
 `source_base_url` nije fiksna postavka instalacije. Ona samo unaprijed popunjava
 administratorsko polje, a stvarni se URL sprema uz svaki pokrenuti import.
+`data_path` mora biti relativni poddirektorij bez `..`, apsolutnih putanja i
+obrnutih kosih crta. Prijenosi i stanje importa ostaju u privatnom `data` direktoriju.
+Postojeći GUI, mapiranja i odabir izvora po poslu ostaju nepromijenjeni.
 
 Prijenos i sadržajni import rade u nastavivim fazama. Nakon potvrde mapiranja
 poslužitelj pripremi stabilan plan, zatim svaki zahtjev obrađuje ograničen broj

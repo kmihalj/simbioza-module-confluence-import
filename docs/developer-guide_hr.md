@@ -1,6 +1,6 @@
 # Integracija za developere
 
-English version: [developer-guide_en.md](developer-guide_en.md)
+Engleska verzija: [developer-guide_en.md](developer-guide_en.md)
 
 ## Arhitektura
 
@@ -41,7 +41,7 @@ za ovaj importer i bilo koji budući migracijski alat.
 
 Masovni upisi stranica, workflowa i ACL-a izvode se kroz javni Workspace servis `WorkspaceContentChangeBatch`. Izvorni događaji se tijekom te cjeline prikupljaju, a na kraju se šalje jedan `bulk_content_changed` događaj po promijenjenom području. Time backlink i Search listeneri ne obnavljaju izvedene podatke nakon svake pojedine stranice. `finally` završetak namjerno šalje objedinjeni događaj i nakon djelomičnog neuspjeha kako izvedeni indeksi ne bi ostali u stanju starijem od stvarno spremljenog izvornog sadržaja.
 
-`confluence_import.import_execution_time_limit` određuje gornju granicu jednog
+`import_execution_time_limit` određuje gornju granicu jednog
 procesnog koraka. `queue()` veliki nepromjenjivi plan sprema jednom u
 `manifest.json`, a mali promjenjivi napredak u `state.json`. Pritom jednom
 odabire aktualne verzije privitaka i priprema kontekst makroa svih stranica.
@@ -138,3 +138,18 @@ semantiku tablice, a ne vlastita konkurentna pravila prikaza.
 ## Vlasništvo sheme
 
 Reverzibilna migracija modula služi kao predložak. Instalacija je kopira u povijest migracija host aplikacije. Nove kolone i tablice moraju ostati prefiksirane kroz konstante modula i imati pokriće za MySQL, PostgreSQL i SQLite u matrici host aplikacije.
+
+## Confluence datumi i doslovno vrijeme
+
+Confluence datum često čuva vrijednost samo u praznom elementu
+`<time datetime="2019-01-22" />`. Converter atribut pretvara u siguran vidljiv
+tekst prije nego Editorova sanitizacija ukloni nepodržane oznake. Prolaz se
+ponavlja nakon pretvorbe makroa za time elemente dodane HTML-tabličnim makroom.
+Postojeće vidljive oznake ostaju iste; datum/vrijeme/vremenska zona ne mijenjaju
+se prešutno. Atribut nikad ne postaje izvršni HTML. Susjedni doslovni tekst,
+primjerice `, 13:00, Srce`, ostaje sačuvan.
+
+Regresijski test datuma sastanka DABAR-a pokriva izvorni oblik iz dostavljene
+arhive i završni sanitizirani HTML. Prethodno uvezena verzija koja je već izgubila
+datum ne može ga pouzdano zaključiti bez arhive; izmjena convertera štiti nove
+uvoze, ne izmišlja datum iz naslova stranice.

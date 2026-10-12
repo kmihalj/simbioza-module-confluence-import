@@ -34,15 +34,27 @@ use const JSON_THROW_ON_ERROR;
 use const JSON_UNESCAPED_SLASHES;
 use const JSON_UNESCAPED_UNICODE;
 
-/** HR: Jedina persistence granica za poslove i izvorna Confluence mapiranja. EN: Sole persistence boundary for jobs and source Confluence mappings. */
+/**
+ * EN: Sole persistence boundary for jobs and source Confluence mappings.
+ *
+ * HR: Jedina persistence granica za poslove i izvorna Confluence mapiranja.
+ */
 final readonly class ConfluenceImportRepository
 {
-    /** HR: Prima prenosivi ORM. EN: Receives the portable ORM. */
+    /**
+     * EN: Receives the portable ORM.
+     *
+     * HR: Prima prenosivi ORM.
+     */
     public function __construct(private Database $database)
     {
     }
 
-    /** HR: Provjerava je li instalirana cijela modulska shema. EN: Checks whether the complete module schema is installed. */
+    /**
+     * EN: Checks whether the complete module schema is installed.
+     *
+     * HR: Provjerava je li instalirana cijela modulska shema.
+     */
     public function tablesReady(): bool
     {
         $schema = $this->database->schema();
@@ -57,8 +69,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Otvara novi posao nastavivog uploada.
      * EN: Opens a new resumable-upload job.
+     *
+     * HR: Otvara novi posao nastavivog uploada.
      *
      * @return array<string,mixed>
      */
@@ -93,8 +106,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Dohvaća posao prema UUID-u i po izboru ograničava vlasnika.
      * EN: Fetches a job by UUID and optionally restricts its owner.
+     *
+     * HR: Dohvaća posao prema UUID-u i po izboru ograničava vlasnika.
      *
      * @return array<string,mixed>
      */
@@ -116,8 +130,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Zaključava upload posao i izvodi strogo sekvencijalnu izmjenu.
      * EN: Locks an upload job and runs a strictly sequential mutation.
+     *
+     * HR: Zaključava upload posao i izvodi strogo sekvencijalnu izmjenu.
      *
      * @param callable(array<string,mixed>,Database):array<string,mixed> $callback
      * @return array<string,mixed>
@@ -141,8 +156,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Ažurira odabrana polja posla i vrijeme izmjene.
      * EN: Updates selected job fields and its modification time.
+     *
+     * HR: Ažurira odabrana polja posla i vrijeme izmjene.
      *
      * @param array<string,mixed> $values
      */
@@ -155,8 +171,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Vraća nedovršeni batch posao administratora kako dva zahtjeva ne bi paralelno pokrenula dva područja.
      * EN: Returns an administrator's unfinished batch job so two requests cannot start two Workspaces in parallel.
+     *
+     * HR: Vraća nedovršeni batch posao administratora kako dva zahtjeva ne bi paralelno pokrenula dva područja.
      *
      * @return array<string,mixed>|null
      */
@@ -173,22 +190,28 @@ final readonly class ConfluenceImportRepository
         return is_array($row) ? $this->normalizeRow($row) : null;
     }
 
-    /** HR: Ažurira javno čitljivu fazu dugotrajnog importa. EN: Updates the publicly readable stage of a long-running import. */
+    /**
+     * EN: Updates the publicly readable stage of a long-running import.
+     *
+     * HR: Ažurira javno čitljivu fazu dugotrajnog importa.
+     */
     public function setStage(int $jobId, string $stage): void
     {
         $this->updateJob($jobId, ['stage' => trim($stage)]);
     }
 
     /**
-     * HR: Sprema rezultat preflight pregleda i otvara mapiranje.
      * EN: Stores the preflight inventory and opens mapping.
+     *
+     * HR: Sprema rezultat preflight pregleda i otvara mapiranje.
      *
      * @param array<string,mixed> $scan
      */
     public function saveScan(int $jobId, array $scan): void
     {
-        // HR: Posao u bazi čuva samo inventar; velike zapise ponovno čitamo iz ZIP-a.
         // EN: The database job retains only the inventory; large records are read from the ZIP again.
+        //
+        // HR: Posao u bazi čuva samo inventar; velike zapise ponovno čitamo iz ZIP-a.
         unset($scan['pages'], $scan['attachments']);
         $space = is_array($scan['spaces'][0] ?? null) ? $scan['spaces'][0] : [];
         $this->updateJob($jobId, [
@@ -203,8 +226,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Označava posao pokrenutim i sprema potvrđene opcije.
      * EN: Marks a job as running and stores confirmed options.
+     *
+     * HR: Označava posao pokrenutim i sprema potvrđene opcije.
      *
      * @param array<string,mixed> $options
      */
@@ -219,10 +243,11 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Dovršava posao, ali zadržava izvornu putanju dok storage servis ne
-     *     potvrdi da je arhiva stvarno uklonjena.
      * EN: Completes a job while retaining its source path until the storage
      *     service confirms that the archive was actually removed.
+     *
+     * HR: Dovršava posao, ali zadržava izvornu putanju dok storage servis ne
+     *     potvrdi da je arhiva stvarno uklonjena.
      *
      * @param array<string,mixed> $summary
      */
@@ -238,7 +263,11 @@ final readonly class ConfluenceImportRepository
         ]);
     }
 
-    /** HR: Zaboravlja putanju tek nakon potvrđenog brisanja arhive. EN: Forgets the path only after confirmed archive deletion. */
+    /**
+     * EN: Forgets the path only after confirmed archive deletion.
+     *
+     * HR: Zaboravlja putanju tek nakon potvrđenog brisanja arhive.
+     */
     public function clearArchivePath(int $jobId): void
     {
         if ($jobId <= 0) {
@@ -249,10 +278,11 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Vraća dovršene poslove i njihove privremene artefakte za siguran
-     *     ponovni pokušaj čišćenja.
      * EN: Returns completed jobs and their transient artifacts for a safe
      *     cleanup retry.
+     *
+     * HR: Vraća dovršene poslove i njihove privremene artefakte za siguran
+     *     ponovni pokušaj čišćenja.
      *
      * @return list<array<string,mixed>>
      */
@@ -273,7 +303,11 @@ final readonly class ConfluenceImportRepository
         return $result;
     }
 
-    /** HR: Bilježi pogrešku bez gubitka preflight sažetka. EN: Records an error without losing the preflight summary. */
+    /**
+     * EN: Records an error without losing the preflight summary.
+     *
+     * HR: Bilježi pogrešku bez gubitka preflight sažetka.
+     */
     public function failImport(int $jobId, string $message): void
     {
         $this->updateJob($jobId, [
@@ -284,10 +318,11 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Vraća istekle poslove prije početka stvarnog importa; dovršeni i
-     *     djelomično izvedeni importi nikada nisu kandidati za automatsko brisanje.
      * EN: Returns jobs expired before a real import began; completed and
      *     partially executed imports are never automatic-cleanup candidates.
+     *
+     * HR: Vraća istekle poslove prije početka stvarnog importa; dovršeni i
+     *     djelomično izvedeni importi nikada nisu kandidati za automatsko brisanje.
      *
      * @return list<array<string,mixed>>
      */
@@ -310,7 +345,11 @@ final readonly class ConfluenceImportRepository
         return $result;
     }
 
-    /** HR: Briše jedan dokazano privremeni posao. EN: Deletes one proven temporary job. */
+    /**
+     * EN: Deletes one proven temporary job.
+     *
+     * HR: Briše jedan dokazano privremeni posao.
+     */
     public function deleteTransientJob(int $jobId): void
     {
         $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
@@ -327,10 +366,11 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Prepoznaje posao koji nije započeo sadržajni import. Neuspjela
-     * početna provjera ostaje privremena dok nema spremljenih import opcija.
      * EN: Recognizes a job that has not started content import. A failed
      * preflight remains transient while no import options have been stored.
+     *
+     * HR: Prepoznaje posao koji nije započeo sadržajni import. Neuspjela
+     * početna provjera ostaje privremena dok nema spremljenih import opcija.
      *
      * @param array<mixed,mixed> $row
      */
@@ -346,8 +386,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Sprema ili osvježava izvorno područje i ciljnu Workspace vezu.
      * EN: Saves or refreshes a source-space to target-Workspace mapping.
+     *
+     * HR: Sprema ili osvježava izvorno područje i ciljnu Workspace vezu.
      *
      * @param array<string,mixed> $space
      * @param array<string,mixed> $workspace
@@ -387,8 +428,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Vraća raniji import istog izvornog Confluence područja.
      * EN: Returns an earlier import of the same source Confluence space.
+     *
+     * HR: Vraća raniji import istog izvornog Confluence područja.
      *
      * @return array<string,mixed>|null
      */
@@ -408,8 +450,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Razrješava Confluence ključ područja u zadnje spremljeno lokalno mapiranje.
      * EN: Resolves a Confluence space key to the latest stored local mapping.
+     *
+     * HR: Razrješava Confluence ključ područja u zadnje spremljeno lokalno mapiranje.
      *
      * @return array<string,mixed>|null
      */
@@ -430,10 +473,11 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Jednim upitom vraća sva trajna mapiranja Confluence ključeva na
-     *     lokalne Workspace slugove za materijalizaciju uvezenog sadržaja.
      * EN: Returns every durable Confluence-key to local-Workspace-slug mapping
      *     in one query so imported content can be materialized locally.
+     *
+     * HR: Jednim upitom vraća sva trajna mapiranja Confluence ključeva na
+     *     lokalne Workspace slugove za materijalizaciju uvezenog sadržaja.
      *
      * @return array<string,string>
      */
@@ -460,8 +504,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Sprema izričito mapiranje izvornog korisnika.
      * EN: Stores an explicit source-user mapping.
+     *
+     * HR: Sprema izričito mapiranje izvornog korisnika.
      *
      * @param array<string,mixed> $user
      */
@@ -490,8 +535,9 @@ final readonly class ConfluenceImportRepository
             );
         }
         if ($existingConfirmed) {
-            // HR: Ponovljeni import drugog područja ne smije poništiti ili preusmjeriti globalno mapiranje računa.
             // EN: A repeated import of another Workspace must not clear or redirect the global account mapping.
+            //
+            // HR: Ponovljeni import drugog područja ne smije poništiti ili preusmjeriti globalno mapiranje računa.
             $targetUserId = $existingTargetId;
             $confirmed = true;
         }
@@ -519,7 +565,11 @@ final readonly class ConfluenceImportRepository
         ]);
     }
 
-    /** HR: Vraća potvrđeni ciljni user ID ili null. EN: Returns a confirmed target user ID or null. */
+    /**
+     * EN: Returns a confirmed target user ID or null.
+     *
+     * HR: Vraća potvrđeni ciljni user ID ili null.
+     */
     public function mappedUserId(string $sourceKey): ?int
     {
         if (trim($sourceKey) === '') {
@@ -536,7 +586,11 @@ final readonly class ConfluenceImportRepository
         return $id > 0 ? $id : null;
     }
 
-    /** HR: Sprema potvrđeno ili neriješeno mapiranje Confluence grupe. EN: Stores a confirmed or unresolved Confluence-group mapping. */
+    /**
+     * EN: Stores a confirmed or unresolved Confluence-group mapping.
+     *
+     * HR: Sprema potvrđeno ili neriješeno mapiranje Confluence grupe.
+     */
     public function mapGroup(string $sourceName, ?int $targetGroupId, bool $confirmed, int $jobId): void
     {
         $sourceName = trim($sourceName);
@@ -586,7 +640,11 @@ final readonly class ConfluenceImportRepository
         ]);
     }
 
-    /** HR: Vraća prethodno potvrđeno mapiranje ciljne grupe. EN: Returns a previously confirmed target-group mapping. */
+    /**
+     * EN: Returns a previously confirmed target-group mapping.
+     *
+     * HR: Vraća prethodno potvrđeno mapiranje ciljne grupe.
+     */
     public function mappedGroupId(string $sourceName): ?int
     {
         $sourceName = trim($sourceName);
@@ -605,8 +663,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Sprema vezu izvorne stranice i ciljnog čvora.
      * EN: Stores the mapping between a source page and target node.
+     *
+     * HR: Sprema vezu izvorne stranice i ciljnog čvora.
      *
      * @param array<string,mixed> $page
      * @param array<string,mixed> $target
@@ -653,8 +712,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Traži uvezenu stranicu po ključu područja i izvornom ID-u.
      * EN: Finds an imported page by space key and source ID.
+     *
+     * HR: Traži uvezenu stranicu po ključu područja i izvornom ID-u.
      *
      * @return array<string,mixed>|null
      */
@@ -671,10 +731,11 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Pronalazi ciljni dokument i kada spremljena poveznica pokazuje na
-     *     ID konkretne povijesne verzije umjesto logičkog ID-a stranice.
      * EN: Finds the target document even when a stored link points at a
      *     concrete historical-version ID instead of the logical page ID.
+     *
+     * HR: Pronalazi ciljni dokument i kada spremljena poveznica pokazuje na
+     *     ID konkretne povijesne verzije umjesto logičkog ID-a stranice.
      *
      * @return array<string,mixed>|null
      */
@@ -697,8 +758,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Razrješava korijensku poveznicu područja u njegovu uvezenu naslovnicu.
      * EN: Resolves a Workspace-root reference to its imported homepage.
+     *
+     * HR: Razrješava korijensku poveznicu područja u njegovu uvezenu naslovnicu.
      *
      * @return array<string,mixed>|null
      */
@@ -730,8 +792,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Vraća najnovije mapiranje stranice iz točno određenog importa.
      * EN: Returns the newest page mapping from one exact import.
+     *
+     * HR: Vraća najnovije mapiranje stranice iz točno određenog importa.
      *
      * @return array<string,mixed>|null
      */
@@ -752,8 +815,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Ažurira samo trajni izvještaj već dovršenog importa.
      * EN: Updates only the durable report of an already completed import.
+     *
+     * HR: Ažurira samo trajni izvještaj već dovršenog importa.
      *
      * @param array<string,mixed> $summary
      */
@@ -773,8 +837,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Razrješava pageId URL kada izvorni URL ne sadrži ključ područja.
      * EN: Resolves a pageId URL when the source URL does not contain a space key.
+     *
+     * HR: Razrješava pageId URL kada izvorni URL ne sadrži ključ područja.
      *
      * @return array<string,mixed>|null
      */
@@ -795,8 +860,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Traži uvezenu stranicu po izvornom naslovu.
      * EN: Finds an imported page by its source title.
+     *
+     * HR: Traži uvezenu stranicu po izvornom naslovu.
      *
      * @return array<string,mixed>|null
      */
@@ -813,10 +879,11 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Čuva javne slugove stranica prije zamjenskog importa kako bi stare
-     *     međupodručne poveznice nastavile voditi na isti URL.
      * EN: Preserves public page slugs before a replacement import so existing
      *     cross-Workspace links keep pointing at the same URL.
+     *
+     * HR: Čuva javne slugove stranica prije zamjenskog importa kako bi stare
+     *     međupodručne poveznice nastavile voditi na isti URL.
      *
      * @return array<string,string>
      */
@@ -848,8 +915,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Vraća izvorno mapiranje ciljnog područja.
      * EN: Returns the source mapping for a target Workspace.
+     *
+     * HR: Vraća izvorno mapiranje ciljnog područja.
      *
      * @return array<string,mixed>|null
      */
@@ -867,8 +935,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Sprema neriješenu ili riješenu izvornu poveznicu.
      * EN: Stores an unresolved or resolved source link.
+     *
+     * HR: Sprema neriješenu ili riješenu izvornu poveznicu.
      *
      * @param array<string,mixed> $link
      */
@@ -881,17 +950,22 @@ final readonly class ConfluenceImportRepository
         return $uuid;
     }
 
-    /** HR: Generira identitet poveznice prije skupnog spremanja. EN: Generates a link identity before bulk persistence. */
+    /**
+     * EN: Generates a link identity before bulk persistence.
+     *
+     * HR: Generira identitet poveznice prije skupnog spremanja.
+     */
     public function newLinkUuid(): string
     {
         return $this->uuid();
     }
 
     /**
-     * HR: Sprema više poveznica u ograničenim skupinama kako stranice s mnogo
-     *     poveznica ne bi pokretale jedan SQL upit za svaku poveznicu.
      * EN: Stores multiple links in bounded batches so link-heavy pages do not
      *     execute one SQL statement per link.
+     *
+     * HR: Sprema više poveznica u ograničenim skupinama kako stranice s mnogo
+     *     poveznica ne bi pokretale jedan SQL upit za svaku poveznicu.
      *
      * @param list<array<string,mixed>> $links
      */
@@ -927,8 +1001,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Dohvaća spremljenu poveznicu po UUID-u.
      * EN: Fetches a stored link by UUID.
+     *
+     * HR: Dohvaća spremljenu poveznicu po UUID-u.
      *
      * @return array<string,mixed>
      */
@@ -945,8 +1020,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Vraća neriješene poveznice i sve poveznice prema upravo promijenjenom području.
      * EN: Returns unresolved links plus every link to the Workspace that just changed.
+     *
+     * HR: Vraća neriješene poveznice i sve poveznice prema upravo promijenjenom području.
      *
      * @return list<array<string,mixed>>
      */
@@ -978,10 +1054,11 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Čita sljedeći ograničeni skup veza po ID-u; promjena statusa već
-     *     obrađenih veza ne smije pomaknuti stranicu rezultata.
      * EN: Reads the next bounded link batch by ID; changing processed link
      *     statuses must not shift the following result page.
+     *
+     * HR: Čita sljedeći ograničeni skup veza po ID-u; promjena statusa već
+     *     obrađenih veza ne smije pomaknuti stranicu rezultata.
      *
      * @return list<array<string,mixed>>
      */
@@ -1009,7 +1086,11 @@ final readonly class ConfluenceImportRepository
         return $result;
     }
 
-    /** HR: Broji veze za prikaz završnog napretka. EN: Counts links for finalization progress. */
+    /**
+     * EN: Counts links for finalization progress.
+     *
+     * HR: Broji veze za prikaz završnog napretka.
+     */
     public function countLinksForReconciliation(string $destinationSpaceKey): int
     {
         $destinationSpaceKey = trim($destinationSpaceKey);
@@ -1028,8 +1109,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Vraća samo trenutačno nerazriješene poveznice jednog izvještaja.
      * EN: Returns only the currently unresolved links for one report.
+     *
+     * HR: Vraća samo trenutačno nerazriješene poveznice jednog izvještaja.
      *
      * @return list<array<string,mixed>>
      */
@@ -1056,7 +1138,11 @@ final readonly class ConfluenceImportRepository
         return $result;
     }
 
-    /** HR: Sprema aktualno razrješenje poveznice ili je ponovno označava neriješenom. EN: Stores the current link resolution or marks it unresolved again. */
+    /**
+     * EN: Stores the current link resolution or marks it unresolved again.
+     *
+     * HR: Sprema aktualno razrješenje poveznice ili je ponovno označava neriješenom.
+     */
     public function updateLinkResolution(int $linkId, ?string $target): void
     {
         $target = trim((string)$target);
@@ -1070,10 +1156,11 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Jednim SQL upitom sprema mali skup razrješenja, bez tisuća
-     *     pojedinačnih UPDATE upita tijekom velikog importa.
      * EN: Persists a small set of resolutions in one SQL statement instead
      *     of thousands of individual UPDATE statements during a large import.
+     *
+     * HR: Jednim SQL upitom sprema mali skup razrješenja, bez tisuća
+     *     pojedinačnih UPDATE upita tijekom velikog importa.
      *
      * @param array<int,?string> $targetsById
      */
@@ -1114,8 +1201,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Trajno izuzima ručno korigirane poveznice iz izvještaja i budućih automatskih usklađivanja.
      * EN: Permanently excludes manually corrected links from reports and future automatic reconciliation.
+     *
+     * HR: Trajno izuzima ručno korigirane poveznice iz izvještaja i budućih automatskih usklađivanja.
      *
      * @param list<string> $uuids
      */
@@ -1140,8 +1228,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Označava jedno upozorenje nepodržanog makroa ručno korigiranim u trajnom izvještaju.
      * EN: Marks one unsupported-macro warning as manually corrected in the durable report.
+     *
+     * HR: Označava jedno upozorenje nepodržanog makroa ručno korigiranim u trajnom izvještaju.
      */
     public function markReviewIssueManuallyResolved(
         int $jobId,
@@ -1198,10 +1287,11 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Čuva UUID-e Editor privitaka prije zamjenskog importa kako bi svi
-     *     postojeći linkovi na njih ostali valjani.
      * EN: Preserves Editor attachment UUIDs before a replacement import so all
      *     existing links to them remain valid.
+     *
+     * HR: Čuva UUID-e Editor privitaka prije zamjenskog importa kako bi svi
+     *     postojeći linkovi na njih ostali valjani.
      *
      * @return array<string,string>
      */
@@ -1232,8 +1322,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Sprema metapodatke privatnog uvezenog privitka.
      * EN: Stores metadata for a private imported attachment.
+     *
+     * HR: Sprema metapodatke privatnog uvezenog privitka.
      *
      * @param array<string,mixed> $attachment
      * @return array<string,mixed>
@@ -1289,10 +1380,11 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Vraća već spremljenu verziju privitka kako ponovljeni import ne bi
-     *     duplicirao veliku binarnu datoteku.
      * EN: Returns an already stored attachment version so a retried import does
      *     not duplicate a large binary file.
+     *
+     * HR: Vraća već spremljenu verziju privitka kako ponovljeni import ne bi
+     *     duplicirao veliku binarnu datoteku.
      *
      * @return array<string,mixed>|null
      */
@@ -1308,8 +1400,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Dohvaća dostupni privatni privitak po UUID-u.
      * EN: Fetches an available private attachment by UUID.
+     *
+     * HR: Dohvaća dostupni privatni privitak po UUID-u.
      *
      * @return array<string,mixed>
      */
@@ -1326,7 +1419,11 @@ final readonly class ConfluenceImportRepository
         return $this->normalizeRow($row);
     }
 
-    /** HR: Nakon izrade čvora veže ranije spremljene privatne privitke uz stvarni ACL cilj. EN: After node creation, binds staged private attachments to the real ACL target. */
+    /**
+     * EN: After node creation, binds staged private attachments to the real ACL target.
+     *
+     * HR: Nakon izrade čvora veže ranije spremljene privatne privitke uz stvarni ACL cilj.
+     */
     public function attachImportedAttachmentsToPage(
         string $sourcePageId,
         int $workspaceId,
@@ -1348,8 +1445,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Vraća privremeno spremljene privitke jedne ciljne stranice.
      * EN: Returns staged attachments for one target page.
+     *
+     * HR: Vraća privremeno spremljene privitke jedne ciljne stranice.
      *
      * @return list<array<string,mixed>>
      */
@@ -1376,8 +1474,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Jednim upitom vraća spremljene i već registrirane privitke svih izvornih verzija stranice.
      * EN: Fetches stored and already registered attachments for all source-page versions in one query.
+     *
+     * HR: Jednim upitom vraća spremljene i već registrirane privitke svih izvornih verzija stranice.
      *
      * @param list<string> $sourcePageIds
      * @return list<array<string,mixed>>
@@ -1411,8 +1510,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Čita ishode privitaka bez promjene starog izvještaja ili uvezenog sadržaja.
      * EN: Reads attachment outcomes without modifying an old report or imported content.
+     *
+     * HR: Čita ishode privitaka bez promjene starog izvještaja ili uvezenog sadržaja.
      *
      * @return array<string,mixed>
      */
@@ -1428,8 +1528,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Nakon sigurnog prijenosa predaje vlasništvo nad datotekom Editor modulu.
      * EN: Transfers file ownership to the Editor module after safe registration.
+     *
+     * HR: Nakon sigurnog prijenosa predaje vlasništvo nad datotekom Editor modulu.
      */
     public function markAttachmentRegistered(int $attachmentId, int $nodeId, string $documentKey): void
     {
@@ -1450,8 +1551,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Nakon uspješnog kopiranja jednim skupnim upisom predaje više privitaka Editoru.
      * EN: Hands several successfully copied attachments to Editor with one batched update.
+     *
+     * HR: Nakon uspješnog kopiranja jednim skupnim upisom predaje više privitaka Editoru.
      *
      * @param list<int> $attachmentIds
      */
@@ -1480,16 +1582,18 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Vraća ograničeni popis najnovijih poslova.
      * EN: Returns a bounded list of recent jobs.
+     *
+     * HR: Vraća ograničeni popis najnovijih poslova.
      *
      * @return list<array<string,mixed>>
      */
     public function recentJobs(int $limit = 100): array
     {
         $rows = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
-            // HR: Popis ne treba preflight JSON; velik posao može imati desetke MB.
             // EN: The list never needs preflight JSON, which can span tens of MB.
+            //
+            // HR: Popis ne treba preflight JSON; velik posao može imati desetke MB.
             ->select(['id', 'uuid', 'original_name', 'source_space_name', 'source_space_key',
                 'status', 'stage', 'archive_size', 'next_offset', 'chunk_size', 'created_at',
                 'error_message', 'actor_user_id', 'workspace_id', 'options_json'])
@@ -1507,8 +1611,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Dohvaća interni zapis privitka po brojčanom ID-u.
      * EN: Fetches an internal attachment record by numeric ID.
+     *
+     * HR: Dohvaća interni zapis privitka po brojčanom ID-u.
      *
      * @return array<string,mixed>
      */
@@ -1524,7 +1629,11 @@ final readonly class ConfluenceImportRepository
         return $this->normalizeRow($row);
     }
 
-    /** HR: Zahtijeva instaliranu cjelovitu shemu modula. EN: Requires the module's complete schema to be installed. */
+    /**
+     * EN: Requires the module's complete schema to be installed.
+     *
+     * HR: Zahtijeva instaliranu cjelovitu shemu modula.
+     */
     private function assertReady(): void
     {
         if (!$this->tablesReady()) {
@@ -1533,8 +1642,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Čuva samo string ključeve i dekodira poznata JSON polja.
      * EN: Keeps string keys only and decodes known JSON fields.
+     *
+     * HR: Čuva samo string ključeve i dekodira poznata JSON polja.
      *
      * @param array<mixed,mixed> $row
      * @return array<string,mixed>
@@ -1561,8 +1671,9 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * HR: Kodira prenosivi JSON uz očuvanje Unicodea.
      * EN: Encodes portable JSON while preserving Unicode.
+     *
+     * HR: Kodira prenosivi JSON uz očuvanje Unicodea.
      *
      * @param array<string,mixed> $value
      */
@@ -1574,13 +1685,21 @@ final readonly class ConfluenceImportRepository
         );
     }
 
-    /** HR: Normalizira obaveznu tekstualnu vrijednost. EN: Normalizes a required text value. */
+    /**
+     * EN: Normalizes a required text value.
+     *
+     * HR: Normalizira obaveznu tekstualnu vrijednost.
+     */
     private function string(mixed $value): string
     {
         return is_scalar($value) ? trim((string)$value) : '';
     }
 
-    /** HR: Normalizira prazni tekst u null. EN: Normalizes empty text to null. */
+    /**
+     * EN: Normalizes empty text to null.
+     *
+     * HR: Normalizira prazni tekst u null.
+     */
     private function nullableString(mixed $value): ?string
     {
         $value = $this->string($value);
@@ -1588,13 +1707,21 @@ final readonly class ConfluenceImportRepository
         return $value !== '' ? $value : null;
     }
 
-    /** HR: Normalizira cjelobrojnu vrijednost. EN: Normalizes an integer value. */
+    /**
+     * EN: Normalizes an integer value.
+     *
+     * HR: Normalizira cjelobrojnu vrijednost.
+     */
     private function integer(mixed $value): int
     {
         return is_numeric($value) ? (int)$value : 0;
     }
 
-    /** HR: Zadržava samo pozitivan ID. EN: Keeps only a positive ID. */
+    /**
+     * EN: Keeps only a positive ID.
+     *
+     * HR: Zadržava samo pozitivan ID.
+     */
     private function positiveOrNull(mixed $value): ?int
     {
         $value = $this->integer($value);
@@ -1602,7 +1729,11 @@ final readonly class ConfluenceImportRepository
         return $value > 0 ? $value : null;
     }
 
-    /** HR: Generira nasumični UUIDv4 bez vanjske biblioteke. EN: Generates a random UUIDv4 without an external library. */
+    /**
+     * EN: Generates a random UUIDv4 without an external library.
+     *
+     * HR: Generira nasumični UUIDv4 bez vanjske biblioteke.
+     */
     private function uuid(): string
     {
         $bytes = random_bytes(16);

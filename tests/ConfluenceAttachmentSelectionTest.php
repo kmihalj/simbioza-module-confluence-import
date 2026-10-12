@@ -9,7 +9,11 @@ use PHPUnit\Framework\TestCase;
 
 final class ConfluenceAttachmentSelectionTest extends TestCase
 {
-    /** HR: Zadani import prenosi samo aktualne privitke; povijest zahtijeva odabir. EN: Default imports transfer only current attachments; history requires an explicit choice. */
+    /**
+     * EN: Default imports transfer only current attachments; history requires an explicit choice.
+     *
+     * HR: Zadani import prenosi samo aktualne privitke; povijest zahtijeva odabir.
+     */
     public function testHistoryRequiresExplicitSelection(): void
     {
         $records = [

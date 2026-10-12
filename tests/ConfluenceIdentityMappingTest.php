@@ -17,8 +17,9 @@ use PHPUnit\Framework\TestCase;
 final class ConfluenceIdentityMappingTest extends TestCase
 {
     /**
-     * HR: Ponovljeni space import ne smije poništiti niti preusmjeriti potvrđeni račun.
      * EN: A repeated space import must not clear or redirect a confirmed account.
+     *
+     * HR: Ponovljeni space import ne smije poništiti niti preusmjeriti potvrđeni račun.
      */
     public function testConfirmedMappingIsReusedAcrossImports(): void
     {
@@ -37,7 +38,11 @@ final class ConfluenceIdentityMappingTest extends TestCase
         $repository->mapIdentity($user, 8, true, 2);
     }
 
-    /** HR: Jednako pravilo vrijedi za potvrđeno mapiranje grupe. EN: The same rule applies to a confirmed group mapping. */
+    /**
+     * EN: The same rule applies to a confirmed group mapping.
+     *
+     * HR: Jednako pravilo vrijedi za potvrđeno mapiranje grupe.
+     */
     public function testConfirmedGroupMappingIsReusedAcrossImports(): void
     {
         [$repository, $database] = $this->environment();

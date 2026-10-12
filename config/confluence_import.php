@@ -3,8 +3,9 @@
 declare(strict_types=1);
 
 return [
-    // HR: Veliki exporti dolaze u dijelovima; ograničenja sprječavaju ZIP bombe.
     // EN: Large exports arrive in chunks; limits protect against ZIP bombs.
+    //
+    // HR: Veliki exporti dolaze u dijelovima; ograničenja sprječavaju ZIP bombe.
     'data_path' => 'confluence-import',
     'max_archive_size' => 8 * 1024 * 1024 * 1024,
     'chunk_size' => 8 * 1024 * 1024,
@@ -13,15 +14,18 @@ return [
     'max_uncompressed_size' => 16 * 1024 * 1024 * 1024,
     'max_entry_size' => 4 * 1024 * 1024 * 1024,
     'max_compression_ratio' => 250,
-    // HR: Stvarni import velikog područja smije trajati do 15 minuta.
     // EN: A real large-Workspace import may run for up to 15 minutes.
+    //
+    // HR: Stvarni import velikog područja smije trajati do 15 minuta.
     'import_execution_time_limit' => 900,
-    // HR: Veliki manifesti traže više memorije samo tijekom administratorskog importa.
     // EN: Large manifests need more memory only during administrator import steps.
+    //
+    // HR: Veliki manifesti traže više memorije samo tijekom administratorskog importa.
     'import_memory_limit_mb' => 512,
     'default_language' => 'hr',
-    // HR: Samo početna vrijednost administratorskog odabira po importu.
     // EN: Only the initial value of the administrator's per-import choice.
+    //
+    // HR: Samo početna vrijednost administratorskog odabira po importu.
     'source_base_url' => '',
     'attachment_policy' => 'download_only',
 ];

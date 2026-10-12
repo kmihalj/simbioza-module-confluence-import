@@ -1,6 +1,6 @@
 # Pretvorba sadržaja i poveznice
 
-English version: [content-links_en.md](content-links_en.md)
+Engleska verzija: [content-links_en.md](content-links_en.md)
 
 ## Pristupačnost mapiranja
 

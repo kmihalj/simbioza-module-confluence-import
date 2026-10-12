@@ -8,6 +8,7 @@ use AaiEduHr\HeartPhrameModuleOrm\Database\LocaleSorter;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Support\Utf8Url;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorHtmlChartService;
 use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorHtmlRoadmapService;
+use AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorExternalScripts;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Value\ConvertedConfluenceBody;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Value\ConfluenceMacroContext;
 use DOMDocument;
@@ -81,8 +82,9 @@ use const PHP_URL_HOST;
 use const PHP_URL_SCHEME;
 
 /**
- * HR: Pretvara Confluence storage-format u siguran, razumljiv HTML uz očuvanje neriješenih referenci.
  * EN: Converts Confluence storage format into safe, understandable HTML while preserving unresolved references.
+ *
+ * HR: Pretvara Confluence storage-format u siguran, razumljiv HTML uz očuvanje neriješenih referenci.
  */
 final readonly class ConfluenceHtmlConverter
 {
@@ -95,8 +97,9 @@ final readonly class ConfluenceHtmlConverter
     private const ATTACHMENT_PREFIX = '__SIMBIOZA_CONFLUENCE_ATTACHMENT__';
 
     /**
-     * HR: Prima nativne Editor renderere grafikona i vremenskog plana.
      * EN: Receives the native Editor chart and timeline-roadmap renderers.
+     *
+     * HR: Prima nativne Editor renderere grafikona i vremenskog plana.
      */
     public function __construct(
         private ?EditorHtmlChartService $charts = null,
@@ -105,8 +108,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Pretvara jedan BodyContent i vraća HTML te strojno čitljive reference.
      * EN: Converts one BodyContent and returns HTML plus machine-readable references.
+     *
+     * HR: Pretvara jedan BodyContent i vraća HTML te strojno čitljive reference.
      */
     public function convert(
         string $storageFormat,
@@ -197,10 +201,11 @@ final readonly class ConfluenceHtmlConverter
             if ($alternative === '') {
                 $alternative = $title;
             }
-            // HR: Naziv datoteke nije zamjenski opis slike. Prazan alt čuva
-            //     dekorativnu sliku bez stvaranja lažnog vidljivog captiona u Editoru.
             // EN: A filename is not fallback alternative text. An empty alt keeps
             //     decorative images from acquiring a fake visible caption in Editor.
+            //
+            // HR: Naziv datoteke nije zamjenski opis slike. Prazan alt čuva
+            //     dekorativnu sliku bez stvaranja lažnog vidljivog captiona u Editoru.
             $replacement->setAttribute('alt', $alternative);
             $classes = ['img-fluid'];
             $alignment = strtolower($this->attribute($image, self::AC_NAMESPACE, 'align'));
@@ -217,10 +222,11 @@ final readonly class ConfluenceHtmlConverter
                     $dimensions[$dimension] = $value;
                 }
             }
-            // HR: img-fluid poništava HTML visinu. Ograničenje visine čuva
-            //     izvorni prikaz kada Confluence ne navodi širinu slike.
             // EN: img-fluid overrides HTML height. A height constraint preserves
             //     the source presentation when Confluence omits image width.
+            //
+            // HR: img-fluid poništava HTML visinu. Ograničenje visine čuva
+            //     izvorni prikaz kada Confluence ne navodi širinu slike.
             if (isset($dimensions['width'])) {
                 $replacement->setAttribute('style', 'width:' . $dimensions['width'] . 'px;max-width:100%;height:auto');
             } elseif (isset($dimensions['height'])) {
@@ -234,12 +240,13 @@ final readonly class ConfluenceHtmlConverter
             }
             $parent->replaceChild($replacement, $image);
             if ($title !== '') {
-                // HR: Confluence ac:title je vidljivi opis ispod slike, dok je
-                //     ac:alt pristupačni tekst. Caption ostaje odvojen kako bi
-                //     ga Editor pri prvom uređivanju vezao uz svoj media wrapper.
                 // EN: Confluence ac:title is the visible image caption, while
                 //     ac:alt is accessibility text. Keeping the caption adjacent
                 //     lets Editor attach it to its media wrapper on first edit.
+                //
+                // HR: Confluence ac:title je vidljivi opis ispod slike, dok je
+                //     ac:alt pristupačni tekst. Caption ostaje odvojen kako bi
+                //     ga Editor pri prvom uređivanju vezao uz svoj media wrapper.
                 $caption = $document->createElement('span');
                 $caption->setAttribute('class', 'figure-caption d-block text-center');
                 $caption->appendChild($document->createTextNode($title));
@@ -248,10 +255,11 @@ final readonly class ConfluenceHtmlConverter
         }
 
         foreach ($this->elements($xpath->query('//ac:link')) as $link) {
-            // HR: Include makro sam preuzima svoju ri:page referencu. Kada bi
-            //     je generički link-konverter prvi zamijenio, cilj bi se izgubio.
             // EN: The include macro owns its ri:page reference. Converting that
             //     nested link first would discard the include target.
+            //
+            // HR: Include makro sam preuzima svoju ri:page referencu. Kada bi
+            //     je generički link-konverter prvi zamijenio, cilj bi se izgubio.
             if ($this->isInsideMacro($link, 'include')) {
                 continue;
             }
@@ -262,12 +270,13 @@ final readonly class ConfluenceHtmlConverter
             $user = $this->firstElement($xpath->query('.//ri:user', $link));
 
             if ($user instanceof DOMElement) {
-                // HR: Confluence korisničke reference nemaju vidljiv tekst. Uvoz
-                //     zato koristi mapirano ime, a za nemapirane identitete
-                //     prikaz administratora koji je pokrenuo import.
                 // EN: Confluence user references have no visible text. The import
                 //     therefore uses the mapped name, falling back to the
                 //     administrator who started the import.
+                //
+                // HR: Confluence korisničke reference nemaju vidljiv tekst. Uvoz
+                //     zato koristi mapirano ime, a za nemapirane identitete
+                //     prikaz administratora koji je pokrenuo import.
                 $identity = $this->confluenceUserIdentity($user);
                 $label = $macroContext instanceof ConfluenceMacroContext
                     ? ($macroContext->users[$identity] ?? $macroContext->fallbackUser)
@@ -320,13 +329,15 @@ final readonly class ConfluenceHtmlConverter
             );
         }
 
-        // HR: Unutarnji makroi moraju biti pretvoreni prije roditeljskih panela i rasporeda,
-        //     dok makroi na istoj razini zadržavaju izvorni redoslijed.
         // EN: Nested macros must be converted before their parent panels and layouts,
         //     while same-level macros retain their source order.
+        //
+        // HR: Unutarnji makroi moraju biti pretvoreni prije roditeljskih panela i rasporeda,
+        //     dok makroi na istoj razini zadržavaju izvorni redoslijed.
         $macros = $this->elements($xpath->query('//ac:structured-macro'));
-        // HR: Položaje snimamo prije zamjena; uklanjanje susjeda mijenja njihov XPath.
         // EN: Snapshot positions before replacement; removing siblings changes their XPath.
+        //
+        // HR: Položaje snimamo prije zamjena; uklanjanje susjeda mijenja njihov XPath.
         $sourceMacroPaths = [];
         foreach ($macros as $macro) {
             $sourceMacroPaths[spl_object_id($macro)] = $macro->getNodePath() ?? '';
@@ -357,18 +368,27 @@ final readonly class ConfluenceHtmlConverter
             $macro->parentNode?->replaceChild($replacement, $macro);
         }
 
-        // HR: Uzastopni Confluence Expand makroi tvore jednu accordion grupu;
-        //     drugi sadržaj između njih namjerno prekida grupu.
         // EN: Consecutive Confluence Expand macros form one accordion group;
         //     other content between them intentionally starts a new group.
+        //
+        // HR: Uzastopni Confluence Expand makroi tvore jednu accordion grupu;
+        //     drugi sadržaj između njih namjerno prekida grupu.
         $this->mergeAdjacentAccordions($xpath);
 
-        // HR: Confluence rasporedi nisu standardni HTML elementi. Nakon obrade
-        // makroa pretvaraju se u Bootstrap retke i stupce kako bi dvostupčane i
-        // trostupčane stranice ostale čitljive i prilagodljive manjim ekranima.
+        // EN: HTML macros can introduce empty time elements only during conversion.
+        // Materialize their safe text as well, before the Editor strips unsupported tags.
+        //
+        // HR: HTML makroi mogu tek tijekom pretvorbe dodati prazne time elemente.
+        // I njihov siguran tekst materijaliziramo prije Editorova uklanjanja nepodržanih oznaka.
+        $this->materializeDates($xpath);
+
         // EN: Confluence layouts are not standard HTML elements. After macro
         // conversion they become Bootstrap rows and columns so two- and
         // three-column pages remain readable and responsive.
+        //
+        // HR: Confluence rasporedi nisu standardni HTML elementi. Nakon obrade
+        // makroa pretvaraju se u Bootstrap retke i stupce kako bi dvostupčane i
+        // trostupčane stranice ostale čitljive i prilagodljive manjim ekranima.
         foreach ($this->elements($xpath->query('//ac:layout')) as $layout) {
             $layout->parentNode?->replaceChild(
                 $this->layoutReplacement($document, $xpath, $layout),
@@ -381,24 +401,26 @@ final readonly class ConfluenceHtmlConverter
             $emoticon->parentNode?->replaceChild($document->createTextNode($this->emoticon($name)), $emoticon);
         }
 
-        // HR: Sve preostale obične i iz makroa materijalizirane tablice koriste
-        //     isti HTML ugovor kao tablice izrađene u Editoru. Time Theme modul
-        //     upravlja zaglavljem, redcima, obrubima i hover stanjem, a široke
-        //     tablice ostaju unutar sadržaja uz vodoravno pomicanje.
         // EN: Every remaining ordinary or macro-materialized table uses the
         //     same HTML contract as Editor-created tables. This lets the Theme
         //     module control headers, rows, borders, and hover state while wide
         //     tables stay inside the content area with horizontal scrolling.
+        //
+        // HR: Sve preostale obične i iz makroa materijalizirane tablice koriste
+        //     isti HTML ugovor kao tablice izrađene u Editoru. Time Theme modul
+        //     upravlja zaglavljem, redcima, obrubima i hover stanjem, a široke
+        //     tablice ostaju unutar sadržaja uz vodoravno pomicanje.
         $this->normalizeTables($document, $document->documentElement);
 
-        // HR: Obične poveznice obrađujemo tek kada su svi makroi pretvoreni.
-        //     HTML makro, tablica ili gumb mogu tek tijekom pretvorbe proizvesti
-        //     završni <a href>, pa bi ih raniji prolaz propustio. Svaki još
-        //     nerazriješeni Confluence URL bilježimo za trajni izvještaj.
         // EN: Plain links are processed only after every macro has been
         //     converted. An HTML macro, table, or button may materialize its
         //     final <a href> only during conversion, so an earlier pass would
         //     miss it. Every remaining Confluence URL is recorded for reporting.
+        //
+        // HR: Obične poveznice obrađujemo tek kada su svi makroi pretvoreni.
+        //     HTML makro, tablica ili gumb mogu tek tijekom pretvorbe proizvesti
+        //     završni <a href>, pa bi ih raniji prolaz propustio. Svaki još
+        //     nerazriješeni Confluence URL bilježimo za trajni izvještaj.
         foreach ($this->elements($xpath->query('//a[@href]')) as $anchor) {
             $href = trim($anchor->getAttribute('href'));
             if (
@@ -443,6 +465,18 @@ final readonly class ConfluenceHtmlConverter
             $image->setAttribute('class', trim($image->getAttribute('class') . ' img-fluid'));
         }
 
+        // EN: Literal scripts outside HTML macros follow exactly the same quarantine.
+        //
+        // HR: Doslovne skripte izvan HTML makroa prolaze istu karantenu.
+        foreach ($this->elements($document->getElementsByTagName('script')) as $script) {
+            [, $ids] = $this->extractExternalScripts((string)$document->saveHTML($script), $reviewIssues);
+            $replacement = $document->createElement('span');
+            if ($ids !== []) {
+                $replacement->setAttribute(EditorExternalScripts::CANDIDATE_ATTRIBUTE, $ids[0]);
+            }
+            $script->parentNode?->replaceChild($replacement, $script);
+        }
+
         return new ConvertedConfluenceBody(
             $this->innerHtml($document, $document->documentElement),
             $links,
@@ -456,8 +490,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Izdvaja zadatke aktualne stranice za nativni Confluence izvještaj zadataka.
      * EN: Extracts current-page tasks for a native Confluence task report.
+     *
+     * HR: Izdvaja zadatke aktualne stranice za nativni Confluence izvještaj zadataka.
      *
      * @return list<array{id:string,native_uuid:string,text:string,complete:bool,due_date:string,assignee:string}>
      */
@@ -524,16 +559,17 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Ispravlja poznate Confluence XML-export zapise koji nisu valjani XML fragmenti.
-     *     Atlassianov izvoz razdvaja CDATA završetak kao `]] >`, a sadržaj koda
-     *     može sadržavati i doslovni CDATA početak. Plain-text tijelo zato se
-     *     najprije pretvara u običan escapirani XML tekst. HTML imenovani
-     *     entiteti osim pet XML entiteta također nisu definirani u XML-u.
      * EN: Repairs known Confluence XML-export forms that are not valid XML
      *     fragments. Atlassian exports split a CDATA terminator as `]] >`, and
      *     code may contain a literal CDATA opener. Each plain-text body is first
      *     converted to ordinary escaped XML text. HTML named entities other
      *     than the five XML entities are also undefined in XML.
+     *
+     * HR: Ispravlja poznate Confluence XML-export zapise koji nisu valjani XML fragmenti.
+     *     Atlassianov izvoz razdvaja CDATA završetak kao `]] >`, a sadržaj koda
+     *     može sadržavati i doslovni CDATA početak. Plain-text tijelo zato se
+     *     najprije pretvara u običan escapirani XML tekst. HTML imenovani
+     *     entiteti osim pet XML entiteta također nisu definirani u XML-u.
      */
     private function normalizeStorageFormat(string $storageFormat): string
     {
@@ -574,8 +610,9 @@ final readonly class ConfluenceHtmlConverter
 
                 $decoded = html_entity_decode($match[0], ENT_QUOTES | ENT_HTML5 | ENT_SUBSTITUTE, 'UTF-8');
 
-                // HR: Nepoznati entitet ostaje vidljiv kao tekst, ali više ne kvari XML.
                 // EN: An unknown entity remains visible as text without breaking XML.
+                //
+                // HR: Nepoznati entitet ostaje vidljiv kao tekst, ali više ne kvari XML.
                 return $decoded !== $match[0] ? $decoded : '&amp;' . $match[1] . ';';
             },
             $normalized,
@@ -583,8 +620,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Pretvara podržani makro u siguran statički HTML element.
      * EN: Converts a supported macro into a safe static HTML element.
+     *
+     * HR: Pretvara podržani makro u siguran statički HTML element.
      *
      * @param list<string> $unsupported
      * @param list<array<string,mixed>> $reviewIssues
@@ -703,10 +741,11 @@ final readonly class ConfluenceHtmlConverter
         }
 
         if ($name === 'column') {
-            // HR: Column makro postaje prilagodljiv Bootstrap stupac s karticom.
-            //     Izvorna postotna širina zaokružuje se na mrežu od 12 stupaca.
             // EN: A column macro becomes a responsive Bootstrap column with a
             //     card. Its source percentage is rounded to the 12-column grid.
+            //
+            // HR: Column makro postaje prilagodljiv Bootstrap stupac s karticom.
+            //     Izvorna postotna širina zaokružuje se na mrežu od 12 stupaca.
             $column = $document->createElement('div');
             $siblingCount = $macro->parentNode instanceof DOMElement
                 ? count($this->elements($xpath->query(
@@ -734,10 +773,11 @@ final readonly class ConfluenceHtmlConverter
         }
 
         if ($name === 'section') {
-            // HR: Section je semantički raspored, a ne podatkovna tablica. Zato
-            //     omata uvezene Column kartice u prilagodljiv red.
             // EN: A section is a layout rather than a data table, so it wraps
             //     imported Column cards in a responsive row.
+            //
+            // HR: Section je semantički raspored, a ne podatkovna tablica. Zato
+            //     omata uvezene Column kartice u prilagodljiv red.
             $row = $document->createElement('div');
             $row->setAttribute('class', 'row g-3 mb-3');
             $this->appendRichBody($document, $row, $rich, $plain);
@@ -746,19 +786,25 @@ final readonly class ConfluenceHtmlConverter
         }
 
         if ($name === 'html') {
+            [$plain, $scriptIds] = $this->extractExternalScripts($plain, $reviewIssues);
             $embed = $this->iframeEmbedReplacement($document, $plain);
             if ($embed instanceof DOMNode) {
-                return $embed;
+                return $this->withScriptReferences($document, $embed, $scriptIds);
             }
 
             $buttonLink = $this->htmlButtonLinkReplacement($document, $plain);
             if ($buttonLink instanceof DOMNode) {
-                return $buttonLink;
+                return $this->withScriptReferences($document, $buttonLink, $scriptIds);
             }
 
             $table = $this->htmlTableReplacement($document, $plain, $sourcePageId . '|' . $sourceMacroPath);
             if ($table instanceof DOMNode) {
-                return $table;
+                return $this->withScriptReferences($document, $table, $scriptIds);
+            }
+            if ($scriptIds !== []) {
+                $box = $document->createElement('div');
+                $this->appendRichBody($document, $box, $rich, $plain);
+                return $this->withScriptReferences($document, $box, $scriptIds);
             }
         }
 
@@ -821,10 +867,11 @@ final readonly class ConfluenceHtmlConverter
                         'resolved' => false,
                     ];
                 }
-                // HR: I prazan eksplicitni popis sprječava pogrešan fallback
-                //     na trenutačno područje kada cilj još nije uvezen.
                 // EN: Even an empty explicit list prevents an incorrect
                 //     fallback to the current Workspace before the target is imported.
+                //
+                // HR: I prazan eksplicitni popis sprječava pogrešan fallback
+                //     na trenutačno područje kada cilj još nije uvezen.
                 $configuration['workspace_slugs'] = array_values(array_unique($workspaceSlugs));
             }
 
@@ -848,10 +895,11 @@ final readonly class ConfluenceHtmlConverter
                 $macro->getAttribute('data-simbioza-native-toc-panel') === '1'
                 && !$this->hasMeaningfulRichBody($rich)
             ) {
-                // HR: Panel koji je služio samo kao okvir Confluence sadržaja ne
-                //     smije ostati kao prazna kartica uz nativni sadržaj stranice.
                 // EN: A panel used solely as the Confluence TOC container must
                 //     not remain as an empty card beside the native page contents.
+                //
+                // HR: Panel koji je služio samo kao okvir Confluence sadržaja ne
+                //     smije ostati kao prazna kartica uz nativni sadržaj stranice.
                 return $document->createDocumentFragment();
             }
 
@@ -885,18 +933,20 @@ final readonly class ConfluenceHtmlConverter
         }
 
         if ($name === 'toc') {
-            // HR: Simbioza već gradi tablicu sadržaja iz naslova stranice pa
-            //     se Confluence TOC makro uklanja bez dupliciranja sadržaja.
             // EN: Simbioza already builds the page table of contents from its
             //     headings, so the Confluence TOC macro is removed without duplication.
+            //
+            // HR: Simbioza već gradi tablicu sadržaja iz naslova stranice pa
+            //     se Confluence TOC makro uklanja bez dupliciranja sadržaja.
             return $document->createDocumentFragment();
         }
 
         if ($name === 'create-from-template') {
-            // HR: Confluenceov gumb pokreće njegov uređivački tijek i nema
-            //     značenje u običnom uvezenom HTML dokumentu.
             // EN: The Confluence button starts its editor workflow and has
             //     no meaning in an ordinary imported HTML document.
+            //
+            // HR: Confluenceov gumb pokreće njegov uređivački tijek i nema
+            //     značenje u običnom uvezenom HTML dokumentu.
             return $document->createDocumentFragment();
         }
 
@@ -915,10 +965,11 @@ final readonly class ConfluenceHtmlConverter
         }
 
         if ($name === 'tableenhancer' && $rich instanceof DOMElement) {
-            // HR: Dodatak samo poboljšava ponašanje tablice u Confluenceu.
-            //     U izvozu je sama tablica potpuna pa je čuvamo kao prilagodljiv HTML.
             // EN: The add-on only enhances table behaviour in Confluence. The
             //     exported table itself is complete, so we retain responsive HTML.
+            //
+            // HR: Dodatak samo poboljšava ponašanje tablice u Confluenceu.
+            //     U izvozu je sama tablica potpuna pa je čuvamo kao prilagodljiv HTML.
             $wrapper = $document->createElement('div');
             $wrapper->setAttribute('class', 'table-responsive');
             $this->appendRichBody($document, $wrapper, $rich, $plain);
@@ -953,10 +1004,11 @@ final readonly class ConfluenceHtmlConverter
         }
 
         if ($name === 'view-file' && $context instanceof ConfluenceMacroContext) {
-            // HR: Preglednik uredskih datoteka ovisi o Confluence poslužitelju.
-            //     Lokalno čuvamo isti privitak i prikazujemo običnu poveznicu.
             // EN: The office-file viewer depends on the Confluence server. We
             //     retain the same local attachment and render a regular link.
+            //
+            // HR: Preglednik uredskih datoteka ovisi o Confluence poslužitelju.
+            //     Lokalno čuvamo isti privitak i prikazujemo običnu poveznicu.
             $filename = $this->macroAttachmentName($xpath, $macro);
             $url = $context->attachments[$filename] ?? '';
             if ($filename !== '' && $url !== '') {
@@ -995,8 +1047,9 @@ final readonly class ConfluenceHtmlConverter
                 return $chart;
             }
 
-            // HR: Neispravna tablica ostaje čitljiva i ulazi u izvještaj za ručnu provjeru.
             // EN: An invalid table remains readable and enters the report for manual review.
+            //
+            // HR: Neispravna tablica ostaje čitljiva i ulazi u izvještaj za ručnu provjeru.
             $unsupported[] = $name;
             $figure = $document->createElement('figure');
             $figure->setAttribute('class', 'figure w-100');
@@ -1017,10 +1070,11 @@ final readonly class ConfluenceHtmlConverter
                 return $roadmap;
             }
 
-            // HR: Neispravan ili nepotpun izvor ostaje u izvještaju umjesto da
-            //     se prikaže kao lažno uspješno pretvoren vremenski plan.
             // EN: Invalid or incomplete source data remains in the report
             //     instead of being presented as a successfully converted roadmap.
+            //
+            // HR: Neispravan ili nepotpun izvor ostaje u izvještaju umjesto da
+            //     se prikaže kao lažno uspješno pretvoren vremenski plan.
             $unsupported[] = $name;
         }
 
@@ -1066,12 +1120,13 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Pretvara siguran HTTPS iframe iz HTML makroa u kanonski Editor blok.
-     *     Skripte se nikada ne kopiraju u sadržaj; poznati H5P resizer pamti se
-     *     deklarativnom oznakom koju Editor učitava iz pouzdanog URL-a.
      * EN: Converts a safe HTTPS iframe from an HTML macro into the canonical
      *     Editor block. Scripts are never copied into content; the known H5P
      *     resizer is represented by a declarative marker loaded by the Editor.
+     *
+     * HR: Pretvara siguran HTTPS iframe iz HTML makroa u kanonski Editor blok.
+     *     Skripte se nikada ne kopiraju u sadržaj; poznati H5P resizer pamti se
+     *     deklarativnom oznakom koju Editor učitava iz pouzdanog URL-a.
      */
     private function iframeEmbedReplacement(DOMDocument $document, string $plain): ?DOMElement
     {
@@ -1107,21 +1162,6 @@ final readonly class ConfluenceHtmlConverter
             return null;
         }
 
-        $trustedH5pResizer = false;
-        foreach ($this->elements($source->getElementsByTagName('script')) as $script) {
-            $scriptSource = trim($script->getAttribute('src'));
-            if (
-                $scriptSource !== 'https://h5p.org/sites/all/modules/h5p/library/js/h5p-resizer.js'
-                || strtolower((string)parse_url($src, PHP_URL_HOST)) !== 'h5p.org'
-            ) {
-                // HR: Iframe uz nepoznati JavaScript ostaje u izvještaju za
-                //     ručnu provjeru umjesto da se skripta neprimjetno odbaci.
-                // EN: An iframe accompanied by unknown JavaScript remains in
-                //     the manual-review report instead of silently losing the script.
-                return null;
-            }
-            $trustedH5pResizer = true;
-        }
 
         $height = $this->iframeDimension($sourceIframe->getAttribute('height'), 450);
         $title = trim($sourceIframe->getAttribute('title'));
@@ -1134,9 +1174,6 @@ final readonly class ConfluenceHtmlConverter
         $figure = $document->createElement('figure');
         $figure->setAttribute('class', 'editor-html-iframe-embed w-100 mb-3');
         $figure->setAttribute('data-editor-html-iframe', '1');
-        if ($trustedH5pResizer) {
-            $figure->setAttribute('data-editor-html-h5p-resizer', '1');
-        }
 
         $iframe = $document->createElement('iframe');
         $iframe->setAttribute('src', $src);
@@ -1165,10 +1202,89 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Pretvara jedini sigurni HTML obrazac poveznice s gumbom u običnu
-     *     Bootstrap poveznicu. Izvorne klase, stilovi i događaji ne prenose se.
+     * EN: Removes every third-party script, including H5P, and records exact
+     *     classic-JavaScript definitions for explicit review. Invalid URLs/types
+     *     stay in the report without an executable reference. No network access.
+     *
+     * HR: Uklanja sve vanjske skripte, uključujući H5P, i bilježi točne definicije
+     *     klasičnog JavaScripta za izričitu provjeru. Nevaljani URL/tip ostaje
+     *     u izvještaju bez izvršive reference. Nema mrežnih zahtjeva.
+     *
+     * @param list<array<string,mixed>> $issues
+     * @return array{string,list<string>}
+     */
+    private function extractExternalScripts(string $html, array &$issues): array
+    {
+        if (preg_match('/<script\b/i', $html) !== 1) {
+            return [$html, []];
+        }
+        $source = new DOMDocument('1.0', 'UTF-8');
+        $previous = libxml_use_internal_errors(true);
+        try {
+            $source->loadHTML('<?xml encoding="UTF-8"><html><body><div>' . $html . '</div></body></html>', LIBXML_NONET);
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
+        $ids = [];
+        foreach ($this->elements($source->getElementsByTagName('script')) as $script) {
+            $url = trim($script->getAttribute('src'));
+            $value = $url !== '' ? $url : $script->textContent;
+            $scriptType = strtolower(trim($script->getAttribute('type')));
+            try {
+                if (!in_array($scriptType, ['', 'text/javascript', 'application/javascript'], true)) {
+                    throw new \RuntimeException('Only classic JavaScript is supported; review this script manually.');
+                }
+                $definition = EditorExternalScripts::definition([
+                    'name' => $url !== ''
+                        ? substr(parse_url($url, PHP_URL_HOST) . ' / '
+                            . basename((string)parse_url($url, PHP_URL_PATH)), 0, 160)
+                        : 'Imported inline script',
+                    'type' => $url !== '' ? 'url' : 'inline', 'value' => $value,
+                    'integrity' => trim($script->getAttribute('integrity')),
+                ]);
+                $ids[] = $definition['id'];
+                $issues[] = ['type' => 'external_script', 'macro' => 'html',
+                    'marker' => $definition['id'], 'script' => $definition];
+            } catch (\Throwable $error) {
+                $issues[] = ['type' => 'external_script', 'macro' => 'html',
+                    'marker' => 'blocked-' . hash('sha256', $value),
+                    'source' => $value, 'error' => $error->getMessage()];
+            }
+            $script->parentNode?->removeChild($script);
+        }
+        $root = $source->getElementsByTagName('div')->item(0);
+        return [$root instanceof DOMElement ? $this->innerHtml($source, $root) : '', array_values(array_unique($ids))];
+    }
+
+    /**
+     * EN: Associates safe imported markup with inert script references.
+     *
+     * HR: Povezuje sigurni uvezeni prikaz s neizvršivim referencama skripti.
+     *
+     * @param list<string> $ids
+     */
+    private function withScriptReferences(DOMDocument $document, DOMNode $content, array $ids): DOMNode
+    {
+        if ($ids === []) {
+            return $content;
+        }
+        $wrapper = $document->createElement('div');
+        $wrapper->appendChild($content);
+        foreach ($ids as $id) {
+            $reference = $document->createElement('span');
+            $reference->setAttribute(EditorExternalScripts::CANDIDATE_ATTRIBUTE, $id);
+            $wrapper->appendChild($reference);
+        }
+        return $wrapper;
+    }
+
+    /**
      * EN: Converts the one safe HTML button-link pattern into a plain Bootstrap
      *     link. Source classes, styles, and event handlers are never copied.
+     *
+     * HR: Pretvara jedini sigurni HTML obrazac poveznice s gumbom u običnu
+     *     Bootstrap poveznicu. Izvorne klase, stilovi i događaji ne prenose se.
      */
     private function htmlButtonLinkReplacement(DOMDocument $document, string $plain): ?DOMElement
     {
@@ -1234,13 +1350,14 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
+     * EN: Converts only an HTML macro made up of one static table. Elements,
+     *     attributes, and links pass a strict allowlist; scripts, forms,
+     *     embedded content, and arbitrary HTML remain in the manual-review report.
+     *
      * HR: Pretvara samo HTML makro koji se sastoji od jedne statične tablice.
      *     Elementi, atributi i poveznice prolaze strogu listu dopuštenoga;
      *     skripte, obrasci, ugrađeni sadržaj i proizvoljni HTML ostaju u
      *     izvještaju za ručni pregled.
-     * EN: Converts only an HTML macro made up of one static table. Elements,
-     *     attributes, and links pass a strict allowlist; scripts, forms,
-     *     embedded content, and arbitrary HTML remain in the manual-review report.
      */
     private function htmlTableReplacement(DOMDocument $document, string $plain, string $identity): ?DOMElement
     {
@@ -1298,10 +1415,11 @@ final readonly class ConfluenceHtmlConverter
             }
         }
 
-        // HR: Prepisujemo samo valjane veze zaglavlja unutar ovog makroa.
-        //     Novi prefiks sprječava sudare istih izvornih ID-ova iz više tablica.
         // EN: Remap only valid header associations within this macro.
         //     A new prefix prevents collisions between source IDs in different tables.
+        //
+        // HR: Prepisujemo samo valjane veze zaglavlja unutar ovog makroa.
+        //     Novi prefiks sprječava sudare istih izvornih ID-ova iz više tablica.
         $idCounts = [];
         foreach ([$sourceTable, ...$this->elements($sourceTable->getElementsByTagName('*'))] as $element) {
             $id = $element->getAttribute('id');
@@ -1324,8 +1442,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Kopira sigurnu tablicu i provjerene lokalne veze zaglavlja, bez izmišljanja novih.
      * EN: Copies a safe table and verified local header associations, without inventing new ones.
+     *
+     * HR: Kopira sigurnu tablicu i provjerene lokalne veze zaglavlja, bez izmišljanja novih.
      *
      * @param array<string, array<string, string>> $headerIdsByTable
      */
@@ -1386,8 +1505,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Ugniježđene tablice imaju vlastiti opseg veza zaglavlja.
      * EN: Nested tables have their own header-association scope.
+     *
+     * HR: Ugniježđene tablice imaju vlastiti opseg veza zaglavlja.
      */
     private function htmlTablePath(DOMNode $node): string
     {
@@ -1400,7 +1520,11 @@ final readonly class ConfluenceHtmlConverter
         return '';
     }
 
-    /** HR: Dopušta obične HTTP(S) i valjane e-mail poveznice. EN: Allows ordinary HTTP(S) and valid email links. */
+    /**
+     * EN: Allows ordinary HTTP(S) and valid email links.
+     *
+     * HR: Dopušta obične HTTP(S) i valjane e-mail poveznice.
+     */
     private function isSafeHtmlContentLink(string $href): bool
     {
         if ($this->isSafeRemoteUrl($href)) {
@@ -1414,7 +1538,11 @@ final readonly class ConfluenceHtmlConverter
         return filter_var(rawurldecode($parts[0]), FILTER_VALIDATE_EMAIL) !== false;
     }
 
-    /** HR: Dopušta samo potpune HTTPS izvore iframea. EN: Allows only absolute HTTPS iframe sources. */
+    /**
+     * EN: Allows only absolute HTTPS iframe sources.
+     *
+     * HR: Dopušta samo potpune HTTPS izvore iframea.
+     */
     private function isSafeIframeSource(string $source): bool
     {
         return filter_var($source, FILTER_VALIDATE_URL) !== false
@@ -1422,7 +1550,11 @@ final readonly class ConfluenceHtmlConverter
         && trim((string)parse_url($source, PHP_URL_HOST)) !== '';
     }
 
-    /** HR: Ograničava visinu iframea na uporabljiv raspon. EN: Bounds iframe height to a usable range. */
+    /**
+     * EN: Bounds iframe height to a usable range.
+     *
+     * HR: Ograničava visinu iframea na uporabljiv raspon.
+     */
     private function iframeDimension(string $value, int $fallback): int
     {
         return preg_match('/^[1-9][0-9]{1,3}$/', trim($value)) === 1
@@ -1430,7 +1562,11 @@ final readonly class ConfluenceHtmlConverter
             : $fallback;
     }
 
-    /** HR: Pretvara postotnu širinu Column makroa u Bootstrap mrežu. EN: Maps a Column percentage to the Bootstrap grid. */
+    /**
+     * EN: Maps a Column percentage to the Bootstrap grid.
+     *
+     * HR: Pretvara postotnu širinu Column makroa u Bootstrap mrežu.
+     */
     private function macroColumnWidth(string $width, int $siblingCount = 1): int
     {
         if (preg_match('/^(100|[1-9][0-9]?)%$/', trim($width), $match) !== 1) {
@@ -1441,10 +1577,11 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Uklanja prazne Confluence pokazivače između Column makroa jer bi inače
-     *     postali dodatne stavke Bootstrap retka i narušili raspored kartica.
      * EN: Removes empty Confluence cursor paragraphs between Column macros because
      *     they would otherwise become extra Bootstrap row items and break the card layout.
+     *
+     * HR: Uklanja prazne Confluence pokazivače između Column makroa jer bi inače
+     *     postali dodatne stavke Bootstrap retka i narušili raspored kartica.
      */
     private function removeEmptyLayoutChildren(DOMElement $row): void
     {
@@ -1466,8 +1603,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Čita strukturirana svojstva iz Confluence Page Properties tablice.
      * EN: Reads structured values from a Confluence Page Properties table.
+     *
+     * HR: Čita strukturirana svojstva iz Confluence Page Properties tablice.
      *
      * @return list<array{key:string,label:string,type:string,value:string,sort_order:int}>
      */
@@ -1489,10 +1627,11 @@ final readonly class ConfluenceHtmlConverter
             );
 
             if ($allHeadings && count($headings) === count($values)) {
-                // HR: Confluence Page Properties često koristi zaglavlja u prvom,
-                //     a pripadajuće vrijednosti u drugom retku tablice.
                 // EN: Confluence Page Properties commonly keeps headings in the
                 //     first row and their corresponding values in the second row.
+                //
+                // HR: Confluence Page Properties često koristi zaglavlja u prvom,
+                //     a pripadajuće vrijednosti u drugom retku tablice.
                 $properties = [];
                 foreach ($headings as $order => $heading) {
                     $property = $this->pageProperty($xpath, trim($heading->textContent), $values[$order], $order);
@@ -1521,8 +1660,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Pretvara jednu ćeliju svojstva u kanonski zapis za Područja.
      * EN: Converts one property cell into the canonical Workspaces record.
+     *
+     * HR: Pretvara jednu ćeliju svojstva u kanonski zapis za Područja.
      *
      * @return array{key:string,label:string,type:string,value:string,sort_order:int}|null
      */
@@ -1564,7 +1704,11 @@ final readonly class ConfluenceHtmlConverter
         ];
     }
 
-    /** HR: Čita oznaku iz jednostavnog Confluence CQL izraza. EN: Reads a label from a simple Confluence CQL expression. */
+    /**
+     * EN: Reads a label from a simple Confluence CQL expression.
+     *
+     * HR: Čita oznaku iz jednostavnog Confluence CQL izraza.
+     */
     private function reportLabel(DOMXPath $xpath, DOMElement $macro): string
     {
         $direct = trim($this->macroParameter($xpath, $macro, 'label'));
@@ -1580,8 +1724,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Čita odabrane naslove stupaca iz makroa izvještaja.
      * EN: Reads selected column headings from a report macro.
+     *
+     * HR: Čita odabrane naslove stupaca iz makroa izvještaja.
      *
      * @return list<string>
      */
@@ -1599,8 +1744,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Gradi kanonski nativni blok koji će Područja prikazati uz ponovnu ACL provjeru.
      * EN: Builds a canonical native block rendered by Workspaces after a fresh ACL check.
+     *
+     * HR: Gradi kanonski nativni blok koji će Područja prikazati uz ponovnu ACL provjeru.
      *
      * @param array<string,mixed> $configuration
      */
@@ -1624,7 +1770,11 @@ final readonly class ConfluenceHtmlConverter
         return $block;
     }
 
-    /** HR: Gradi samostalni nativni accordion s jednim izravno uređivim dijelom. EN: Builds a standalone native accordion with one directly editable item. */
+    /**
+     * EN: Builds a standalone native accordion with one directly editable item.
+     *
+     * HR: Gradi samostalni nativni accordion s jednim izravno uređivim dijelom.
+     */
     private function accordionNode(
         DOMDocument $document,
         string $titleText,
@@ -1653,7 +1803,11 @@ final readonly class ConfluenceHtmlConverter
         return $section;
     }
 
-    /** HR: Spaja samo susjedne accordion blokove, uz ignoriranje praznog XML razmaka. EN: Merges only adjacent accordion blocks while ignoring empty XML whitespace. */
+    /**
+     * EN: Merges only adjacent accordion blocks while ignoring empty XML whitespace.
+     *
+     * HR: Spaja samo susjedne accordion blokove, uz ignoriranje praznog XML razmaka.
+     */
     private function mergeAdjacentAccordions(DOMXPath $xpath): void
     {
         foreach ($this->elements($xpath->query('//*[@data-editor-html-accordion="1"]')) as $accordion) {
@@ -1680,7 +1834,11 @@ final readonly class ConfluenceHtmlConverter
         }
     }
 
-    /** HR: Pretvara naslov svojstva u stabilan lokalni ključ. EN: Converts a property label into a stable local key. */
+    /**
+     * EN: Converts a property label into a stable local key.
+     *
+     * HR: Pretvara naslov svojstva u stabilan lokalni ključ.
+     */
     private function propertyKey(string $label): string
     {
         $key = mb_strtolower(trim($label), 'UTF-8');
@@ -1688,7 +1846,11 @@ final readonly class ConfluenceHtmlConverter
         return mb_substr(trim($key, '-.'), 0, 128, 'UTF-8');
     }
 
-    /** HR: Mjeri ugniježđenost radi sigurne obrade unutarnjih makroa. EN: Measures nesting for safe inner-macro processing. */
+    /**
+     * EN: Measures nesting for safe inner-macro processing.
+     *
+     * HR: Mjeri ugniježđenost radi sigurne obrade unutarnjih makroa.
+     */
     private function macroDepth(DOMElement $macro): int
     {
         $depth = 0;
@@ -1703,7 +1865,11 @@ final readonly class ConfluenceHtmlConverter
         return $depth;
     }
 
-    /** HR: Označava najbliži panel koji je samo spremnik TOC makroa. EN: Marks the nearest panel containing a TOC macro. */
+    /**
+     * EN: Marks the nearest panel containing a TOC macro.
+     *
+     * HR: Označava najbliži panel koji je samo spremnik TOC makroa.
+     */
     private function markContainingTocPanel(DOMElement $macro): void
     {
         $parent = $macro->parentNode;
@@ -1719,7 +1885,11 @@ final readonly class ConfluenceHtmlConverter
         }
     }
 
-    /** HR: Razlikuje prazan TOC okvir od panela s dodatnim sadržajem. EN: Distinguishes an empty TOC wrapper from a panel with additional content. */
+    /**
+     * EN: Distinguishes an empty TOC wrapper from a panel with additional content.
+     *
+     * HR: Razlikuje prazan TOC okvir od panela s dodatnim sadržajem.
+     */
     private function hasMeaningfulRichBody(?DOMElement $rich): bool
     {
         if (!$rich instanceof DOMElement) {
@@ -1737,7 +1907,11 @@ final readonly class ConfluenceHtmlConverter
         return false;
     }
 
-    /** HR: Čita izravni parametar strukturiranog makroa. EN: Reads a structured macro's direct parameter. */
+    /**
+     * EN: Reads a structured macro's direct parameter.
+     *
+     * HR: Čita izravni parametar strukturiranog makroa.
+     */
     private function macroParameter(DOMXPath $xpath, DOMElement $macro, string $name): string
     {
         foreach ($this->elements($xpath->query('./ac:parameter', $macro)) as $parameter) {
@@ -1750,10 +1924,11 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Čita ciljana područja iz stvarnog `spaceKey` XML parametra. Ugniježđeni
-     *     `ri:space` ima prednost, a tekstualni zapis služi starijim izvozima.
      * EN: Reads target Workspaces from the actual `spaceKey` XML parameter. A
      *     nested `ri:space` takes precedence, with scalar text for older exports.
+     *
+     * HR: Čita ciljana područja iz stvarnog `spaceKey` XML parametra. Ugniježđeni
+     *     `ri:space` ima prednost, a tekstualni zapis služi starijim izvozima.
      *
      * @return list<string>
      */
@@ -1790,8 +1965,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Čita URL iz tekstnog parametra ili ugniježđene Confluence `ri:url` reference.
      * EN: Reads a URL from a text parameter or a nested Confluence `ri:url` reference.
+     *
+     * HR: Čita URL iz tekstnog parametra ili ugniježđene Confluence `ri:url` reference.
      */
     private function macroUrlParameter(DOMXPath $xpath, DOMElement $macro, string $name): string
     {
@@ -1812,12 +1988,13 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Pretvara podržane vanjske widgete bez učitavanja proizvoljnog koda providera.
-     *     YouTube koristi strogo ograničen privacy-enhanced iframe, dok Figma i
-     *     društvene objave postaju jasne tematske poveznice.
      * EN: Converts supported external widgets without loading arbitrary provider code.
      *     YouTube uses a tightly restricted privacy-enhanced iframe, while Figma
      *     and social posts become clear theme-aware links.
+     *
+     * HR: Pretvara podržane vanjske widgete bez učitavanja proizvoljnog koda providera.
+     *     YouTube koristi strogo ograničen privacy-enhanced iframe, dok Figma i
+     *     društvene objave postaju jasne tematske poveznice.
      */
     private function widgetReplacement(
         DOMDocument $document,
@@ -1898,8 +2075,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Izdvaja YouTube identifikator i početak reprodukcije iz poznatih URL oblika.
      * EN: Extracts the YouTube identifier and playback start from known URL forms.
+     *
+     * HR: Izdvaja YouTube identifikator i početak reprodukcije iz poznatih URL oblika.
      *
      * @param array<string,mixed> $parts
      * @return array{id:string,start:int}|null
@@ -1929,7 +2107,11 @@ final readonly class ConfluenceHtmlConverter
         return ['id' => $identifier, 'start' => $start];
     }
 
-    /** HR: Pretvara `1h2m3s` YouTube vrijeme u sekunde. EN: Converts `1h2m3s` YouTube time to seconds. */
+    /**
+     * EN: Converts `1h2m3s` YouTube time to seconds.
+     *
+     * HR: Pretvara `1h2m3s` YouTube vrijeme u sekunde.
+     */
     private function youtubeStart(string $value): int
     {
         $value = strtolower(trim($value));
@@ -1944,10 +2126,11 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Čita korisnika iz tekstnog parametra ili Confluence `ri:user`
-     *     reference koja nema tekstni sadržaj.
      * EN: Reads a user from a text parameter or from a Confluence `ri:user`
      *     reference that has no text content.
+     *
+     * HR: Čita korisnika iz tekstnog parametra ili Confluence `ri:user`
+     *     reference koja nema tekstni sadržaj.
      */
     private function macroUser(DOMXPath $xpath, DOMElement $macro): string
     {
@@ -1968,7 +2151,11 @@ final readonly class ConfluenceHtmlConverter
         return '';
     }
 
-    /** HR: Čita stabilni identitet Confluence korisničke reference. EN: Reads the stable identity from a Confluence user reference. */
+    /**
+     * EN: Reads the stable identity from a Confluence user reference.
+     *
+     * HR: Čita stabilni identitet Confluence korisničke reference.
+     */
     private function confluenceUserIdentity(DOMElement $user): string
     {
         foreach (['userkey', 'username'] as $attribute) {
@@ -1981,7 +2168,11 @@ final readonly class ConfluenceHtmlConverter
         return trim($user->textContent);
     }
 
-    /** HR: Provjerava je li element unutar zadanog strukturiranog makroa. EN: Checks whether an element is inside a named structured macro. */
+    /**
+     * EN: Checks whether an element is inside a named structured macro.
+     *
+     * HR: Provjerava je li element unutar zadanog strukturiranog makroa.
+     */
     private function isInsideMacro(DOMElement $element, string $macroName): bool
     {
         $parent = $element->parentNode;
@@ -1999,8 +2190,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Pretvara tablicu Confluence chart makroa u uređivi nativni Editor grafikon.
      * EN: Converts a Confluence chart macro table into an editable native Editor chart.
+     *
+     * HR: Pretvara tablicu Confluence chart makroa u uređivi nativni Editor grafikon.
      */
     private function chartReplacement(
         DOMDocument $document,
@@ -2142,10 +2334,11 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Pretvara Confluence Roadmap Planner JSON u uređivi nativni vremenski plan.
-     *     Trajanje aktivnosti izračunava se u jedinici odabranog mjerila izvoza.
      * EN: Converts Confluence Roadmap Planner JSON into an editable native timeline.
      *     Activity duration is calculated in the unit selected by the export scale.
+     *
+     * HR: Pretvara Confluence Roadmap Planner JSON u uređivi nativni vremenski plan.
+     *     Trajanje aktivnosti izračunava se u jedinici odabranog mjerila izvoza.
      */
     private function roadmapReplacement(
         DOMDocument $document,
@@ -2279,7 +2472,11 @@ final readonly class ConfluenceHtmlConverter
         return $element instanceof DOMElement ? $document->importNode($element, true) : null;
     }
 
-    /** HR: Čita datum iz Confluence zapisa. EN: Reads a date from a Confluence value. */
+    /**
+     * EN: Reads a date from a Confluence value.
+     *
+     * HR: Čita datum iz Confluence zapisa.
+     */
     private function roadmapDate(mixed $value): string
     {
         $value = trim(is_scalar($value) ? (string)$value : '');
@@ -2295,8 +2492,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Iz proizvoljnog Roadmap pageLink zapisa uzima samo sigurnu HTTP(S) poveznicu.
      * EN: Extracts only a safe HTTP(S) link from an arbitrary Roadmap pageLink value.
+     *
+     * HR: Iz proizvoljnog Roadmap pageLink zapisa uzima samo sigurnu HTTP(S) poveznicu.
      */
     private function roadmapLink(mixed $value): string
     {
@@ -2318,8 +2516,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Čita 1-based Confluence izbor stupaca i vraća 0-based indekse.
      * EN: Reads Confluence's 1-based column selection and returns 0-based indexes.
+     *
+     * HR: Čita 1-based Confluence izbor stupaca i vraća 0-based indekse.
      *
      * @return list<int>
      */
@@ -2341,7 +2540,11 @@ final readonly class ConfluenceHtmlConverter
         return $columns !== [] ? $columns : range(0, max(0, $columnCount - 1));
     }
 
-    /** HR: Pretvara lokalizirani tablični broj u float. EN: Converts a localized table number into a float. */
+    /**
+     * EN: Converts a localized table number into a float.
+     *
+     * HR: Pretvara lokalizirani tablični broj u float.
+     */
     private function chartNumber(string $value): ?float
     {
         $normalized = preg_replace('/[\s\x{00A0}]+/u', '', trim($value)) ?? '';
@@ -2353,8 +2556,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Pretvara jedan Confluence layout u responzivnu Bootstrap mrežu.
      * EN: Converts one Confluence layout into a responsive Bootstrap grid.
+     *
+     * HR: Pretvara jedan Confluence layout u responzivnu Bootstrap mrežu.
      */
     private function layoutReplacement(
         DOMDocument $document,
@@ -2371,10 +2575,11 @@ final readonly class ConfluenceHtmlConverter
                 $this->elements($xpath->query('./ac:layout-cell', $section)),
                 $this->hasMeaningfulLayoutContent(...),
             ));
-            // HR: Prazan Confluence redak nema sadržaja, ali Bootstrapov negativni
-            //     gornji razmak može povući sljedeći redak pod alatnu traku dokumenta.
             // EN: An empty Confluence row has no content, yet Bootstrap's negative
             //     top gutter can pull the next row under the document toolbar.
+            //
+            // HR: Prazan Confluence redak nema sadržaja, ali Bootstrapov negativni
+            //     gornji razmak može povući sljedeći redak pod alatnu traku dokumenta.
             if ($cells === []) {
                 continue;
             }
@@ -2396,12 +2601,13 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Vraća sadržaj layout ćelije bez praznih Confluence cursor odlomaka
-     *     na rubovima. Takvi odlomci služe samo editoru, a između dva layout
-     *     retka stvaraju dvostruki, vizualno prazan razmak.
      * EN: Returns layout-cell content without empty Confluence cursor paragraphs
      *     at its edges. They are editor-only artifacts that otherwise create a
      *     doubled visual gap between consecutive layout rows.
+     *
+     * HR: Vraća sadržaj layout ćelije bez praznih Confluence cursor odlomaka
+     *     na rubovima. Takvi odlomci služe samo editoru, a između dva layout
+     *     retka stvaraju dvostruki, vizualno prazan razmak.
      *
      * @return list<DOMNode>
      */
@@ -2427,7 +2633,11 @@ final readonly class ConfluenceHtmlConverter
         return $children;
     }
 
-    /** HR: Prepoznaje samo prazne rubne cursor artefakte. EN: Detects only empty boundary cursor artifacts. */
+    /**
+     * EN: Detects only empty boundary cursor artifacts.
+     *
+     * HR: Prepoznaje samo prazne rubne cursor artefakte.
+     */
     private function isDisposableLayoutBoundaryNode(DOMNode $node): bool
     {
         if (!$node instanceof DOMElement) {
@@ -2440,10 +2650,11 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Prazni Confluence stupci često su samo pokazivač `<p><br></p>`.
-     *     Ne smiju rezervirati trećinu ili polovicu širine Simbioza sadržaja.
      * EN: Empty Confluence columns are often only a `<p><br></p>` cursor.
      *     They must not reserve a third or half of the Simbioza content width.
+     *
+     * HR: Prazni Confluence stupci često su samo pokazivač `<p><br></p>`.
+     *     Ne smiju rezervirati trećinu ili polovicu širine Simbioza sadržaja.
      */
     private function hasMeaningfulLayoutContent(DOMNode $node): bool
     {
@@ -2467,7 +2678,11 @@ final readonly class ConfluenceHtmlConverter
         return false;
     }
 
-    /** HR: Određuje širinu ćelije izvornog Confluence rasporeda. EN: Determines a source Confluence layout cell width. */
+    /**
+     * EN: Determines a source Confluence layout cell width.
+     *
+     * HR: Određuje širinu ćelije izvornog Confluence rasporeda.
+     */
     private function layoutColumnClass(string $type, int $index, int $cellCount): string
     {
         if ($cellCount <= 1) {
@@ -2486,7 +2701,11 @@ final readonly class ConfluenceHtmlConverter
         return 'col-12 col-lg-' . $width;
     }
 
-    /** HR: Čita naslov stranice iz parametra children/pagetree/include makroa. EN: Reads a page title from a children/pagetree/include macro parameter. */
+    /**
+     * EN: Reads a page title from a children/pagetree/include macro parameter.
+     *
+     * HR: Čita naslov stranice iz parametra children/pagetree/include makroa.
+     */
     private function macroPageTitle(DOMXPath $xpath, DOMElement $macro): string
     {
         $page = $this->firstElement($xpath->query('./ac:parameter//ri:page', $macro));
@@ -2495,7 +2714,11 @@ final readonly class ConfluenceHtmlConverter
             : '';
     }
 
-    /** HR: Čita naziv privitka zadan multimedia makrou. EN: Reads the attachment name supplied to a multimedia macro. */
+    /**
+     * EN: Reads the attachment name supplied to a multimedia macro.
+     *
+     * HR: Čita naziv privitka zadan multimedia makrou.
+     */
     private function macroAttachmentName(DOMXPath $xpath, DOMElement $macro): string
     {
         $attachment = $this->firstElement($xpath->query('./ac:parameter//ri:attachment', $macro));
@@ -2504,7 +2727,11 @@ final readonly class ConfluenceHtmlConverter
             : '';
     }
 
-    /** HR: Pronalazi lokalni ID stranice prema izvornom naslovu. EN: Finds a local page ID by its source title. */
+    /**
+     * EN: Finds a local page ID by its source title.
+     *
+     * HR: Pronalazi lokalni ID stranice prema izvornom naslovu.
+     */
     private function pageIdByTitle(ConfluenceMacroContext $context, string $title): string
     {
         foreach ($context->pages as $id => $page) {
@@ -2516,7 +2743,11 @@ final readonly class ConfluenceHtmlConverter
         return '';
     }
 
-    /** HR: Gradi lokalni hijerarhijski popis children ili pagetree makroa. EN: Builds a local hierarchical children or pagetree macro list. */
+    /**
+     * EN: Builds a local hierarchical children or pagetree macro list.
+     *
+     * HR: Gradi lokalni hijerarhijski popis children ili pagetree makroa.
+     */
     private function pageList(
         DOMDocument $document,
         ConfluenceMacroContext $context,
@@ -2543,8 +2774,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Materijalizira Confluence izvještaj sadržaja kao običnu uređivu HTML tablicu.
      * EN: Materializes a Confluence content report as an ordinary editable HTML table.
+     *
+     * HR: Materijalizira Confluence izvještaj sadržaja kao običnu uređivu HTML tablicu.
      */
     private function staticContentReport(
         DOMDocument $document,
@@ -2575,11 +2807,12 @@ final readonly class ConfluenceHtmlConverter
             }
         }
 
+        // EN: Confluence's meeting-notes blueprint report defaults to most
+        //     recently modified pages first. The title stabilizes equal dates.
+        //
         // HR: Confluenceov blueprint izvještaj sastanaka zadano prikazuje
         //     najnovije izmijenjene stranice prve. Kod istog vremena naslov
         //     daje stabilan redoslijed.
-        // EN: Confluence's meeting-notes blueprint report defaults to most
-        //     recently modified pages first. The title stabilizes equal dates.
         uasort($pages, static function (array $left, array $right): int {
             $byUpdated = strcmp($right['updated_at'] ?? '', $left['updated_at'] ?? '');
             return $byUpdated !== 0
@@ -2639,12 +2872,13 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Materijalizira Confluence tasks-report-macro kao samostalni nativni
-     *     tablični popis zadataka. Izvorna stranica ostaje obična poveznica;
-     *     uvezeni zadaci nemaju skrivenu vezu sa zadacima na drugim stranicama.
      * EN: Materializes Confluence tasks-report-macro as an independent native
      *     task table. The source page remains a regular link; imported tasks
      *     have no hidden relationship with tasks on other pages.
+     *
+     * HR: Materijalizira Confluence tasks-report-macro kao samostalni nativni
+     *     tablični popis zadataka. Izvorna stranica ostaje obična poveznica;
+     *     uvezeni zadaci nemaju skrivenu vezu sa zadacima na drugim stranicama.
      */
     private function staticTaskReport(
         DOMDocument $document,
@@ -2773,7 +3007,11 @@ final readonly class ConfluenceHtmlConverter
         return $taskList;
     }
 
-    /** HR: Pretvara Confluence task-listu u nativni Editor/Task popis. EN: Converts a Confluence task list into a native Editor/Task list. */
+    /**
+     * EN: Converts a Confluence task list into a native Editor/Task list.
+     *
+     * HR: Pretvara Confluence task-listu u nativni Editor/Task popis.
+     */
     private function taskListReplacement(
         DOMDocument $document,
         DOMXPath $xpath,
@@ -2805,7 +3043,11 @@ final readonly class ConfluenceHtmlConverter
         return $replacement;
     }
 
-    /** HR: Ravna ugniježđene Confluence zadatke u nativni popis uz očuvanu razinu. EN: Flattens nested Confluence tasks into a native list while retaining their depth. */
+    /**
+     * EN: Flattens nested Confluence tasks into a native list while retaining their depth.
+     *
+     * HR: Ravna ugniježđene Confluence zadatke u nativni popis uz očuvanu razinu.
+     */
     private function appendNativeTaskItems(
         DOMDocument $document,
         DOMXPath $xpath,
@@ -2878,7 +3120,13 @@ final readonly class ConfluenceHtmlConverter
         }
     }
 
-    /** HR: Prikazuje datume koje Confluence čuva samo u atributu, prije čišćenja HTML-a. EN: Displays dates stored only in a Confluence attribute before HTML sanitization. */
+    /**
+     * EN: Displays dates stored only in a Confluence attribute before HTML sanitization.
+     * Existing labels remain unchanged; attribute values become escaped text, never markup.
+     *
+     * HR: Prikazuje datume koje Confluence čuva samo u atributu prije čišćenja HTML-a.
+     * Postojeće oznake ostaju iste; atribut postaje escapirani tekst, nikad izvršni HTML.
+     */
     private function materializeDates(DOMXPath $xpath): void
     {
         foreach ($xpath->query('//time[@datetime]') ?: [] as $date) {
@@ -2892,7 +3140,11 @@ final readonly class ConfluenceHtmlConverter
         }
     }
 
-    /** HR: Confluence uređivački placeholderi nisu objavljeni sadržaj. EN: Confluence editor placeholders are not published content. */
+    /**
+     * EN: Confluence editor placeholders are not published content.
+     *
+     * HR: Confluence uređivački placeholderi nisu objavljeni sadržaj.
+     */
     private function removeConfluencePlaceholders(DOMXPath $xpath): void
     {
         foreach ($this->elements($xpath->query('//ac:placeholder')) as $placeholder) {
@@ -2900,7 +3152,11 @@ final readonly class ConfluenceHtmlConverter
         }
     }
 
-    /** HR: Čita tekst zadatka bez teksta njegovih ugniježđenih zadataka. EN: Reads task text without duplicating nested-task text. */
+    /**
+     * EN: Reads task text without duplicating nested-task text.
+     *
+     * HR: Čita tekst zadatka bez teksta njegovih ugniježđenih zadataka.
+     */
     private function taskBodyText(DOMNode $node): string
     {
         if (
@@ -2922,7 +3178,11 @@ final readonly class ConfluenceHtmlConverter
         return $text;
     }
 
-    /** HR: Gradi stabilan nativni UUID zadatka iz Confluence identiteta. EN: Builds a stable native task UUID from Confluence identity. */
+    /**
+     * EN: Builds a stable native task UUID from Confluence identity.
+     *
+     * HR: Gradi stabilan nativni UUID zadatka iz Confluence identiteta.
+     */
     private function portableTaskUuid(
         string $sourcePageId,
         string $sourceTaskId,
@@ -2937,7 +3197,11 @@ final readonly class ConfluenceHtmlConverter
         return $this->portableUuid('task|' . trim($sourcePageId) . '|' . $identity);
     }
 
-    /** HR: Iz proizvoljnog stabilnog imena izvodi RFC 4122 UUID v5 zapis. EN: Derives an RFC 4122 UUID v5 value from an arbitrary stable name. */
+    /**
+     * EN: Derives an RFC 4122 UUID v5 value from an arbitrary stable name.
+     *
+     * HR: Iz proizvoljnog stabilnog imena izvodi RFC 4122 UUID v5 zapis.
+     */
     private function portableUuid(string $name): string
     {
         $hex = hash('sha1', 'simbioza-confluence-import|' . $name);
@@ -2952,10 +3216,11 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Normalizira sve tablice na standardni Editor/Bootstrap prikaz i
-     *     dodaje responzivni omotač bez stvaranja dvostrukih omotača.
      * EN: Normalizes every table to the standard Editor/Bootstrap presentation
      *     and adds a responsive wrapper without creating duplicate wrappers.
+     *
+     * HR: Normalizira sve tablice na standardni Editor/Bootstrap prikaz i
+     *     dodaje responzivni omotač bez stvaranja dvostrukih omotača.
      */
     private function normalizeTables(DOMDocument $document, DOMElement $root): void
     {
@@ -2983,8 +3248,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Postavlja kanonske klase tablice na početak, a čuva dodatne semantičke klase izvora.
      * EN: Places canonical table classes first while preserving extra semantic source classes.
+     *
+     * HR: Postavlja kanonske klase tablice na početak, a čuva dodatne semantičke klase izvora.
      */
     private function setCanonicalTableClasses(DOMElement $table): void
     {
@@ -3001,10 +3267,11 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Iz prvog retka sa zaglavljima gradi `thead`, označava ga tematskom
-     *     klasom i premješta neposredne retke tablice u `tbody`.
      * EN: Builds `thead` from an initial header row, marks it with the theme
      *     class, and moves direct table rows into `tbody`.
+     *
+     * HR: Iz prvog retka sa zaglavljima gradi `thead`, označava ga tematskom
+     *     klasom i premješta neposredne retke tablice u `tbody`.
      */
     private function normalizeTableSections(DOMDocument $document, DOMElement $table): void
     {
@@ -3053,7 +3320,11 @@ final readonly class ConfluenceHtmlConverter
         }
     }
 
-    /** HR: Vraća prvo neposredno dijete zadanog imena. EN: Returns the first direct child with the requested name. */
+    /**
+     * EN: Returns the first direct child with the requested name.
+     *
+     * HR: Vraća prvo neposredno dijete zadanog imena.
+     */
     private function firstDirectChild(DOMElement $parent, string $tagName): ?DOMElement
     {
         foreach ($parent->childNodes as $child) {
@@ -3065,7 +3336,11 @@ final readonly class ConfluenceHtmlConverter
         return null;
     }
 
-    /** HR: Provjerava sadrži li element zadanu CSS klasu. EN: Checks whether an element contains the requested CSS class. */
+    /**
+     * EN: Checks whether an element contains the requested CSS class.
+     *
+     * HR: Provjerava sadrži li element zadanu CSS klasu.
+     */
     private function hasClass(DOMElement $element, string $className): bool
     {
         $classes = preg_split('/\s+/', trim($element->getAttribute('class'))) ?: [];
@@ -3074,8 +3349,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Vraća neposrednu djecu u stabilnom Confluence poretku.
      * EN: Returns direct children in stable Confluence order.
+     *
+     * HR: Vraća neposrednu djecu u stabilnom Confluence poretku.
      *
      * @return array<string,array{title:string,path:string,parent_id:string,sort_order:int}>
      */
@@ -3094,8 +3370,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Gradi read-only popis lokalno uvezenih privitaka stranice.
      * EN: Builds a read-only list of locally imported page attachments.
+     *
+     * HR: Gradi read-only popis lokalno uvezenih privitaka stranice.
      *
      * @param array<int,array<string,string>> $attachments
      */
@@ -3120,7 +3397,11 @@ final readonly class ConfluenceHtmlConverter
         return $list;
     }
 
-    /** HR: Pretvara Confluence status u tematski Bootstrap badge. EN: Converts a Confluence status into a themed Bootstrap badge. */
+    /**
+     * EN: Converts a Confluence status into a themed Bootstrap badge.
+     *
+     * HR: Pretvara Confluence status u tematski Bootstrap badge.
+     */
     private function statusBadge(DOMDocument $document, DOMXPath $xpath, DOMElement $macro): DOMElement
     {
         $colour = strtolower($this->macroParameter($xpath, $macro, 'colour'));
@@ -3137,7 +3418,11 @@ final readonly class ConfluenceHtmlConverter
         return $badge;
     }
 
-    /** HR: Gradi siguran audio/video pregled uvezenog privitka. EN: Builds a safe audio/video preview of an imported attachment. */
+    /**
+     * EN: Builds a safe audio/video preview of an imported attachment.
+     *
+     * HR: Gradi siguran audio/video pregled uvezenog privitka.
+     */
     private function mediaElement(DOMDocument $document, string $filename, string $url): DOMElement
     {
         $lower = strtolower($filename);
@@ -3150,14 +3435,22 @@ final readonly class ConfluenceHtmlConverter
         return $media;
     }
 
-    /** HR: Normalizira Confluence sidro u siguran HTML fragment. EN: Normalizes a Confluence anchor into a safe HTML fragment. */
+    /**
+     * EN: Normalizes a Confluence anchor into a safe HTML fragment.
+     *
+     * HR: Normalizira Confluence sidro u siguran HTML fragment.
+     */
     private function safeFragment(string $value): string
     {
         $safe = preg_replace('/[^A-Za-z0-9_.:-]+/', '-', trim($value)) ?? '';
         return trim($safe, '-');
     }
 
-    /** HR: Dodaje bogato ili obično tijelo u zamjenski element. EN: Appends a rich or plain body to a replacement element. */
+    /**
+     * EN: Appends a rich or plain body to a replacement element.
+     *
+     * HR: Dodaje bogato ili obično tijelo u zamjenski element.
+     */
     private function appendRichBody(DOMDocument $document, DOMElement $target, ?DOMElement $rich, string $plain): void
     {
         if ($rich instanceof DOMElement) {
@@ -3176,7 +3469,11 @@ final readonly class ConfluenceHtmlConverter
         }
     }
 
-    /** HR: Određuje čitljiv tekst Confluence poveznice. EN: Determines a readable Confluence link label. */
+    /**
+     * EN: Determines a readable Confluence link label.
+     *
+     * HR: Određuje čitljiv tekst Confluence poveznice.
+     */
     private function linkLabel(DOMXPath $xpath, DOMElement $link): string
     {
         $label = trim($this->nodeText($xpath, './/ac:plain-text-link-body', $link));
@@ -3203,12 +3500,13 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Čuva formatirani ac:link-body, uključujući slike koje su već pretvorene
-     *     u prijenosne reference. Tekstualni fallback koristi se samo kada nema
-     *     stvarnog vidljivog sadržaja.
      * EN: Preserves a formatted ac:link-body, including images already converted
      *     to portable references. The text fallback is used only when no actual
      *     visible content exists.
+     *
+     * HR: Čuva formatirani ac:link-body, uključujući slike koje su već pretvorene
+     *     u prijenosne reference. Tekstualni fallback koristi se samo kada nema
+     *     stvarnog vidljivog sadržaja.
      */
     private function appendLinkContent(
         DOMDocument $document,
@@ -3239,7 +3537,11 @@ final readonly class ConfluenceHtmlConverter
         }
     }
 
-    /** HR: Čita imenovani atribut uz namespace i legacy fallback. EN: Reads a named attribute with namespace and legacy fallback. */
+    /**
+     * EN: Reads a named attribute with namespace and legacy fallback.
+     *
+     * HR: Čita imenovani atribut uz namespace i legacy fallback.
+     */
     private function attribute(DOMElement $element, string $namespace, string $localName): string
     {
         $value = trim($element->getAttributeNS($namespace, $localName));
@@ -3251,8 +3553,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Pretvara XPath rezultat u popis DOM elemenata.
      * EN: Converts an XPath result into a list of DOM elements.
+     *
+     * HR: Pretvara XPath rezultat u popis DOM elemenata.
      *
      * @param \DOMNodeList<DOMNameSpaceNode|DOMNode>|false $nodes
      * @return list<DOMElement>
@@ -3273,8 +3576,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Vraća prvi DOM element iz XPath rezultata.
      * EN: Returns the first DOM element from an XPath result.
+     *
+     * HR: Vraća prvi DOM element iz XPath rezultata.
      *
      * @param \DOMNodeList<DOMNameSpaceNode|DOMNode>|false $nodes
      */
@@ -3287,7 +3591,11 @@ final readonly class ConfluenceHtmlConverter
         return null;
     }
 
-    /** HR: Čita tekst prvog čvora zadanog XPath upita. EN: Reads text from the first node of an XPath query. */
+    /**
+     * EN: Reads text from the first node of an XPath query.
+     *
+     * HR: Čita tekst prvog čvora zadanog XPath upita.
+     */
     private function nodeText(DOMXPath $xpath, string $query, DOMElement $context): string
     {
         $nodes = $xpath->query($query, $context);
@@ -3296,7 +3604,11 @@ final readonly class ConfluenceHtmlConverter
         return $node instanceof DOMNode ? trim($node->textContent) : '';
     }
 
-    /** HR: Serijalizira samo unutarnji HTML korijena. EN: Serializes only the root element's inner HTML. */
+    /**
+     * EN: Serializes only the root element's inner HTML.
+     *
+     * HR: Serijalizira samo unutarnji HTML korijena.
+     */
     private function innerHtml(DOMDocument $document, DOMElement $root): string
     {
         $html = '';
@@ -3311,8 +3623,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Prepoznaje moderne, legacy, kratke i pageId Confluence URL-ove.
      * EN: Recognizes modern, legacy, short, and pageId Confluence URLs.
+     *
+     * HR: Prepoznaje moderne, legacy, kratke i pageId Confluence URL-ove.
      *
      * @return array<string,string>|null
      */
@@ -3383,8 +3696,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Bilježi nepoznat URL s Confluence/Wiki hosta bez nagađanja cilja.
      * EN: Records an unknown URL from a Confluence/Wiki host without guessing its target.
+     *
+     * HR: Bilježi nepoznat URL s Confluence/Wiki hosta bez nagađanja cilja.
      *
      * @return array<string,string>|null
      */
@@ -3411,7 +3725,11 @@ final readonly class ConfluenceHtmlConverter
         ];
     }
 
-    /** HR: Dekodira Confluence /x/ oznaku kao little-endian ID stranice. EN: Decodes a Confluence /x/ token as a little-endian page ID. */
+    /**
+     * EN: Decodes a Confluence /x/ token as a little-endian page ID.
+     *
+     * HR: Dekodira Confluence /x/ oznaku kao little-endian ID stranice.
+     */
     private function decodedShortPageId(string $token): string
     {
         $normalized = strtr(rawurldecode(trim($token)), '-_', '+/');
@@ -3433,8 +3751,9 @@ final readonly class ConfluenceHtmlConverter
     }
 
     /**
-     * HR: Prepoznaje legacy URL privitka.
      * EN: Recognizes a legacy attachment URL.
+     *
+     * HR: Prepoznaje legacy URL privitka.
      *
      * @return array<string,string>|null
      */
@@ -3467,7 +3786,11 @@ final readonly class ConfluenceHtmlConverter
         ];
     }
 
-    /** HR: Relativne ciljeve smatra internima, a apsolutne samo kada odgovaraju administratorovu izvornom hostu. EN: Treats relative targets as internal and absolute targets only when they match the administrator-selected source host. */
+    /**
+     * EN: Treats relative targets as internal and absolute targets only when they match the administrator-selected source host.
+     *
+     * HR: Relativne ciljeve smatra internima, a apsolutne samo kada odgovaraju administratorovu izvornom hostu.
+     */
     private function isSourceReferenceTarget(string $target, string $sourceHost): bool
     {
         $target = trim($target);
@@ -3490,22 +3813,31 @@ final readonly class ConfluenceHtmlConverter
             && $host === $sourceHost;
     }
 
-    /** HR: Dopušta samo udaljene HTTP(S) slike. EN: Allows only remote HTTP(S) images. */
+    /**
+     * EN: Allows only remote HTTP(S) images.
+     *
+     * HR: Dopušta samo udaljene HTTP(S) slike.
+     */
     private function isSafeRemoteUrl(string $url): bool
     {
         $scheme = strtolower(Utf8Url::component($url, PHP_URL_SCHEME) ?? '');
         return $scheme === 'http' || $scheme === 'https';
     }
 
-    /** HR: Dekodira naslov zapisan u URL-u. EN: Decodes a title stored in a URL. */
+    /**
+     * EN: Decodes a title stored in a URL.
+     *
+     * HR: Dekodira naslov zapisan u URL-u.
+     */
     private function decodedUrlTitle(string $value): string
     {
         return trim(rawurldecode(str_replace('+', ' ', $value)));
     }
 
     /**
-     * HR: Kodira sigurni privremeni token poveznice.
      * EN: Encodes a safe temporary link token.
+     *
+     * HR: Kodira sigurni privremeni token poveznice.
      *
      * @param array<string,string> $reference
      */
@@ -3517,7 +3849,11 @@ final readonly class ConfluenceHtmlConverter
         )));
     }
 
-    /** HR: Pretvara Confluence emotikon u Unicode znak. EN: Converts a Confluence emoticon into a Unicode character. */
+    /**
+     * EN: Converts a Confluence emoticon into a Unicode character.
+     *
+     * HR: Pretvara Confluence emotikon u Unicode znak.
+     */
     private function emoticon(string $name): string
     {
         return match (strtolower(trim($name))) {

@@ -39,7 +39,7 @@ final class ConfluenceImportUploadServiceTest extends TestCase
         $helper = new Helper();
         $configuration = new class ($helper, [
             'database' => ['connections' => ['default' => ['driver' => 'sqlite', 'database' => ':memory:']]],
-            'confluence_import' => ['chunk_size' => 3, 'upload_ttl' => 60],
+            'confluence-import' => ['confluence-import' => ['chunk_size' => 3, 'upload_ttl' => 60]],
         ], $this->directory) extends Config {
             /** @param array<string,mixed> $data */
             public function __construct(Helper $helper, array $data, private readonly string $root)
@@ -68,7 +68,11 @@ final class ConfluenceImportUploadServiceTest extends TestCase
         $this->removeDirectory($this->directory);
     }
 
-    /** HR: Dokazuje nastavak po offsetu i automatsko uklanjanje isteklog privremenog posla. EN: Proves offset-based resume and automatic cleanup of an expired temporary job. */
+    /**
+     * EN: Proves offset-based resume and automatic cleanup of an expired temporary job.
+     *
+     * HR: Dokazuje nastavak po offsetu i automatsko uklanjanje isteklog privremenog posla.
+     */
     public function testResumableChunksAndExpiredCleanup(): void
     {
         $job = $this->uploads->start('space.xml.zip', 6, 42);
@@ -99,7 +103,11 @@ final class ConfluenceImportUploadServiceTest extends TestCase
         $this->repository->jobByUuid((string)$job['uuid'], 42);
     }
 
-    /** HR: Dokazuje da odustajanje briše i privremenu datoteku i posao. EN: Proves that cancellation deletes both the temporary file and job. */
+    /**
+     * EN: Proves that cancellation deletes both the temporary file and job.
+     *
+     * HR: Dokazuje da odustajanje briše i privremenu datoteku i posao.
+     */
     public function testAdministratorCanCancelOwnTransientUpload(): void
     {
         $job = $this->uploads->start('cancel.xml.zip', 6, 42);
@@ -114,7 +122,11 @@ final class ConfluenceImportUploadServiceTest extends TestCase
         $this->repository->jobByUuid((string)$job['uuid'], 42);
     }
 
-    /** HR: Velik preflight čuva sažetak, a ne popis svih stranica i privitaka. EN: A large preflight retains the summary, not every page and attachment. */
+    /**
+     * EN: A large preflight retains the summary, not every page and attachment.
+     *
+     * HR: Velik preflight čuva sažetak, a ne popis svih stranica i privitaka.
+     */
     public function testFinishedPreflightStoresOnlyMappingInventory(): void
     {
         $fixture = $this->directory . '/source.zip';
@@ -136,7 +148,11 @@ final class ConfluenceImportUploadServiceTest extends TestCase
         self::assertArrayNotHasKey('summary_json', $this->repository->recentJobs()[0]);
     }
 
-    /** HR: Stari veliki sažetak ne smije se učitati pri popisu i odustajanju. EN: A legacy large summary must not be loaded while listing or cancelling. */
+    /**
+     * EN: A legacy large summary must not be loaded while listing or cancelling.
+     *
+     * HR: Stari veliki sažetak ne smije se učitati pri popisu i odustajanju.
+     */
     public function testLegacyLargeSummaryIsNotLoadedForListOrCancellation(): void
     {
         $job = $this->uploads->start('large.xml.zip', 6, 42);
@@ -154,7 +170,11 @@ final class ConfluenceImportUploadServiceTest extends TestCase
         self::assertFileDoesNotExist((string)$job['archive_path']);
     }
 
-    /** HR: Dokazuje da se posao koji je počeo mijenjati sadržaj ne može ukloniti kao privremeni upload. EN: Proves that a content-mutating job cannot be removed as a transient upload. */
+    /**
+     * EN: Proves that a content-mutating job cannot be removed as a transient upload.
+     *
+     * HR: Dokazuje da se posao koji je počeo mijenjati sadržaj ne može ukloniti kao privremeni upload.
+     */
     public function testRunningImportCannotBeCancelled(): void
     {
         $job = $this->uploads->start('running.xml.zip', 6, 42);
@@ -177,7 +197,11 @@ final class ConfluenceImportUploadServiceTest extends TestCase
         self::assertSame('running', $this->repository->jobByUuid((string)$job['uuid'], 42)['status']);
     }
 
-    /** HR: Dokazuje da je i neuspjela početna provjera privremena te se uklanja po isteku. EN: Proves that a failed preflight is still transient and removed on expiry. */
+    /**
+     * EN: Proves that a failed preflight is still transient and removed on expiry.
+     *
+     * HR: Dokazuje da je i neuspjela početna provjera privremena te se uklanja po isteku.
+     */
     public function testFailedPreflightUploadIsExpiredAndRemoved(): void
     {
         $job = $this->uploads->start('failed.xml.zip', 6, 42);
@@ -196,7 +220,11 @@ final class ConfluenceImportUploadServiceTest extends TestCase
         $this->repository->jobByUuid((string)$job['uuid'], 42);
     }
 
-    /** HR: Dokazuje brisanje izvornog ZIP-a koje servis importa poziva nakon uspjeha. EN: Proves source-ZIP deletion invoked by the import service after success. */
+    /**
+     * EN: Proves source-ZIP deletion invoked by the import service after success.
+     *
+     * HR: Dokazuje brisanje izvornog ZIP-a koje servis importa poziva nakon uspjeha.
+     */
     public function testSuccessfulImportArchiveCleanupDeletesSourceFile(): void
     {
         $job = $this->uploads->start('completed.xml.zip', 6, 42);
@@ -215,7 +243,11 @@ final class ConfluenceImportUploadServiceTest extends TestCase
         self::assertSame('', $completed['archive_path']);
     }
 
-    /** HR: Dokazuje ponovni cleanup dovršenog ZIP-a i staginga uz očuvanje privitaka. EN: Proves retry cleanup of a completed ZIP and staging while preserving attachments. */
+    /**
+     * EN: Proves retry cleanup of a completed ZIP and staging while preserving attachments.
+     *
+     * HR: Dokazuje ponovni cleanup dovršenog ZIP-a i staginga uz očuvanje privitaka.
+     */
     public function testCompletedArtifactCleanupRetriesOnlyTransientArtifacts(): void
     {
         $job = $this->uploads->start('retry-cleanup.xml.zip', 6, 42);
@@ -253,7 +285,11 @@ final class ConfluenceImportUploadServiceTest extends TestCase
             ->where('uuid', '=', 'unused-attachment')->first());
     }
 
-    /** HR: Dokazuje da cleanup dovršenih artefakata ne dira nastavivi posao. EN: Proves completed-artifact cleanup never touches a resumable job. */
+    /**
+     * EN: Proves completed-artifact cleanup never touches a resumable job.
+     *
+     * HR: Dokazuje da cleanup dovršenih artefakata ne dira nastavivi posao.
+     */
     public function testCompletedArtifactCleanupPreservesRunningImport(): void
     {
         $job = $this->uploads->start('running-cleanup.xml.zip', 6, 42);
@@ -290,7 +326,11 @@ final class ConfluenceImportUploadServiceTest extends TestCase
             ->where('uuid', '=', 'running-attachment')->first());
     }
 
-    /** HR: Batch popis prihvaća samo izravne XML ZIP datoteke, a uspjeh briše i upload poveznicu i izvor. EN: The batch inventory accepts direct XML ZIP files only, and success removes both the upload link and its source. */
+    /**
+     * EN: The batch inventory accepts direct XML ZIP files only, and success removes both the upload link and its source.
+     *
+     * HR: Batch popis prihvaća samo izravne XML ZIP datoteke, a uspjeh briše i upload poveznicu i izvor.
+     */
     public function testBatchArchiveIsAdoptedWithoutCopyAndDeletedOnlyAfterSuccess(): void
     {
         $batchDirectory = $this->config->batchDirectory();
@@ -321,7 +361,11 @@ final class ConfluenceImportUploadServiceTest extends TestCase
         self::assertSame('', $this->repository->jobByUuid((string)$job['uuid'], 42)['archive_path']);
     }
 
-    /** HR: Neispravna batch arhiva ostaje u ulaznom direktoriju za dijagnostiku i ponovni pokušaj. EN: An invalid batch archive remains in the input directory for diagnosis and retry. */
+    /**
+     * EN: An invalid batch archive remains in the input directory for diagnosis and retry.
+     *
+     * HR: Neispravna batch arhiva ostaje u ulaznom direktoriju za dijagnostiku i ponovni pokušaj.
+     */
     public function testFailedBatchPreflightPreservesSourceArchive(): void
     {
         $batchDirectory = $this->config->batchDirectory();

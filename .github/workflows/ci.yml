@@ -10,6 +10,9 @@ permissions:
 
 jobs:
   quality:
+    env:
+      COMPOSER: composer.ci.json
+      COMPOSER_ROOT_VERSION: '0.3.0'
     name: PHP ${{ matrix.php }}
     runs-on: ubuntu-latest
     strategy:
@@ -28,6 +31,16 @@ jobs:
           extensions: dom, fileinfo, libxml, mbstring, pdo_sqlite, xmlreader, zip
           coverage: none
           tools: composer:v2
+
+      - name: Prepare dependency manifest / Pripremi manifest ovisnosti
+        env:
+          RELEASE_REF_TYPE: ${{ github.ref_type }}
+        run: |
+          if [ "$RELEASE_REF_TYPE" = "tag" ]; then
+            php scripts/build_ci_composer.php --stable
+          else
+            php scripts/build_ci_composer.php
+          fi
 
       - name: Validate Composer metadata / Provjeri Composer metapodatke
         run: composer validate --strict --no-interaction

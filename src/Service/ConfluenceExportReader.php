@@ -14,17 +14,26 @@ use function is_string;
 use function trim;
 use function unlink;
 
-/** HR: Stream parsira Hibernate XML bez učitavanja cijelog exporta u memoriju. EN: Stream-parses Hibernate XML without loading the complete export into memory. */
+/**
+ * EN: Stream-parses Hibernate XML without loading the complete export into memory.
+ *
+ * HR: Stream parsira Hibernate XML bez učitavanja cijelog exporta u memoriju.
+ */
 final readonly class ConfluenceExportReader
 {
-    /** HR: Prima sigurni ZIP čitač. EN: Receives the safe ZIP reader. */
+    /**
+     * EN: Receives the safe ZIP reader.
+     *
+     * HR: Prima sigurni ZIP čitač.
+     */
     public function __construct(private ConfluenceArchive $archive)
     {
     }
 
     /**
-     * HR: Generira normalizirane objekte; privremeni XML briše i kod prekida petlje.
      * EN: Yields normalized objects; the temporary XML is deleted even when iteration stops early.
+     *
+     * HR: Generira normalizirane objekte; privremeni XML briše i kod prekida petlje.
      *
      * @return \Generator<int,ConfluenceObject>
      */
@@ -55,7 +64,11 @@ final readonly class ConfluenceExportReader
         }
     }
 
-    /** HR: Pretvara jedan object element u zatvoreni normalizirani model. EN: Converts one object element into a closed normalized model. */
+    /**
+     * EN: Converts one object element into a closed normalized model.
+     *
+     * HR: Pretvara jedan object element u zatvoreni normalizirani model.
+     */
     private function parseObject(string $xml): ConfluenceObject
     {
         $document = new DOMDocument();

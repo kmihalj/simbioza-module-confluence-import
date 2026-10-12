@@ -15,14 +15,16 @@ use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportConfig;
 use function basename;
 
 /**
- * HR: Prenosi samo trajna mapiranja dovršenih importa i uklanja privremene upload putanje.
  * EN: Transfers only durable mappings from completed imports and removes temporary upload paths.
+ *
+ * HR: Prenosi samo trajna mapiranja dovršenih importa i uklanja privremene upload putanje.
  */
 final class ConfluenceImportBackupProvider extends DatabaseTableBackupProvider
 {
     /**
-     * HR: Prima privatni korijen kako apsolutna putanja nikada ne bi prešla u prenosivi backup.
      * EN: Receives the private root so an absolute path never leaks into a portable backup.
+     *
+     * HR: Prima privatni korijen kako apsolutna putanja nikada ne bi prešla u prenosivi backup.
      *
      * @param list<array<string,mixed>> $definitions
      */
@@ -36,8 +38,9 @@ final class ConfluenceImportBackupProvider extends DatabaseTableBackupProvider
     }
 
     /**
-     * HR: Ne izvozi nedovršene poslove ni njihove djelomične metapodatke.
      * EN: Does not export unfinished jobs or their partial metadata.
+     *
+     * HR: Ne izvozi nedovršene poslove ni njihove djelomične metapodatke.
      *
      * @param array<string,mixed> $definition
      * @return iterable<array<string,mixed>>
@@ -59,8 +62,9 @@ final class ConfluenceImportBackupProvider extends DatabaseTableBackupProvider
     }
 
     /**
-     * HR: Uklanja lokalne privremene putanje iz trajnog zapisa backupa.
      * EN: Removes local transient paths from the durable backup record.
+     *
+     * HR: Uklanja lokalne privremene putanje iz trajnog zapisa backupa.
      *
      * @param array<string,mixed> $definition
      * @param array<string,mixed> $record
@@ -87,8 +91,9 @@ final class ConfluenceImportBackupProvider extends DatabaseTableBackupProvider
     }
 
     /**
-     * HR: Nakon prenosivog mapiranja čvora osvježava lokalni dokument ključ i slug.
      * EN: Refreshes the local document key and slug after portable node mapping.
+     *
+     * HR: Nakon prenosivog mapiranja čvora osvježava lokalni dokument ključ i slug.
      *
      * @param array<string,mixed> $definition
      * @param array<string,mixed> $record

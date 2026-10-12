@@ -20,7 +20,11 @@ final class PurgeConfluenceWorkspaceImportTest extends TestCase
 {
     private string $directory;
 
-    /** HR: Čisti izolirano privatno spremište nakon testa. EN: Cleans isolated private storage after the test. */
+    /**
+     * EN: Cleans isolated private storage after the test.
+     *
+     * HR: Čisti izolirano privatno spremište nakon testa.
+     */
     protected function tearDown(): void
     {
         if (isset($this->directory)) {
@@ -28,7 +32,11 @@ final class PurgeConfluenceWorkspaceImportTest extends TestCase
         }
     }
 
-    /** HR: Dokazuje da zamjena područja uklanja ZIP, privitke i nastavivi staging njegova posla. EN: Proves Workspace replacement removes the job ZIP, attachments, and resumable staging. */
+    /**
+     * EN: Proves Workspace replacement removes the job ZIP, attachments, and resumable staging.
+     *
+     * HR: Dokazuje da zamjena područja uklanja ZIP, privitke i nastavivi staging njegova posla.
+     */
     public function testWorkspacePurgeRemovesAllManagedJobArtifacts(): void
     {
         $this->directory = sys_get_temp_dir() . '/simbioza-confluence-workspace-purge-'
@@ -44,7 +52,11 @@ final class PurgeConfluenceWorkspaceImportTest extends TestCase
                 parent::__construct($helper, $data);
             }
 
-            /** HR: Vraća izolirani aplikacijski korijen. EN: Returns the isolated application root. */
+            /**
+             * EN: Returns the isolated application root.
+             *
+             * HR: Vraća izolirani aplikacijski korijen.
+             */
             public function getAppRootDir(): string
             {
                 return $this->root;

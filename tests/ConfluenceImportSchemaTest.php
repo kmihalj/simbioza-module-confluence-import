@@ -15,7 +15,11 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(ModuleSimbiozaConfluenceImport::class)]
 final class ConfluenceImportSchemaTest extends TestCase
 {
-    /** HR: Dokazuje da je shema potpuna i reverzibilna na SQLiteu. EN: Proves that the schema is complete and reversible on SQLite. */
+    /**
+     * EN: Proves that the schema is complete and reversible on SQLite.
+     *
+     * HR: Dokazuje da je shema potpuna i reverzibilna na SQLiteu.
+     */
     public function testMigrationCreatesAndDropsAllOwnedTables(): void
     {
         $helper = new Helper();

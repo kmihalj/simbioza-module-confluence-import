@@ -9,10 +9,18 @@ use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceExportScanner;
 use HeartPhrame\Config\ConfigInterface;
 use RuntimeException;
 
-/** HR: CLI za instalaciju migracije i read-only pregled Confluence arhive. EN: CLI for migration installation and read-only Confluence archive inspection. */
+/**
+ * EN: CLI for migration installation and read-only Confluence archive inspection.
+ *
+ * HR: CLI za instalaciju migracije i read-only pregled Confluence arhive.
+ */
 final readonly class HpSimbiozaConfluenceImportCommand
 {
-    /** HR: Prima aplikacijski korijen i sigurni scanner. EN: Receives the application root and safe scanner. */
+    /**
+     * EN: Receives the application root and safe scanner.
+     *
+     * HR: Prima aplikacijski korijen i sigurni scanner.
+     */
     public function __construct(
         private ConfigInterface $config,
         private ConfluenceExportScanner $scanner,
@@ -20,8 +28,9 @@ final readonly class HpSimbiozaConfluenceImportCommand
     }
 
     /**
-     * HR: Usmjerava podnaredbu na instalaciju, provjeru ili pomoć.
      * EN: Routes a subcommand to installation, inspection, or help.
+     *
+     * HR: Usmjerava podnaredbu na instalaciju, provjeru ili pomoć.
      *
      * @param list<string> $arguments
      * @param array<string,mixed> $options
@@ -39,8 +48,9 @@ final readonly class HpSimbiozaConfluenceImportCommand
     }
 
     /**
-     * HR: Kopira početnu migraciju u host aplikaciju.
      * EN: Copies the initial migration into the host application.
+     *
+     * HR: Kopira početnu migraciju u host aplikaciju.
      *
      * @param array<string,mixed> $options
      */
@@ -74,8 +84,9 @@ final readonly class HpSimbiozaConfluenceImportCommand
     }
 
     /**
-     * HR: Ispisuje sigurni preflight kao JSON bez importa.
      * EN: Prints safe preflight JSON without importing.
+     *
+     * HR: Ispisuje sigurni preflight kao JSON bez importa.
      *
      * @param list<string> $arguments
      */
@@ -95,7 +106,11 @@ final readonly class HpSimbiozaConfluenceImportCommand
         return 0;
     }
 
-    /** HR: Ispisuje početničke CLI primjere. EN: Prints beginner-friendly CLI examples. */
+    /**
+     * EN: Prints beginner-friendly CLI examples.
+     *
+     * HR: Ispisuje početničke CLI primjere.
+     */
     private function help(): int
     {
         fwrite(STDOUT, <<<'TEXT'

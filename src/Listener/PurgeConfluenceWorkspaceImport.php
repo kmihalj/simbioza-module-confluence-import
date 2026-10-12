@@ -26,17 +26,29 @@ use function scandir;
 use function str_starts_with;
 use function unlink;
 
-/** HR: Uklanja Confluence mapiranja i privatne staging datoteke trajno obrisanog područja. EN: Removes Confluence mappings and private staging files for a permanently deleted Workspace. */
+/**
+ * EN: Removes Confluence mappings and private staging files for a permanently deleted Workspace.
+ *
+ * HR: Uklanja Confluence mapiranja i privatne staging datoteke trajno obrisanog područja.
+ */
 final readonly class PurgeConfluenceWorkspaceImport
 {
-    /** HR: Prima ORM i sigurnu granicu privatnog spremišta. EN: Receives the ORM and private-storage safety boundary. */
+    /**
+     * EN: Receives the ORM and private-storage safety boundary.
+     *
+     * HR: Prima ORM i sigurnu granicu privatnog spremišta.
+     */
     public function __construct(
         private Database $database,
         private ConfluenceImportConfig $config,
     ) {
     }
 
-    /** HR: Čisti samo poslove i mapiranja koji ciljaju zadano područje. EN: Cleans only jobs and mappings targeting the supplied Workspace. */
+    /**
+     * EN: Cleans only jobs and mappings targeting the supplied Workspace.
+     *
+     * HR: Čisti samo poslove i mapiranja koji ciljaju zadano područje.
+     */
     public function __invoke(WorkspacePermanentlyDeleting $event): void
     {
         $jobIds = [];
@@ -164,14 +176,22 @@ final readonly class PurgeConfluenceWorkspaceImport
         }
     }
 
-    /** HR: Gradi isključivo izravni staging direktorij poznatog posla. EN: Builds only the direct staging directory of a known job. */
+    /**
+     * EN: Builds only the direct staging directory of a known job.
+     *
+     * HR: Gradi isključivo izravni staging direktorij poznatog posla.
+     */
     private function stagingDirectory(string $uuid): string
     {
         return rtrim($this->config->dataDirectory(), DIRECTORY_SEPARATOR)
             . DIRECTORY_SEPARATOR . 'staging' . DIRECTORY_SEPARATOR . trim($uuid);
     }
 
-    /** HR: Briše samo datoteku koja se stvarno nalazi ispod direktorija ovog modula. EN: Deletes only a file that actually resides below this module's data directory. */
+    /**
+     * EN: Deletes only a file that actually resides below this module's data directory.
+     *
+     * HR: Briše samo datoteku koja se stvarno nalazi ispod direktorija ovog modula.
+     */
     private function deleteManagedFile(string $path): void
     {
         if (!is_file($path)) {
@@ -189,7 +209,11 @@ final readonly class PurgeConfluenceWorkspaceImport
         }
     }
 
-    /** HR: Rekurzivno briše samo staging direktorij ispod upravljanog korijena. EN: Recursively deletes only a staging directory below the managed root. */
+    /**
+     * EN: Recursively deletes only a staging directory below the managed root.
+     *
+     * HR: Rekurzivno briše samo staging direktorij ispod upravljanog korijena.
+     */
     private function deleteManagedDirectory(string $path): void
     {
         if (!is_dir($path)) {

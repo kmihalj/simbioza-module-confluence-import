@@ -1,6 +1,6 @@
 # Vodič za administratore
 
-English version: [administrator-guide_en.md](administrator-guide_en.md)
+Engleska verzija: [administrator-guide_en.md](administrator-guide_en.md)
 
 ## Izvoz iz Confluencea
 

@@ -1,5 +1,13 @@
 # Simbioza Module Confluence Import
 
+Third-party scripts are reviewed through the Editor registry: an exact locally
+approved match is selected automatically only on imported pages containing it.
+New scripts remain pending; the grouped report can approve/select one or all
+matching pages. H5P has no exception. See the Editor's `docs/external-scripts_en.md`
+for security, usage reports and backup behavior.
+
+> Release 0.3.0 preparation: the tagged installation commands below apply after coordinated publication of the application and modules. Development verification uses local packages; older releases cannot replace this configuration and schema.
+
 Croatian version: [README_hr.md](README_hr.md)
 
 Simbioza-specific module for safely importing a Confluence XML space backup into a Workspace. It preserves the page tree, current content, attachments, internal links and explicitly mapped access rules. Page and attachment history, drafts and deleted pages are optional and disabled by default.
@@ -7,6 +15,13 @@ Simbioza-specific module for safely importing a Confluence XML space backup into
 With **Page and attachment history** off, only current attachment versions are copied; older versions are neither attempted nor reported as missing. Enabling it explicitly imports both page history and attachment history. Import results distinguish failures of current files from failures of historical versions. Images retain source pixel widths or height-only constraints and alignment, while shrinking to fit narrow screens.
 
 ## Dependencies
+
+New imports use the current Editor/Workspace storage layout. Filesystem HTML
+and attachments live below `data/workspaces/<storage-slug>--<ID>/pages/<page-label>--<document-UUID>/`, in
+`content/` and `attachments/` respectively, including imported history. With
+database HTML storage, HTML stays in the database and attachments remain files.
+Changing the HTML storage driver later uses the same layout without changing
+public page or attachment URLs.
 
 Required and loaded before this module:
 
@@ -28,7 +43,7 @@ Optional integrations:
   calendar or link an already visible calendar from the durable import report.
 - Workspace Search rebuilds its derived index automatically after import.
 
-Internal packages use compatible `^0.1.0` releases; this module does not commit a `composer.lock`.
+Internal packages use compatible `^0.3.0` releases; this module does not commit a `composer.lock`.
 
 ## What the importer does
 
@@ -135,7 +150,7 @@ the report selects it as a suggestion that the administrator must still confirm.
 ## Quick start
 
 ```bash
-composer require aaieduhr/simbioza-module-confluence-import:^0.1.13
+composer require aaieduhr/simbioza-module-confluence-import:^0.3.0
 vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```

@@ -27,7 +27,6 @@ use AaiEduHr\SimbiozaModuleUser\Service\PersonalWorkspaceService;
 use HeartPhrame\Routing\UrlGenerator;
 use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
-use ReflectionMethod;
 
 use function array_filter;
 use function array_key_exists;
@@ -98,13 +97,147 @@ use const PHP_URL_HOST;
 use const PHP_URL_SCHEME;
 
 /**
- * HR: Orkestrira kontrolirani import područja, stranica, povijesti, ACL-a, privitaka i opcionalnih komentara.
  * EN: Orchestrates controlled import of spaces, pages, history, ACL, attachments, and optional comments.
+ *
+ * HR: Orkestrira kontrolirani import područja, stranica, povijesti, ACL-a, privitaka i opcionalnih komentara.
  */
 final readonly class ConfluenceImportService
 {
-    // HR: Paketi ostaju kraći od tipičnog 30-sekundnog proxy limita.
+    /**
+     * EN: Shows current local decisions without trusting the archive's proposed status.
+     *
+     * HR: Prikazuje lokalne odluke bez povjerenja statusu predloženom u arhivi.
+     *
+     * @return array<string,string>
+     */
+    public function externalScriptStatuses(): array
+    {
+        $result = [];
+        foreach ($this->editor->externalScripts()->all() as $id => $entry) {
+            $result[$id] = $entry['status'];
+        }
+        return $result;
+    }
+
+    /**
+     * EN: Decides only a script belonging to this completed job; posted code is never accepted.
+     *
+     * HR: Odlučuje samo o skripti ovog dovršenog posla; poslani kod nikada se ne prihvaća.
+     *
+     * @param array<string,mixed> $actor
+     */
+    public function decideExternalScript(
+        string $jobUuid,
+        string $id,
+        string $decision,
+        string $scope,
+        string $sourcePageId,
+        array $actor,
+    ): void {
+        $job = $this->repository->jobByUuid($jobUuid);
+        if (($job['status'] ?? '') !== 'completed') {
+            throw new ConfluenceImportException('Script review requires a completed import.');
+        }
+        $summary = is_array($job['summary'] ?? null) ? $job['summary'] : [];
+        $actorId = (int)($actor['id'] ?? 0);
+        if (
+            $actorId <= 0 || !in_array($scope, ['page', 'all', 'none'], true)
+            || !in_array($decision, ['approve', 'reject', 'register'], true)
+        ) {
+            throw new ConfluenceImportException('Invalid script decision or administrator.');
+        }
+        $definition = null;
+        $pages = [];
+        foreach (is_array($summary['review_pages'] ?? null) ? $summary['review_pages'] : [] as $pageIndex => $page) {
+            if (!is_array($page)) {
+                continue;
+            }
+            foreach (is_array($page['issues'] ?? null) ? $page['issues'] : [] as $issue) {
+                if (
+                    is_array($issue) && ($issue['type'] ?? '') === 'external_script'
+                    && ($issue['marker'] ?? '') === $id && is_array($issue['script'] ?? null)
+                ) {
+                    $definition = \AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorExternalScripts::definition(
+                        $issue['script'],
+                    );
+                    if ($scope === 'all' || $this->text($page['source_page_id'] ?? '') === $sourcePageId) {
+                        $pages[$pageIndex] = $page;
+                    }
+                }
+            }
+        }
+        if ($definition === null || ($scope === 'page' && $pages === [])) {
+            throw new ConfluenceImportException('Script does not belong to the selected import page.');
+        }
+        $registry = $this->editor->externalScripts();
+        $registry->importPending([$definition]);
+        if ($decision !== 'approve' || $scope === 'none') {
+            if ($decision === 'reject') {
+                $registry->decide($id, 'rejected');
+            }
+            return;
+        }
+        $options = is_array($job['options'] ?? null) ? $job['options'] : [];
+        $language = $this->text($options['language'] ?? $this->config->defaultLanguage());
+        $targets = [];
+        // EN: Preflight every page before granting approval. Never publish an existing user draft.
+        //
+        // HR: Provjeriti sve stranice prije odobrenja. Nikada ne objaviti postojeći korisnički nacrt.
+        foreach ($pages as $index => $page) {
+            $content = $this->repository->contentForJobSource(
+                (int)$job['id'],
+                $this->text($page['source_page_id'] ?? ''),
+            );
+            $key = $this->text($content['target_document_key'] ?? '');
+            $nodeId = (int)($content['target_node_id'] ?? 0);
+            $published = $this->workflow->publicationVersionForNode($nodeId, $language);
+            [$current, $version] = $this->editorActors->runAs($actor, fn(): array => [
+                $this->editor->currentVersionNumber($key, $language),
+                $this->editor->loadVersion($key, $language, $published),
+            ]);
+            if ($current !== $published || $published <= 0) {
+                throw new ConfluenceImportException(
+                    __('Stranica ima neobjavljeni nacrt ili nije objavljena. Skriptu uključite nakon objave ili odbacivanja nacrta.'),
+                );
+            }
+            if (!$version instanceof \AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorDocumentVersion) {
+                throw new ConfluenceImportException('Imported page no longer exists.');
+            }
+            $html = \AaiEduHr\HeartPhrameModuleEditorHtml\Service\EditorExternalScripts::activateCandidate(
+                $version->html,
+                $id,
+            );
+            if ($html !== $version->html) {
+                $targets[$index] = [$key, $nodeId, $version->title, $html];
+            }
+        }
+        $registry->decide($id, 'approved');
+        foreach ($targets as $index => [$key, $nodeId, $title, $html]) {
+            $this->workspaceChanges->run(function () use ($actor, $key, $nodeId, $title, $html, $language, $actorId): void {
+                $this->editorActors->runAs($actor, function () use ($key, $nodeId, $title, $html, $language, $actorId): void {
+                    $this->editor->save($key, $language, $title, $html);
+                    $number = $this->editor->currentVersionNumber($key, $language);
+                    $this->editor->markVersionDraft($key, $language, $number);
+                    $this->workflow->markDocumentDraft($key, $language, $number, $actorId);
+                    $this->editor->publishDraft($key, $language, $number);
+                    $this->workflow->transition($nodeId, $language, 'publish', $number, $actorId, true, true, true);
+                });
+            });
+            foreach ($summary['review_pages'][$index]['issues'] as &$issue) {
+                if (($issue['type'] ?? '') === 'external_script' && ($issue['marker'] ?? '') === $id) {
+                    $issue['resolved'] = true;
+                    $issue['resolution_mode'] = 'script_activation';
+                    $issue['resolved_at'] = gmdate('Y-m-d H:i:s');
+                    $issue['resolved_by_user_id'] = $actorId;
+                }
+            }
+            unset($issue);
+            $this->repository->updateCompletedSummary((int)$job['id'], $summary);
+        }
+    }
     // EN: Batches remain shorter than a typical 30-second proxy timeout.
+    //
+    // HR: Paketi ostaju kraći od tipičnog 30-sekundnog proxy limita.
     private const ATTACHMENT_BATCH_SIZE = 100;
 
     private const PAGE_BATCH_SIZE = 10;
@@ -117,7 +250,11 @@ final readonly class ConfluenceImportService
 
     private const AUDIT_LOG = \AaiEduHr\HeartPhrameModuleAudit\Service\AuditLogService::class;
 
-    /** HR: Prima samo javne servise obaveznih modula i container za opcionalne integracije. EN: Receives public required-module services and a container for optional integrations. */
+    /**
+     * EN: Receives public required-module services and a container for optional integrations.
+     *
+     * HR: Prima samo javne servise obaveznih modula i container za opcionalne integracije.
+     */
     public function __construct(
         private ConfluenceImportRepository $repository,
         private ConfluenceImportUploadService $uploads,
@@ -152,8 +289,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Vraća preflight, prijedloge identiteta i postojeće korisnike bez izmjene sadržaja.
      * EN: Returns preflight, identity suggestions, and existing users without changing content.
+     *
+     * HR: Vraća preflight, prijedloge identiteta i postojeće korisnike bez izmjene sadržaja.
      *
      * @return array<string,mixed>
      */
@@ -221,10 +359,11 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Dohvaća mali skup mogućih lokalnih korisnika za automatski prijedlog,
-     * bez učitavanja cijelog Auth imenika u memoriju.
      * EN: Fetches a small set of possible local users for automatic suggestion
      * without loading the complete Auth directory into memory.
+     *
+     * HR: Dohvaća mali skup mogućih lokalnih korisnika za automatski prijedlog,
+     * bez učitavanja cijelog Auth imenika u memoriju.
      *
      * @param array<string,mixed> $sourceUser
      * @return list<array<string,mixed>>
@@ -248,8 +387,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Predlaže postojeća mapiranja grupa bez automatskog stvaranja.
      * EN: Suggests existing group mappings without automatic creation.
+     *
+     * HR: Predlaže postojeća mapiranja grupa bez automatskog stvaranja.
      *
      * @param array<string,mixed> $scan
      * @param list<array<string,mixed>> $targetGroups
@@ -278,16 +418,17 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Pokreće serverski batch posao sa sigurnim zadanim opcijama. Postojeće
-     * korisnike automatski mapira, a nemapirane prema administratorovu izboru
-     * pripisuje administratoru ili za njih izrađuje neaktivne korisnike. Nove
-     * grupe izrađuje kao obične grupe, a postojeće uvezeno područje nikada ne
-     * prepisuje bez ručne odluke.
      * EN: Starts a server-side batch job with safe defaults. Existing users are
      * mapped automatically, while unmapped users are either attributed to the
      * administrator or created as inactive users according to the administrator's
      * choice. Missing groups are created as regular groups, and an existing
      * imported Workspace is never overwritten without a manual decision.
+     *
+     * HR: Pokreće serverski batch posao sa sigurnim zadanim opcijama. Postojeće
+     * korisnike automatski mapira, a nemapirane prema administratorovu izboru
+     * pripisuje administratoru ili za njih izrađuje neaktivne korisnike. Nove
+     * grupe izrađuje kao obične grupe, a postojeće uvezeno područje nikada ne
+     * prepisuje bez ručne odluke.
      *
      * @param array<string,mixed> $actor
      * @return array<string,mixed>
@@ -345,10 +486,11 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Priprema potvrđeni import i sprema nastavivo stanje prije prvog
-     *     ograničenog procesnog koraka.
      * EN: Prepares a confirmed import and stores resumable state before the
      *     first bounded processing step.
+     *
+     * HR: Priprema potvrđeni import i sprema nastavivo stanje prije prvog
+     *     ograničenog procesnog koraka.
      *
      * @param array<string,mixed> $options
      * @param array<string,mixed> $actor
@@ -398,10 +540,11 @@ final readonly class ConfluenceImportService
 
             $this->repository->setStage($jobId, 'preparing_content');
             $dataset = $this->preparedAttachmentDataset($this->stageDataset($archivePath, $staging));
-            // HR: Korisnički zapisi iz preflighta mali su i čuvaju se uz fazno
-            //     stanje kako bi makroi profila prikazali stvarna imena.
             // EN: Preflight user records are small and are retained in the
             //     phased state so profile macros can show real names.
+            //
+            // HR: Korisnički zapisi iz preflighta mali su i čuvaju se uz fazno
+            //     stanje kako bi makroi profila prikazali stvarna imena.
             $dataset['users'] = $this->rows($scan['users'] ?? []);
             $dataset['calendars'] = $this->rows($scan['calendars'] ?? []);
             $pages = $this->selectedPageGroups($dataset['pages'], $normalized);
@@ -465,10 +608,11 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Obrađuje jedan mali dio nastavivog importa. Istodobni poziv ne
-     *     duplicira sadržaj nego dobiva trenutačno stanje.
      * EN: Processes one small part of a resumable import. A concurrent call
      *     returns current state instead of duplicating content.
+     *
+     * HR: Obrađuje jedan mali dio nastavivog importa. Istodobni poziv ne
+     *     duplicira sadržaj nego dobiva trenutačno stanje.
      *
      * @param array<string,mixed> $actor
      * @return array<string,mixed>
@@ -554,10 +698,11 @@ final readonly class ConfluenceImportService
             } elseif ($phase === 'pages') {
                 $pageResult = is_array($state['page_result'] ?? null) ? $state['page_result'] : [];
                 /*
-                 * HR: Svaki HTTP korak sprema mali broj stranica, ali skupe
-                 *     izvedene indekse osvježavamo tek u završnoj fazi.
                  * EN: Each HTTP step stores a small number of pages, while
                  *     expensive derived indexes refresh only in finalization.
+                 *
+                 * HR: Svaki HTTP korak sprema mali broj stranica, ali skupe
+                 *     izvedene indekse osvježavamo tek u završnoj fazi.
                  */
                 $batch = $this->workspaceChanges->runDeferred(fn(): array => $this->editorActors->runAs(
                     $actor,
@@ -602,8 +747,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Izvodi potvrđeni import. Arhivu briše tek nakon završetka, a na pogrešci je čuva za dijagnostiku.
      * EN: Runs a confirmed import. The archive is deleted only after completion and retained on failure for diagnosis.
+     *
+     * HR: Izvodi potvrđeni import. Arhivu briše tek nakon završetka, a na pogrešci je čuva za dijagnostiku.
      *
      * @param array<string,mixed> $options
      * @param array<string,mixed> $actor
@@ -651,8 +797,9 @@ final readonly class ConfluenceImportService
             $this->applyWorkspaceAcl($workspaceId, $workspaceManagerUserId, $scan, $normalized);
 
             $dataset = $this->preparedAttachmentDataset($this->stageDataset($archivePath, $staging));
-            // HR: I sinkroni import treba isti kontekst korisnika kao fazni.
             // EN: A synchronous import needs the same user context as a phased import.
+            //
+            // HR: I sinkroni import treba isti kontekst korisnika kao fazni.
             $dataset['users'] = $this->rows($scan['users'] ?? []);
             $dataset['calendars'] = $this->rows($scan['calendars'] ?? []);
             $pages = $this->selectedPageGroups($dataset['pages'], $normalized);
@@ -676,12 +823,13 @@ final readonly class ConfluenceImportService
             $attachments = $attachmentResult['urls'];
 
             /*
-             * HR: Stranice, workflow i ACL mijenjaju se u jednom skupnom
-             *     prozoru. Backlink i Search listeneri zato rade samo jednom,
-             *     nakon što je izvorni sadržaj spreman.
              * EN: Pages, workflow, and ACL are changed in one bulk window.
              *     Backlink and Search listeners therefore run only once after
              *     the source content is ready.
+             *
+             * HR: Stranice, workflow i ACL mijenjaju se u jednom skupnom
+             *     prozoru. Backlink i Search listeneri zato rade samo jednom,
+             *     nakon što je izvorni sadržaj spreman.
              */
             $contentResult = $this->workspaceChanges->run(function () use (
                 $actor,
@@ -811,8 +959,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Dovršava ACL, komentare i izvedene poveznice tek nakon svih stranica.
      * EN: Finalizes ACL, comments, and derived links only after all pages exist.
+     *
+     * HR: Dovršava ACL, komentare i izvedene poveznice tek nakon svih stranica.
      *
      * @param array<string,mixed> $state
      * @return array<string,mixed>
@@ -861,8 +1010,9 @@ final readonly class ConfluenceImportService
                     )
                     : ['imported' => 0, 'skipped' => 0];
 
-                // HR: Jedan završni signal obnavlja Search nakon svih stranica.
                 // EN: One final signal rebuilds Search after all pages exist.
+                //
+                // HR: Jedan završni signal obnavlja Search nakon svih stranica.
                 $this->workspaceChanges->publish(new WorkspaceContentChanged(
                     $workspaceId,
                     'bulk_content_changed',
@@ -976,8 +1126,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Spaja rezultate dvaju skupova stranica bez gubitka izvornih mapa.
      * EN: Merges two page batches without losing source mappings.
+     *
+     * HR: Spaja rezultate dvaju skupova stranica bez gubitka izvornih mapa.
      *
      * @param array<string,mixed> $stored
      * @param array<string,mixed> $batch
@@ -1018,8 +1169,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Spaja URL-ove privitaka po stranici i izvornom nazivu.
      * EN: Merges attachment URLs by page and original filename.
+     *
+     * HR: Spaja URL-ove privitaka po stranici i izvornom nazivu.
      *
      * @return array<string,array<string,string>>
      */
@@ -1041,8 +1193,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Vraća poslovni napredak bez izlaganja velikog internog stanja.
      * EN: Returns business progress without exposing large internal state.
+     *
+     * HR: Vraća poslovni napredak bez izlaganja velikog internog stanja.
      *
      * @param array<string,mixed> $state
      * @return array<string,mixed>
@@ -1083,8 +1236,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Završna faza sada pokazuje i napredak poveznica.
      * EN: Finalization now shows link progress too.
+     *
+     * HR: Završna faza sada pokazuje i napredak poveznica.
      *
      * @param array<string,mixed> $state
      */
@@ -1102,7 +1256,11 @@ final readonly class ConfluenceImportService
         return $step === 'complete' ? 99 : 91;
     }
 
-    /** HR: Zaključava jedan procesni korak bez čekanja. EN: Locks one processing step without waiting. */
+    /**
+     * EN: Locks one processing step without waiting.
+     *
+     * HR: Zaključava jedan procesni korak bez čekanja.
+     */
     private function stateLock(string $staging): mixed
     {
         $handle = fopen($staging . DIRECTORY_SEPARATOR . 'state.lock', 'c+b');
@@ -1118,8 +1276,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Normalizira mješoviti popis u neprazne tekstne vrijednosti.
      * EN: Normalizes a mixed list into non-empty string values.
+     *
+     * HR: Normalizira mješoviti popis u neprazne tekstne vrijednosti.
      *
      * @return list<string>
      */
@@ -1136,8 +1295,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Jednoliko bilježi neuspjeli sinkroni ili nastavivi import.
      * EN: Consistently records a failed synchronous or resumable import.
+     *
+     * HR: Jednoliko bilježi neuspjeli sinkroni ili nastavivi import.
      *
      * @param array<string,mixed> $space
      * @param array<string,mixed>|null $workspace
@@ -1174,10 +1334,11 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Ako PHP prekine zahtjev fatalnom pogreškom prije catch bloka, posao
-     *     više ne ostaje zauvijek u stanju „u tijeku”.
      * EN: If PHP terminates the request with a fatal error before the catch
      *     block, the job no longer remains permanently in a running state.
+     *
+     * HR: Ako PHP prekine zahtjev fatalnom pogreškom prije catch bloka, posao
+     *     više ne ostaje zauvijek u stanju „u tijeku”.
      */
     private function registerFatalFailureHandler(int $jobId, string $jobUuid, bool &$handled): void
     {
@@ -1200,8 +1361,9 @@ final readonly class ConfluenceImportService
             try {
                 $this->repository->failImport($jobId, $message);
             } catch (\Throwable) {
-                // HR: Izvorna fatalna pogreška ostaje mjerodavna.
                 // EN: The original fatal error remains authoritative.
+                //
+                // HR: Izvorna fatalna pogreška ostaje mjerodavna.
             }
             $this->logger->critical('Confluence import was terminated by a fatal PHP error.', [
                 'module' => 'simbioza-confluence-import',
@@ -1215,10 +1377,11 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Podiže limit samo za administratorski korak koji učitava veliki manifest.
-     *     Ako FPM zabranjuje promjenu, prijavljuje jasan problem prije izmjene sadržaja.
      * EN: Raises the limit only for an administrator step loading a large manifest.
      *     If FPM disallows it, reports the requirement before changing content.
+     *
+     * HR: Podiže limit samo za administratorski korak koji učitava veliki manifest.
+     *     Ako FPM zabranjuje promjenu, prijavljuje jasan problem prije izmjene sadržaja.
      */
     private function ensureImportMemory(): void
     {
@@ -1237,7 +1400,11 @@ final readonly class ConfluenceImportService
         }
     }
 
-    /** HR: Pretvara PHP memorijski zapis u bajtove. EN: Converts a PHP memory setting to bytes. */
+    /**
+     * EN: Converts a PHP memory setting to bytes.
+     *
+     * HR: Pretvara PHP memorijski zapis u bajtove.
+     */
     private function memoryLimitBytes(string|false $limit): int
     {
         if ($limit === false) {
@@ -1263,10 +1430,11 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Velikom potvrđenom importu daje vlastiti, konfigurabilni vremenski
-     *     okvir umjesto zadanih 30 sekundi web zahtjeva.
      * EN: Gives a large confirmed import its own configurable execution window
      *     instead of the web request's default 30 seconds.
+     *
+     * HR: Velikom potvrđenom importu daje vlastiti, konfigurabilni vremenski
+     *     okvir umjesto zadanih 30 sekundi web zahtjeva.
      */
     private function extendExecutionTime(): void
     {
@@ -1289,8 +1457,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Pronalazi ili izrađuje ciljano obično ili osobno područje.
      * EN: Finds or creates the target regular or Personal Workspace.
+     *
+     * HR: Pronalazi ili izrađuje ciljano obično ili osobno područje.
      *
      * @param array<string,mixed> $space
      * @param array<string,mixed> $options
@@ -1324,6 +1493,13 @@ final readonly class ConfluenceImportService
         );
 
         return $this->workspaces->saveWorkspace([
+            // EN: The imported language is the new Workspace's primary language.
+            //     Do not depend on another installation's default language.
+            //
+            // HR: Jezik uvoza glavni je jezik novog područja. Ne ovisi o
+            //     zadanom jeziku druge instalacije.
+            'primary_language' => $language,
+            'supported_languages' => [$language],
             'name' => $name,
             'name_translations' => [$language => $name],
             'slug' => $options['workspace_slug'],
@@ -1336,8 +1512,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Određuje korisnika koji kroz obični ACL upravlja ciljanim područjem.
      * EN: Resolves the user who manages the target Workspace through regular ACL.
+     *
+     * HR: Određuje korisnika koji kroz obični ACL upravlja ciljanim područjem.
      *
      * @param array<string,mixed> $space
      */
@@ -1359,8 +1536,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Sprema samo mapiranja korisnika koja je administrator potvrdio.
      * EN: Stores only user mappings confirmed by the administrator.
+     *
+     * HR: Sprema samo mapiranja korisnika koja je administrator potvrdio.
      *
      * @param array<string,mixed> $scan
      * @param array<string,mixed> $options
@@ -1385,8 +1563,9 @@ final readonly class ConfluenceImportService
                         __('Confluence identitet već je potvrđeno povezan s drugim korisnikom. Postojeće mapiranje nije promijenjeno.'),
                     );
                 }
-                // HR: Isti Confluence račun može se pojaviti u više space backupa; postojeće povezivanje uvijek se ponovno koristi.
                 // EN: The same Confluence account can occur in multiple space backups; its existing mapping is always reused.
+                //
+                // HR: Isti Confluence račun može se pojaviti u više space backupa; postojeće povezivanje uvijek se ponovno koristi.
                 $targetId = $mappedId;
             }
             if ($targetId !== null && !is_array($this->users->findByIdIncludingInactive($targetId))) {
@@ -1422,8 +1601,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Vraća najbolje dostupno prikazno ime izvornog korisnika.
      * EN: Returns the best available source-user display name.
+     *
+     * HR: Vraća najbolje dostupno prikazno ime izvornog korisnika.
      *
      * @param array<string,mixed> $sourceUser
      */
@@ -1446,10 +1626,11 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Vraća izvorno ime i prezime, a kod starijih Confluence backupa bez
-     *     tih polja koristi čitljive dijelove adrese e-pošte.
      * EN: Returns the source first and last name, falling back to readable
      *     email-address parts for older Confluence backups without those fields.
+     *
+     * HR: Vraća izvorno ime i prezime, a kod starijih Confluence backupa bez
+     *     tih polja koristi čitljive dijelove adrese e-pošte.
      *
      * @param array<string,mixed> $sourceUser
      * @return array{0:string,1:string}
@@ -1473,10 +1654,11 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Dopunjava samo neaktivni migracijski račun kojem nedostaju prikazni
-     *     podaci; postojeći stvarni profil korisnika nikada se ne prepisuje.
      * EN: Enriches only an inactive migration account with missing display
      *     data; an existing real user profile is never overwritten.
+     *
+     * HR: Dopunjava samo neaktivni migracijski račun kojem nedostaju prikazni
+     *     podaci; postojeći stvarni profil korisnika nikada se ne prepisuje.
      *
      * @param array<string,mixed> $sourceUser
      */
@@ -1516,10 +1698,11 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Potvrđuje postojeće mapiranje ili izričito izrađuje običnu ciljnu grupu.
-     * Nikada ne prenosi Confluence članstva niti dodjeljuje administratorski status.
      * EN: Confirms an existing mapping or explicitly creates a regular target
      * group. It never transfers Confluence memberships or grants administrator status.
+     *
+     * HR: Potvrđuje postojeće mapiranje ili izričito izrađuje običnu ciljnu grupu.
+     * Nikada ne prenosi Confluence članstva niti dodjeljuje administratorski status.
      *
      * @param array<string,mixed> $scan
      * @param array<string,mixed> $options
@@ -1576,20 +1759,22 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Pretvara izvorne ovlasti područja u zatvoreni ciljni ACL.
      * EN: Converts source-space permissions into a fail-closed target ACL.
+     *
+     * HR: Pretvara izvorne ovlasti područja u zatvoreni ciljni ACL.
      *
      * @param array<string,mixed> $scan
      * @param array<string,mixed> $options
      */
     private function applyWorkspaceAcl(int $workspaceId, int $managerUserId, array $scan, array $options): void
     {
-        // HR: Upravitelj je sigurni fail-closed subjekt. Njegov ACL red osigurava da
-        // područje s potpuno neriješenim Confluence identitetima ne postane
-        // dostupno drugim korisnicima kroz nasljeđivanje.
         // EN: The manager is the safe fail-closed subject. Their ACL row ensures a
         // space with entirely unresolved Confluence identities never becomes
         // accessible to other users through inheritance.
+        //
+        // HR: Upravitelj je sigurni fail-closed subjekt. Njegov ACL red osigurava da
+        // područje s potpuno neriješenim Confluence identitetima ne postane
+        // dostupno drugim korisnicima kroz nasljeđivanje.
         $acl = [
             WorkspaceRepository::SUBJECT_USER => [
                 $managerUserId => $this->completeRights([
@@ -1632,12 +1817,13 @@ final readonly class ConfluenceImportService
             $acl[$type][$id] = $this->mergeRights($acl[$type][$id] ?? [], $rights);
         }
 
-        // HR: Stranična ograničenja mogu navesti subjekt koji nema zaseban
-        // Confluence SpacePermission redak. Dajemo mu samo bazni pregled kako
-        // bi ga kasnije page ACL mogao dodatno ograničiti, nikada proširiti.
         // EN: Page restrictions may name a subject without a separate
         // Confluence SpacePermission row. Grant only base view so page ACL can
         // restrict it further, never broaden it.
+        //
+        // HR: Stranična ograničenja mogu navesti subjekt koji nema zaseban
+        // Confluence SpacePermission redak. Dajemo mu samo bazni pregled kako
+        // bi ga kasnije page ACL mogao dodatno ograničiti, nikada proširiti.
         foreach ($this->rows($scan['content_permissions'] ?? []) as $permission) {
             $sourceUser = $this->text($permission['user_source_key'] ?? '');
             $groupName = $this->text($permission['group_name'] ?? '');
@@ -1665,8 +1851,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Jednim prolazom priprema tijela i povezane objekte za uvoz.
      * EN: Stages bodies and related objects for import in one pass.
+     *
+     * HR: Jednim prolazom priprema tijela i povezane objekte za uvoz.
      *
      * @return array{pages:list<array<string,mixed>>,attachments:list<array<string,mixed>>,properties:array<string,array<string,string>>,comments:list<array<string,mixed>>,permission_sets:list<array<string,mixed>>,permissions:array<string,array<string,mixed>>,page_labels:array<string,list<string>>,body_directory:string,warnings:list<string>}
      */
@@ -1777,8 +1964,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Grupira odabrane verzije stranica prema logičkom izvornom ID-u.
      * EN: Groups selected page versions by logical source ID.
+     *
+     * HR: Grupira odabrane verzije stranica prema logičkom izvornom ID-u.
      *
      * @param list<array<string,mixed>> $pages
      * @param array<string,mixed> $options
@@ -1815,8 +2003,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Unaprijed određuje jedinstvene slugove i ključeve ciljnih stranica.
      * EN: Precomputes unique slugs and document keys for target pages.
+     *
+     * HR: Unaprijed određuje jedinstvene slugove i ključeve ciljnih stranica.
      *
      * @param array<string,list<array<string,mixed>>> $pages
      * @param array<string,mixed> $workspace
@@ -1861,10 +2050,11 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Jednom odabire aktualnu verziju svakog privitka i zadržava vezu
-     *     svih izvornih verzija sa stranicom radi uvoza komentara.
      * EN: Selects the current version of every attachment once and retains
      *     every source-version-to-page relation needed by comment import.
+     *
+     * HR: Jednom odabire aktualnu verziju svakog privitka i zadržava vezu
+     *     svih izvornih verzija sa stranicom radi uvoza komentara.
      *
      * @param array<string,mixed> $dataset
      * @return array<string,mixed>
@@ -1894,8 +2084,9 @@ final readonly class ConfluenceImportService
                 . ':' . max(1, (int)($currentAttachment['version'] ?? 1))
             ] = true;
         }
-        // HR: Mapu računamo jednom, ne pri svakom HTTP paketu od velikog arhiva.
         // EN: Compute the map once, not for every HTTP batch of a large archive.
+        //
+        // HR: Mapu računamo jednom, ne pri svakom HTTP paketu od velikog arhiva.
         $dataset['current_attachment_versions'] = $currentVersions;
         $dataset['attachment_pages_by_source'] = $attachmentPages;
         $dataset['attachments_prepared'] = true;
@@ -1904,8 +2095,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Kopira odabrane verzije privitaka u privatnu pohranu i bilježi neuspjele prijenose.
      * EN: Copies selected attachment versions into private storage and records failed transfers.
+     *
+     * HR: Kopira odabrane verzije privitaka u privatnu pohranu i bilježi neuspjele prijenose.
      *
      * @param array<string,mixed> $dataset
      * @param array<string,mixed> $workspace
@@ -1928,8 +2120,9 @@ final readonly class ConfluenceImportService
         $warnings = [];
         $workspaceId = (int)($workspace['id'] ?? 0);
         $properties = is_array($dataset['properties'] ?? null) ? $dataset['properties'] : [];
-        // HR: Pripremljeni odabir čuva velike importe od ponovnog grupiranja u svakom batchu.
         // EN: The prepared selection avoids regrouping large imports in every batch.
+        //
+        // HR: Pripremljeni odabir čuva velike importe od ponovnog grupiranja u svakom batchu.
         $all = ($dataset['attachments_prepared'] ?? false) === true
             ? $this->rows($dataset[$includeHistory ? 'attachment_versions' : 'attachments'] ?? [])
             : ConfluenceAttachmentSelector::forImport($this->rows($dataset['attachments'] ?? []), $includeHistory);
@@ -2041,8 +2234,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Jednom priprema podatke koje svaki paket stranica samo čita.
      * EN: Prepares once the data that every page batch only reads.
+     *
+     * HR: Jednom priprema podatke koje svaki paket stranica samo čita.
      *
      * @param array<string,list<array<string,mixed>>> $pages
      * @param array<string,mixed> $dataset
@@ -2142,8 +2336,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Uvozi stablo, verzije, statuse objave i izvorna mapiranja stranica.
      * EN: Imports the tree, versions, publication states, and source page mappings.
+     *
+     * HR: Uvozi stablo, verzije, statuse objave i izvorna mapiranja stranica.
      *
      * @param array<string,list<array<string,mixed>>> $pages
      * @param array<string,mixed> $dataset
@@ -2305,6 +2500,8 @@ final readonly class ConfluenceImportService
                 $this->editor->markVersionDraft($document->id, $language, $versionNumber);
                 $node = $this->workspaces->saveNode($workspaceId, [
                     'id' => $node['id'] ?? null,
+                    'primary_language' => $language,
+                    'supported_languages' => [$language],
                     'title' => $this->text($target['title'] ?? ''),
                     'title_translations' => [
                         $language => $this->text($target['title'] ?? ''),
@@ -2349,8 +2546,9 @@ final readonly class ConfluenceImportService
                     $actorUserId,
                 );
                 if ($registeredAttachments > 0) {
-                    // HR: Confluence privitci pripadaju stranici i moraju biti vidljivi svakome tko smije vidjeti tu stranicu.
                     // EN: Confluence attachments belong to the page and must be visible to everyone allowed to view that page.
+                    //
+                    // HR: Confluence privitci pripadaju stranici i moraju biti vidljivi svakome tko smije vidjeti tu stranicu.
                     $this->editor->updateAttachmentVisibility(
                         $document->id,
                         EditorService::ATTACHMENT_VISIBILITY_PUBLIC,
@@ -2440,13 +2638,13 @@ final readonly class ConfluenceImportService
                 }
 
                 $current = $this->currentPage($versions);
-                $this->invokeImportAttribution('attributeDocument', [
+                $this->importAttribution->attributeDocument(
                     $document->id,
                     $this->sourceCreatorUserId($versions, $actorUserId),
                     $this->sourceVersionAuthorUserId($current, $actorUserId),
                     $this->text($current['created_at'] ?? ''),
                     $this->text($current['updated_at'] ?? ''),
-                ]);
+                );
 
                 if (($target['status'] ?? '') === 'deleted') {
                     $this->workspaces->disableNodeTree($workspaceId, $nodeId, $actorUserId);
@@ -2462,8 +2660,9 @@ final readonly class ConfluenceImportService
             }
 
             if (!$progress) {
-                // HR: Ciklus ili nedostajući roditelj ne smije zaustaviti sadržaj; preostale stranice stavljamo u korijen.
                 // EN: A cycle or missing parent must not lose content; remaining pages are moved to the root.
+                //
+                // HR: Ciklus ili nedostajući roditelj ne smije zaustaviti sadržaj; preostale stranice stavljamo u korijen.
                 foreach ($pending as $logicalId => &$versions) {
                     $targets[$logicalId]['parent_id'] = '';
                 }
@@ -2484,12 +2683,13 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Razrješava Confluence početnu stranicu na logički identitet koji
-     *     koristi grupirani skup verzija. Ako izvorna oznaka nije dostupna,
-     *     bira prvu korijensku, a tek zatim prvu uvezenu stranicu.
      * EN: Resolves the Confluence homepage to the logical identity used by the
      *     grouped version set. When the source reference is unavailable, it
      *     selects the first root page and only then the first imported page.
+     *
+     * HR: Razrješava Confluence početnu stranicu na logički identitet koji
+     *     koristi grupirani skup verzija. Ako izvorna oznaka nije dostupna,
+     *     bira prvu korijensku, a tek zatim prvu uvezenu stranicu.
      *
      * @param array<string,list<array<string,mixed>>> $pages
      */
@@ -2520,8 +2720,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Vraća sve Confluence ID-eve verzija koji mogu biti container privitka iste logičke stranice.
      * EN: Returns all Confluence version IDs that may be an attachment container for the same logical page.
+     *
+     * HR: Vraća sve Confluence ID-eve verzija koji mogu biti container privitka iste logičke stranice.
      *
      * @param list<array<string,mixed>> $versions
      * @return list<string>
@@ -2540,8 +2741,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Registrira ranije izdvojene Confluence datoteke kao stvarne Editor privitke stranice.
      * EN: Registers previously staged Confluence files as real Editor page attachments.
+     *
+     * HR: Registrira ranije izdvojene Confluence datoteke kao stvarne Editor privitke stranice.
      *
      * @param list<array<string,mixed>> $attachments
      */
@@ -2586,22 +2788,18 @@ final readonly class ConfluenceImportService
                     $createdByUserId = $sourceCreator !== ''
                         ? ($this->repository->mappedUserId($sourceCreator) ?? $actorUserId)
                         : $actorUserId;
-                    // HR: Posredni poziv zadržava kompatibilnost analize s prethodnim Editor paketom;
-                    //     instalacija s novim paketom prima i broj verzije te izvorno vrijeme.
-                    // EN: The indirect call keeps analysis compatible with the previous Editor package;
-                    //     installations with the new package also receive version number and source time.
-                    (new ReflectionMethod($this->importedAttachmentService, 'importFromPath'))->invokeArgs(
-                        $this->importedAttachmentService,
-                        [
-                            $documentKey,
-                            $assetUuid,
-                            $sourcePath,
-                            $this->text($attachment['original_name'] ?? 'attachment'),
-                            $this->text($attachment['mime_type'] ?? 'application/octet-stream'),
-                            $createdByUserId,
-                            max(1, (int)($attachment['source_version'] ?? 1)),
-                            $this->text($attachment['source_created_at'] ?? ''),
-                        ],
+                    // EN: Uses the current Editor contract with source version and timestamp.
+                    //
+                    // HR: Koristi aktualni Editor ugovor s izvornom verzijom i vremenskom oznakom.
+                    $this->importedAttachmentService->importFromPath(
+                        $documentKey,
+                        $assetUuid,
+                        $sourcePath,
+                        $this->text($attachment['original_name'] ?? 'attachment'),
+                        $this->text($attachment['mime_type'] ?? 'application/octet-stream'),
+                        $createdByUserId,
+                        max(1, (int)($attachment['source_version'] ?? 1)),
+                        $this->text($attachment['source_created_at'] ?? ''),
                     );
                     $registeredIds[] = $attachmentId;
                     if (!unlink($sourcePath) && is_file($sourcePath)) {
@@ -2612,12 +2810,13 @@ final readonly class ConfluenceImportService
                 }
             }
         } finally {
-            // HR: Ako kasniji privitak ne uspije, ranije uspješno predani
-            // Editor asseti ipak se skupno označavaju kako nastavak ne bi
-            // pokušao duplicirati već kopirane datoteke.
             // EN: If a later attachment fails, earlier assets successfully
             // handed to Editor are still batch-marked so resume cannot
             // duplicate files that were already copied.
+            //
+            // HR: Ako kasniji privitak ne uspije, ranije uspješno predani
+            // Editor asseti ipak se skupno označavaju kako nastavak ne bi
+            // pokušao duplicirati već kopirane datoteke.
             $this->repository->markAttachmentsRegistered($registeredIds, $nodeId, $documentKey);
         }
 
@@ -2625,8 +2824,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Grupira upozorenja konverzije po ciljnoj stranici za trajni izvještaj importa.
      * EN: Groups conversion warnings by target page for the durable import report.
+     *
+     * HR: Grupira upozorenja konverzije po ciljnoj stranici za trajni izvještaj importa.
      *
      * @param array<string,array<string,mixed>> $reviewPages
      * @param list<array<string,mixed>> $issues
@@ -2662,8 +2862,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Razlikuje više istovrsnih makroa na istoj stranici stabilnom oznakom.
      * EN: Distinguishes multiple macros of the same kind on one page by their stable marker.
+     *
+     * HR: Razlikuje više istovrsnih makroa na istoj stranici stabilnom oznakom.
      *
      * @param array<string,mixed> $issue
      */
@@ -2678,8 +2879,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Pretvara jedno izvorno tijelo i razrješava privitke i poveznice.
      * EN: Converts one source body and resolves attachments and links.
+     *
+     * HR: Pretvara jedno izvorno tijelo i razrješava privitke i poveznice.
      *
      * @param array<string,mixed> $dataset
      * @param array<string,mixed> $page
@@ -2709,8 +2911,26 @@ final readonly class ConfluenceImportService
             $macroContext,
             $sourceBaseUrl,
         );
+        $scripts = [];
+        foreach ($converted->reviewIssues as $issue) {
+            if (($issue['type'] ?? '') === 'external_script' && is_array($issue['script'] ?? null)) {
+                $scripts[$issue['script']['id']] = $issue['script'];
+            }
+        }
+        $scriptImport = $this->editor->externalScripts()->prepareImport($converted->html, array_values($scripts));
+        $reviewIssues = $converted->reviewIssues;
+        foreach ($reviewIssues as &$issue) {
+            if (
+                ($issue['type'] ?? '') === 'external_script'
+                && in_array($issue['marker'] ?? '', $scriptImport['automatic_ids'], true)
+            ) {
+                $issue['resolved'] = true;
+                $issue['resolution_mode'] = 'existing_script_approval';
+            }
+        }
+        unset($issue);
         $html = $this->references->resolve(
-            $converted->html,
+            $scriptImport['html'],
             $sourceId,
             $spaceKey,
             $jobId,
@@ -2719,10 +2939,11 @@ final readonly class ConfluenceImportService
             $localByTitle,
         );
 
-        // HR: Confluence include nije statički link. Pretvara se u kanonsku
-        //     Editor referencu koja pri svakom prikazu ponovno čita ciljnu stranicu.
         // EN: A Confluence include is not a static link. It becomes a canonical
         //     Editor reference that reloads the target page on every view.
+        //
+        // HR: Confluence include nije statički link. Pretvara se u kanonsku
+        //     Editor referencu koja pri svakom prikazu ponovno čita ciljnu stranicu.
         foreach ($converted->includes as $include) {
             $marker = $this->text($include['marker'] ?? '');
             if ($marker === '') {
@@ -2763,7 +2984,7 @@ final readonly class ConfluenceImportService
                 $converted->unsupportedMacros,
             ),
             'review_issues' => [
-                ...$converted->reviewIssues,
+                ...$reviewIssues,
                 ...array_map(
                     static fn(string $macro): array => ['type' => 'unsupported_macro', 'macro' => $macro],
                     $converted->unsupportedMacros,
@@ -2782,8 +3003,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Provjerava postoji li cilj include makroa u ovom planu ili ranijem importu.
      * EN: Checks whether an include target exists in this plan or an earlier import.
+     *
+     * HR: Provjerava postoji li cilj include makroa u ovom planu ili ranijem importu.
      *
      * @param array<string,string> $include
      * @param array<string,string> $localById
@@ -2808,7 +3030,11 @@ final readonly class ConfluenceImportService
             : $this->repository->contentByTitle($spaceKey, $title));
     }
 
-    /** HR: Objavljuje trenutačnu verziju dokumenta kroz službeni workflow. EN: Publishes the current document version through the official workflow. */
+    /**
+     * EN: Publishes the current document version through the official workflow.
+     *
+     * HR: Objavljuje trenutačnu verziju dokumenta kroz službeni workflow.
+     */
     private function publishVersion(string $documentKey, string $language, int $nodeId, int $actorUserId): int
     {
         $versionNumber = $this->editor->currentVersionNumber($documentKey, $language);
@@ -2821,8 +3047,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Pripisuje jednu uvezenu verziju stvarnom Confluence autoru kada je njegov račun mapiran.
      * EN: Attributes one imported version to its real Confluence author when that account is mapped.
+     *
+     * HR: Pripisuje jednu uvezenu verziju stvarnom Confluence autoru kada je njegov račun mapiran.
      *
      * @param array<string,mixed> $page
      */
@@ -2834,36 +3061,20 @@ final readonly class ConfluenceImportService
         int $fallbackUserId,
         bool $published,
     ): void {
-        $this->invokeImportAttribution('attributeVersion', [
+        $this->importAttribution->attributeVersion(
             $documentKey,
             $language,
             $versionNumber,
             $this->sourceVersionAuthorUserId($page, $fallbackUserId),
             $published,
             $this->text($page['updated_at'] ?? $page['created_at'] ?? ''),
-        ]);
-    }
-
-    /**
-     * HR: Novi Editor prima i izvorne vremenske oznake, ali importer ostaje
-     *     siguran tijekom zajedničkog Composer ažuriranja sa starijim izdanjem.
-     * EN: New Editor releases accept source timestamps, while the importer
-     *     remains safe during a joint Composer update from an older release.
-     *
-     * @param list<mixed> $arguments
-     */
-    private function invokeImportAttribution(string $method, array $arguments): void
-    {
-        $reflection = new \ReflectionMethod($this->importAttribution, $method);
-        $reflection->invokeArgs(
-            $this->importAttribution,
-            array_slice($arguments, 0, $reflection->getNumberOfParameters()),
         );
     }
 
     /**
-     * HR: Vraća mapiranog zadnjeg urednika, zatim izvornog autora, pa sigurni administratorski fallback.
      * EN: Returns the mapped last editor, then source creator, then the safe importing-admin fallback.
+     *
+     * HR: Vraća mapiranog zadnjeg urednika, zatim izvornog autora, pa sigurni administratorski fallback.
      *
      * @param array<string,mixed> $page
      */
@@ -2879,7 +3090,11 @@ final readonly class ConfluenceImportService
         return $fallbackUserId;
     }
 
-    /** HR: Vraća prikazno ime lokalnog administratora koji je pokrenuo import. EN: Returns the display name of the local administrator who started the import. */
+    /**
+     * EN: Returns the display name of the local administrator who started the import.
+     *
+     * HR: Vraća prikazno ime lokalnog administratora koji je pokrenuo import.
+     */
     private function importingAdministratorDisplayName(int $actorUserId): string
     {
         $actor = $this->users->findByIdIncludingInactive($actorUserId);
@@ -2896,8 +3111,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Vraća najranijeg mapiranog autora dokumenta bez promjene vlasnika i ACL-a.
      * EN: Returns the earliest mapped document creator without changing ownership or ACL.
+     *
+     * HR: Vraća najranijeg mapiranog autora dokumenta bez promjene vlasnika i ACL-a.
      *
      * @param list<array<string,mixed>> $versions
      */
@@ -2916,8 +3132,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Sprema administratorsku napomenu za jednu uvezenu verziju.
      * EN: Stores the administrator provenance note for one imported version.
+     *
+     * HR: Sprema administratorsku napomenu za jednu uvezenu verziju.
      *
      * @param array<string,mixed> $page
      * @param array<string,mixed> $node
@@ -2947,8 +3164,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Primjenjuje dodatna ograničenja stranica uz zatvoreni fallback.
      * EN: Applies page-level restrictions with a fail-closed fallback.
+     *
+     * HR: Primjenjuje dodatna ograničenja stranica uz zatvoreni fallback.
      *
      * @param array<string,mixed> $dataset
      * @param array<string,int> $nodesBySource
@@ -2982,12 +3200,13 @@ final readonly class ConfluenceImportService
             }
 
             $restrictionType = strtolower($this->text($set['type'] ?? '')) === 'edit' ? 'edit' : 'view';
-            // HR: Sama prisutnost skupa je semantički važna. Prazan ili potpuno
-            // neriješen View skup mora ostati zatvoren, dok prazan Edit skup
-            // smije ograničiti uređivanje bez skrivanja stranice.
             // EN: The set's presence is semantically significant. An empty or
             // fully unresolved View set must remain closed, while an empty Edit
             // set may restrict editing without hiding the page.
+            //
+            // HR: Sama prisutnost skupa je semantički važna. Prazan ili potpuno
+            // neriješen View skup mora ostati zatvoren, dok prazan Edit skup
+            // smije ograničiti uređivanje bez skrivanja stranice.
             $setsByPage[$pageId][$restrictionType] ??= [];
             $permissionIds = is_array($set['permission_ids'] ?? null) ? $set['permission_ids'] : [];
             if ($permissionIds === []) {
@@ -3040,14 +3259,15 @@ final readonly class ConfluenceImportService
                 ...array_keys($editSubjects),
                 $managerKey,
             ]);
-            // HR: Ugrađeni public red je zadano pravilo cijele stranice. Kod
-            //     View ograničenja uskraćuje sve, a izričite iznimke ispod
-            //     ponovno uključuju samo mapirane korisnike i grupe. Kod samog
-            //     Edit ograničenja svima ostavlja pregled, ali uskraćuje izmjene.
             // EN: The built-in public row is the page-wide default. A View
             //     restriction denies everyone before explicit mapped user/group
             //     exceptions are applied. An Edit-only restriction keeps viewing
             //     while denying modifications by default.
+            //
+            // HR: Ugrađeni public red je zadano pravilo cijele stranice. Kod
+            //     View ograničenja uskraćuje sve, a izričite iznimke ispod
+            //     ponovno uključuju samo mapirane korisnike i grupe. Kod samog
+            //     Edit ograničenja svima ostavlja pregled, ali uskraćuje izmjene.
             $acl = [
                 WorkspaceRepository::SUBJECT_PUBLIC => [
                     WorkspaceRepository::BUILT_IN_SUBJECT_ID => $this->completeRights([
@@ -3092,8 +3312,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Uvozi samo komentare s razriješenim autorom i ciljnom stranicom.
      * EN: Imports only comments with a resolved author and target page.
+     *
+     * HR: Uvozi samo komentare s razriješenim autorom i ciljnom stranicom.
      *
      * @param array<string,mixed> $dataset
      * @param array<string,string> $documentsBySource
@@ -3124,12 +3345,13 @@ final readonly class ConfluenceImportService
             }
         }
 
-        // HR: Confluence dopušta komentare izravno na privitku. Simbioza ih
-        //     prikazuje uz stranicu kojoj privitak pripada, pa ovdje gradimo
-        //     vezu privitak -> stranica prije obrade komentara.
         // EN: Confluence allows comments directly on an attachment. Simbioza
         //     shows them on the attachment's owning page, so we build the
         //     attachment-to-page relation before processing comments.
+        //
+        // HR: Confluence dopušta komentare izravno na privitku. Simbioza ih
+        //     prikazuje uz stranicu kojoj privitak pripada, pa ovdje gradimo
+        //     vezu privitak -> stranica prije obrade komentara.
         $attachmentPagesBySource = $this->scalarMap($dataset['attachment_pages_by_source'] ?? []);
         if ($attachmentPagesBySource === []) {
             foreach ($this->rows($dataset['attachments'] ?? []) as $attachment) {
@@ -3174,10 +3396,11 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Prati lanac odgovora dok ne dođe do stvarne stranice. Confluenceov
-     *     `containerContent` odgovora pokazuje na nadređeni komentar.
      * EN: Follows a reply chain until it reaches the actual page. A Confluence
      *     reply's `containerContent` points at its parent comment.
+     *
+     * HR: Prati lanac odgovora dok ne dođe do stvarne stranice. Confluenceov
+     *     `containerContent` odgovora pokazuje na nadređeni komentar.
      *
      * @param array<string,mixed> $comment
      * @param array<string,array<string,mixed>> $commentsBySource
@@ -3198,7 +3421,11 @@ final readonly class ConfluenceImportService
         return $attachmentPagesBySource[$containerId] ?? $containerId;
     }
 
-    /** HR: Sinkroni poziv također obrađuje veze u ograničenim skupovima. EN: The synchronous path also handles links in bounded batches. */
+    /**
+     * EN: The synchronous path also handles links in bounded batches.
+     *
+     * HR: Sinkroni poziv također obrađuje veze u ograničenim skupovima.
+     */
     private function reconcileLinks(string $changedSpaceKey): int
     {
         $cursor = 0;
@@ -3213,8 +3440,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Kursor omogućuje zaseban HTTP zahtjev za svaki mali skup poveznica.
      * EN: The cursor lets each small link batch run in its own HTTP request.
+     *
+     * HR: Kursor omogućuje zaseban HTTP zahtjev za svaki mali skup poveznica.
      *
      * @return array{cursor:int,processed:int,resolved:int,has_more:bool}
      */
@@ -3233,8 +3461,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Razrješava i skupno sprema točno predane veze.
      * EN: Resolves and bulk-persists exactly the supplied links.
+     *
+     * HR: Razrješava i skupno sprema točno predane veze.
      *
      * @param list<array<string,mixed>> $links
      */
@@ -3317,8 +3546,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Gradi točnu prijelaznu putanju spremljenu u ranije uvezenom HTML-u.
      * EN: Builds the exact transitional path stored in previously imported HTML.
+     *
+     * HR: Gradi točnu prijelaznu putanju spremljenu u ranije uvezenom HTML-u.
      */
     private function confluenceLinkPath(string $uuid): string
     {
@@ -3330,10 +3560,11 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Razrješava include reference tek kada su sve stranice područja stvorene.
-     *     Time radi i forward reference te reference iz ranije uvezenih područja.
      * EN: Resolves include references only after every Workspace page exists.
      *     This supports forward references and references from earlier imports.
+     *
+     * HR: Razrješava include reference tek kada su sve stranice područja stvorene.
+     *     Time radi i forward reference te reference iz ranije uvezenih područja.
      *
      * @param array<string,array<string,mixed>> $targets
      * @param array<string,string> $documentsBySource
@@ -3356,8 +3587,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Opcionalno bilježi poslovni događaj bez utjecaja na ishod importa.
      * EN: Optionally records a business event without affecting the import outcome.
+     *
+     * HR: Opcionalno bilježi poslovni događaj bez utjecaja na ishod importa.
      *
      * @param array<string,mixed> $data
      */
@@ -3382,12 +3614,13 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Priprema jednoznačnu strategiju ponovnog uvoza prije prvog zapisa.
-     *     Zamjena trajno uklanja prethodno uvezeno područje, dok kopija dobiva
-     *     vlastiti izvorni identitet i slobodan naziv/slug.
      * EN: Prepares an unambiguous re-import strategy before the first write.
      *     Replacement permanently removes the previous imported Workspace,
      *     while a copy receives its own source identity and free name/slug.
+     *
+     * HR: Priprema jednoznačnu strategiju ponovnog uvoza prije prvog zapisa.
+     *     Zamjena trajno uklanja prethodno uvezeno područje, dok kopija dobiva
+     *     vlastiti izvorni identitet i slobodan naziv/slug.
      *
      * @param array<string,mixed> $space
      * @param array<string,mixed> $options
@@ -3475,8 +3708,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Vraća izvorni zapis s identitetom namijenjenim ovom uvozu.
      * EN: Returns the source record with the identity assigned to this import.
+     *
+     * HR: Vraća izvorni zapis s identitetom namijenjenim ovom uvozu.
      *
      * @param array<string,mixed> $space
      * @param array<string,mixed> $options
@@ -3491,8 +3725,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Normalizira i potvrđuje sve administratorske opcije importa.
      * EN: Normalizes and validates all administrator import options.
+     *
+     * HR: Normalizira i potvrđuje sve administratorske opcije importa.
      *
      * @param array<string,mixed> $options
      * @param array<string,mixed> $space
@@ -3533,7 +3768,11 @@ final readonly class ConfluenceImportService
         ];
     }
 
-    /** HR: Potvrđuje administratorski odabrani URL izvornog Confluencea. EN: Validates the administrator-selected source Confluence URL. */
+    /**
+     * EN: Validates the administrator-selected source Confluence URL.
+     *
+     * HR: Potvrđuje administratorski odabrani URL izvornog Confluencea.
+     */
     private function sourceBaseUrl(mixed $value): string
     {
         $url = rtrim($this->text($value), '/');
@@ -3551,8 +3790,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Pretvara izvorni Page objekt u interni zapis.
      * EN: Converts a source Page object into an internal record.
+     *
+     * HR: Pretvara izvorni Page objekt u interni zapis.
      *
      * @return array<string,mixed>
      */
@@ -3578,8 +3818,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Pretvara izvorni Attachment objekt u interni zapis.
      * EN: Converts a source Attachment object into an internal record.
+     *
+     * HR: Pretvara izvorni Attachment objekt u interni zapis.
      *
      * @return array<string,mixed>
      */
@@ -3598,8 +3839,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Pretvara izvorni Comment objekt u interni zapis.
      * EN: Converts a source Comment object into an internal record.
+     *
+     * HR: Pretvara izvorni Comment objekt u interni zapis.
      *
      * @return array<string,mixed>
      */
@@ -3616,8 +3858,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Odabire aktualnu verziju jedne logičke stranice.
      * EN: Selects the current version of one logical page.
+     *
+     * HR: Odabire aktualnu verziju jedne logičke stranice.
      *
      * @param list<array<string,mixed>> $versions
      * @return array<string,mixed>
@@ -3634,8 +3877,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Mapira Confluence ovlast na Simbioza prava.
      * EN: Maps a Confluence permission to Simbioza rights.
+     *
+     * HR: Mapira Confluence ovlast na Simbioza prava.
      *
      * @return array<string,bool>
      */
@@ -3659,8 +3903,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Spaja dva skupa prava bez gubitka dopuštenja.
      * EN: Merges two rights sets without losing permissions.
+     *
+     * HR: Spaja dva skupa prava bez gubitka dopuštenja.
      *
      * @param array<string,bool> $left
      * @param array<string,bool> $right
@@ -3675,8 +3920,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Dopunjuje sva ACL polja eksplicitnim boolean vrijednostima.
      * EN: Completes every ACL field with an explicit boolean value.
+     *
+     * HR: Dopunjuje sva ACL polja eksplicitnim boolean vrijednostima.
      *
      * @param array<string,bool> $rights
      * @return array<string,bool>
@@ -3690,7 +3936,11 @@ final readonly class ConfluenceImportService
         return $complete;
     }
 
-    /** HR: Gradi putanju jedne stranice područja. EN: Builds a Workspace page path. */
+    /**
+     * EN: Builds a Workspace page path.
+     *
+     * HR: Gradi putanju jedne stranice područja.
+     */
     private function nodePath(string $workspaceSlug, string $nodeSlug): string
     {
         if ($this->urls->namedRouteExists('workspace.node.show')) {
@@ -3703,7 +3953,11 @@ final readonly class ConfluenceImportService
             . rawurlencode($workspaceSlug) . '/' . rawurlencode($nodeSlug);
     }
 
-    /** HR: Gradi Editorovu ACL-zaštićenu putanju stvarnog privitka stranice. EN: Builds Editor's ACL-protected real page-attachment path. */
+    /**
+     * EN: Builds Editor's ACL-protected real page-attachment path.
+     *
+     * HR: Gradi Editorovu ACL-zaštićenu putanju stvarnog privitka stranice.
+     */
     private function attachmentPath(string $uuid): string
     {
         if ($this->urls->namedRouteExists('editor-html.asset')) {
@@ -3712,7 +3966,11 @@ final readonly class ConfluenceImportService
         return rtrim($this->urls->getBasePath(), '/') . '/editor-html/asset/' . rawurlencode($uuid);
     }
 
-    /** HR: Priprema izolirani direktorij jednog importa. EN: Prepares an isolated directory for one import. */
+    /**
+     * EN: Prepares an isolated directory for one import.
+     *
+     * HR: Priprema izolirani direktorij jednog importa.
+     */
     private function stagingDirectory(string $uuid): string
     {
         $path = $this->config->dataDirectory() . DIRECTORY_SEPARATOR . 'staging' . DIRECTORY_SEPARATOR
@@ -3721,7 +3979,11 @@ final readonly class ConfluenceImportService
         return $path;
     }
 
-    /** HR: Sigurno izrađuje potreban privatni direktorij. EN: Safely creates a required private directory. */
+    /**
+     * EN: Safely creates a required private directory.
+     *
+     * HR: Sigurno izrađuje potreban privatni direktorij.
+     */
     private function ensureDirectory(string $directory): void
     {
         if (!is_dir($directory) && !mkdir($directory, 0770, true) && !is_dir($directory)) {
@@ -3729,7 +3991,11 @@ final readonly class ConfluenceImportService
         }
     }
 
-    /** HR: Rekurzivno uklanja samo direktorij unutar privatnog korijena modula. EN: Recursively removes only a directory inside the module's private root. */
+    /**
+     * EN: Recursively removes only a directory inside the module's private root.
+     *
+     * HR: Rekurzivno uklanja samo direktorij unutar privatnog korijena modula.
+     */
     private function removeDirectory(string $directory): void
     {
         $privateRoot = realpath($this->config->dataDirectory());
@@ -3743,8 +4009,9 @@ final readonly class ConfluenceImportService
             return;
         }
 
-        // HR: macOS može u privatni direktorij naknadno dodati .DS_Store; kratki ponovljeni prolaz sprječava lažno upozorenje nakon uspješnog importa.
         // EN: macOS may recreate .DS_Store in the private directory; a short repeated sweep prevents a false warning after a successful import.
+        //
+        // HR: macOS može u privatni direktorij naknadno dodati .DS_Store; kratki ponovljeni prolaz sprječava lažno upozorenje nakon uspješnog importa.
         for ($attempt = 0; $attempt < 3 && is_dir($resolvedDirectory); $attempt++) {
             $items = scandir($resolvedDirectory);
             foreach (is_array($items) ? $items : [] as $item) {
@@ -3759,8 +4026,9 @@ final readonly class ConfluenceImportService
                 }
             }
 
-            // HR: Aplikacijski error handler ne smije pretvoriti bezazleni rmdir neuspjeh u tehnički log.
             // EN: The application error handler must not turn a harmless rmdir failure into a technical-log entry.
+            //
+            // HR: Aplikacijski error handler ne smije pretvoriti bezazleni rmdir neuspjeh u tehnički log.
             set_error_handler(static fn (): bool => true);
             try {
                 rmdir($resolvedDirectory);
@@ -3770,7 +4038,11 @@ final readonly class ConfluenceImportService
         }
     }
 
-    /** HR: Detektira MIME iz sadržaja uz siguran fallback. EN: Detects MIME from content with a safe fallback. */
+    /**
+     * EN: Detects MIME from content with a safe fallback.
+     *
+     * HR: Detektira MIME iz sadržaja uz siguran fallback.
+     */
     private function detectedMime(string $path, string $fallback): string
     {
         $finfo = finfo_open(FILEINFO_MIME_TYPE);
@@ -3778,15 +4050,20 @@ final readonly class ConfluenceImportService
         return is_string($detected) && trim($detected) !== '' ? trim($detected) : ($fallback ?: 'application/octet-stream');
     }
 
-    /** HR: Pretvara izvorni ID u siguran dio naziva datoteke. EN: Converts a source ID into a safe filename segment. */
+    /**
+     * EN: Converts a source ID into a safe filename segment.
+     *
+     * HR: Pretvara izvorni ID u siguran dio naziva datoteke.
+     */
     private function safeSourceId(string $value): string
     {
         return preg_replace('/[^A-Za-z0-9._-]/', '_', $value) ?: 'unknown';
     }
 
     /**
-     * HR: Zadržava samo znakove dopuštene u URL fragmentu.
      * EN: Keeps only characters allowed in a URL fragment.
+     *
+     * HR: Zadržava samo znakove dopuštene u URL fragmentu.
      */
     private function safeFragment(string $fragment): string
     {
@@ -3794,8 +4071,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Normalizira popis asocijativnih zapisa.
      * EN: Normalizes a list of associative records.
+     *
+     * HR: Normalizira popis asocijativnih zapisa.
      *
      * @return list<array<string,mixed>>
      */
@@ -3814,8 +4092,9 @@ final readonly class ConfluenceImportService
     }
 
     /**
-     * HR: Zadržava samo neprazne skalarne ključeve i vrijednosti interne mape.
      * EN: Keeps only non-empty scalar keys and values from an internal map.
+     *
+     * HR: Zadržava samo neprazne skalarne ključeve i vrijednosti interne mape.
      *
      * @return array<string,string>
      */
@@ -3836,19 +4115,31 @@ final readonly class ConfluenceImportService
         return $result;
     }
 
-    /** HR: Normalizira skalarnu tekstualnu vrijednost. EN: Normalizes a scalar text value. */
+    /**
+     * EN: Normalizes a scalar text value.
+     *
+     * HR: Normalizira skalarnu tekstualnu vrijednost.
+     */
     private function text(mixed $value): string
     {
         return is_scalar($value) ? trim((string)$value) : '';
     }
 
-    /** HR: Čita HTML ili JSON boolean vrijednost. EN: Reads an HTML or JSON boolean value. */
+    /**
+     * EN: Reads an HTML or JSON boolean value.
+     *
+     * HR: Čita HTML ili JSON boolean vrijednost.
+     */
     private function boolean(mixed $value): bool
     {
         return $value === true || (is_scalar($value) && in_array(strtolower(trim((string)$value)), ['1', 'true', 'yes', 'on'], true));
     }
 
-    /** HR: Potvrđuje jezični kod uz zadani fallback. EN: Validates a language code with the configured fallback. */
+    /**
+     * EN: Validates a language code with the configured fallback.
+     *
+     * HR: Potvrđuje jezični kod uz zadani fallback.
+     */
     private function language(mixed $value): string
     {
         $language = strtolower($this->text($value));
@@ -3857,7 +4148,11 @@ final readonly class ConfluenceImportService
             : $this->config->defaultLanguage();
     }
 
-    /** HR: Zahtijeva pozitivan brojčani identifikator. EN: Requires a positive numeric identifier. */
+    /**
+     * EN: Requires a positive numeric identifier.
+     *
+     * HR: Zahtijeva pozitivan brojčani identifikator.
+     */
     private function positiveInt(mixed $value, string $message): int
     {
         $id = is_numeric($value) ? (int)$value : 0;

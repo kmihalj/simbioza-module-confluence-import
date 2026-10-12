@@ -5,21 +5,22 @@ declare(strict_types=1);
 namespace AaiEduHr\SimbiozaModuleConfluenceImport\Service;
 
 /**
- * HR: Sigurno predlaže postojeće Auth korisnike i grupe za Confluence
- * identitete. Podudaranje je namjerno strogo: email, login oznaka, ključ ili
- * naziv moraju se podudarati nakon uklanjanja suvišnih razmaka i razlike u
- * veličini slova. Slični nazivi nikada se ne povezuju automatski.
- *
  * EN: Safely suggests existing Auth users and groups for Confluence
  * principals. Matching is intentionally strict: email, login identifier, key,
  * or name must match after whitespace and case normalization. Similar names
  * are never linked automatically.
+ *
+ * HR: Sigurno predlaže postojeće Auth korisnike i grupe za Confluence
+ * identitete. Podudaranje je namjerno strogo: email, login oznaka, ključ ili
+ * naziv moraju se podudarati nakon uklanjanja suvišnih razmaka i razlike u
+ * veličini slova. Slični nazivi nikada se ne povezuju automatski.
  */
 final readonly class ConfluencePrincipalMatcher
 {
     /**
-     * HR: Predlaže točno jednog korisnika, prvo po emailu pa po login oznaci.
      * EN: Suggests exactly one user, preferring email before login identifier.
+     *
+     * HR: Predlaže točno jednog korisnika, prvo po emailu pa po login oznaci.
      *
      * @param array<string,mixed> $sourceUser
      * @param list<array<string,mixed>> $targetUsers
@@ -85,8 +86,9 @@ final readonly class ConfluencePrincipalMatcher
     }
 
     /**
-     * HR: Predlaže aktivnu ciljnu grupu po točnom ključu ili nazivu.
      * EN: Suggests an enabled target group by exact key or name.
+     *
+     * HR: Predlaže aktivnu ciljnu grupu po točnom ključu ili nazivu.
      *
      * @param list<array<string,mixed>> $targetGroups
      */
@@ -123,8 +125,9 @@ final readonly class ConfluencePrincipalMatcher
     }
 
     /**
-     * HR: Gradi stabilnu login oznaku za neaktivni predračun bez providera.
      * EN: Builds a stable login identifier for an inactive provider-less account.
+     *
+     * HR: Gradi stabilnu login oznaku za neaktivni predračun bez providera.
      *
      * @param array<string,mixed> $sourceUser
      */
@@ -145,8 +148,9 @@ final readonly class ConfluencePrincipalMatcher
     }
 
     /**
-     * HR: Dodaje valjani pozitivni ID samo jednom u listu rezultata.
      * EN: Adds a valid positive ID to the result list only once.
+     *
+     * HR: Dodaje valjani pozitivni ID samo jednom u listu rezultata.
      *
      * @param list<int> $ids
      */
@@ -163,8 +167,9 @@ final readonly class ConfluencePrincipalMatcher
     }
 
     /**
-     * HR: Normalizira izvorni identifikator za strogu usporedbu.
      * EN: Normalizes a source identifier for strict comparison.
+     *
+     * HR: Normalizira izvorni identifikator za strogu usporedbu.
      */
     private function normalize(mixed $value): string
     {
@@ -175,8 +180,9 @@ final readonly class ConfluencePrincipalMatcher
     }
 
     /**
-     * HR: Sigurno skraćuje tehničku oznaku na dopuštenu duljinu.
      * EN: Safely truncates a technical identifier to the allowed length.
+     *
+     * HR: Sigurno skraćuje tehničku oznaku na dopuštenu duljinu.
      */
     private function truncate(string $value, int $length): string
     {

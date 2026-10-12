@@ -17,7 +17,11 @@ use ZipArchive;
 #[CoversClass(ConfluenceExportScanner::class)]
 final class ConfluenceExportScannerTest extends TestCase
 {
-    /** HR: Dokazuje inventar područja, povijesti, korisnika, ACL grupe i makroa jednim stream prolazom. EN: Proves Workspace, history, user, ACL-group, and macro inventory in one streaming pass. */
+    /**
+     * EN: Proves Workspace, history, user, ACL-group, and macro inventory in one streaming pass.
+     *
+     * HR: Dokazuje inventar područja, povijesti, korisnika, ACL grupe i makroa jednim stream prolazom.
+     */
     public function testScansConfluenceSpaceInventory(): void
     {
         $directory = sys_get_temp_dir() . '/simbioza-confluence-scan-' . bin2hex(random_bytes(8));

@@ -15,8 +15,9 @@ use PHPUnit\Framework\TestCase;
 final class ConfluenceAttachmentRegistrationTest extends TestCase
 {
     /**
-     * HR: Dokazuje prijelaz privitka iz privremene Confluence pohrane u vlasništvo Editora.
      * EN: Proves the attachment transition from Confluence staging to Editor ownership.
+     *
+     * HR: Dokazuje prijelaz privitka iz privremene Confluence pohrane u vlasništvo Editora.
      */
     public function testMarksStagedAttachmentAsRegisteredEditorAsset(): void
     {
@@ -54,7 +55,11 @@ final class ConfluenceAttachmentRegistrationTest extends TestCase
         self::assertSame('document-key', $registered['target_document_key']);
     }
 
-    /** HR: Više verzija stranice dohvaća i predaje Editoru skupno. EN: Multiple page versions are fetched and handed to Editor in batches. */
+    /**
+     * EN: Multiple page versions are fetched and handed to Editor in batches.
+     *
+     * HR: Više verzija stranice dohvaća i predaje Editoru skupno.
+     */
     public function testFetchesAndRegistersAttachmentsForAllPageVersionsInBatches(): void
     {
         $repository = $this->repository();
@@ -116,10 +121,11 @@ final class ConfluenceAttachmentRegistrationTest extends TestCase
     }
 
     /**
-     * HR: Dokazuje da dva odvojena importa istog Confluence privitka dobivaju
-     *     zasebne identitete i ne mogu preuzeti vlasništvo jedan drugome.
      * EN: Proves that two separate imports of the same Confluence attachment
      *     receive distinct identities and cannot take ownership from each other.
+     *
+     * HR: Dokazuje da dva odvojena importa istog Confluence privitka dobivaju
+     *     zasebne identitete i ne mogu preuzeti vlasništvo jedan drugome.
      */
     public function testScopesAttachmentIdentityToImportJob(): void
     {
@@ -154,7 +160,11 @@ final class ConfluenceAttachmentRegistrationTest extends TestCase
         self::assertSame((int)$second['id'], (int)$repository->attachmentBySourceVersion(2, 'attachment-1', 1)['id']);
     }
 
-    /** HR: Zamjenski import može sačuvati javne identitete stranica i privitaka. EN: A replacement import can preserve public page and attachment identities. */
+    /**
+     * EN: A replacement import can preserve public page and attachment identities.
+     *
+     * HR: Zamjenski import može sačuvati javne identitete stranica i privitaka.
+     */
     public function testExposesAndAcceptsReplacementIdentities(): void
     {
         $repository = $this->repository();

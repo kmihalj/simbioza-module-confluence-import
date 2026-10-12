@@ -1,12 +1,26 @@
 # Simbioza modul za Confluence import
 
-English version: [README.md](README.md)
+Vanjske skripte provjeravaju se kroz registar Editora: točno lokalno odobreno
+podudaranje automatski se odabire samo na uvezenim stranicama koje ga sadrže.
+Nove skripte ostaju na čekanju; grupirani izvještaj omogućuje odobrenje/uključivanje
+jedne ili svih pripadajućih stranica. H5P nema iznimku. Editorov
+`docs/external-scripts_hr.md` opisuje sigurnost, pregled upotrebe i backup.
+
+> Priprema izdanja 0.3.0: navedene naredbe za označena izdanja vrijede nakon koordinirane objave aplikacije i modula. Razvojna provjera koristi lokalne pakete; starija izdanja nisu zamjena za ovu konfiguraciju i shemu.
+
+Engleska verzija: [README.md](README.md)
 
 Modul specifičan za Simbiozu koji sigurno uvozi Confluence XML backup jednog spacea u područje. Čuva stablo stranica, aktualni sadržaj, privitke, unutarnje poveznice i izričito mapirane ovlasti. Povijest stranica i privitaka, nacrti i obrisane stranice opcionalni su i zadano isključeni.
 
 Uz isključenu opciju **Povijest stranica i privitaka** kopiraju se samo aktualne verzije privitaka; prijenos starijih verzija ne pokušava se niti se one prijavljuju kao nedostajuće. Uključivanje opcije izričito uvozi povijest stranica i privitaka. Rezultat razlikuje greške aktualnih datoteka od grešaka ranijih verzija. Slike zadržavaju izvorne širine u pikselima ili ograničenje samo visine te poravnanje, uz prilagodbu uskim ekranima.
 
 ## Ovisnosti
+
+Novi uvozi koriste aktualni raspored Editora i područja. HTML u filesystemu
+i privitci su pod `data/workspaces/<oznaka-pohrane>--<ID>/pages/<oznaka-stranice>--<UUID-dokumenta>/`, u `content/`
+i `attachments/`, uključujući uvezenu povijest. Uz bazni HTML driver sadržaj
+ostaje u bazi, a privitci su i dalje datoteke. Naknadna promjena drivera koristi
+isti raspored bez promjene javnih URL-ova stranica i privitaka.
 
 Obavezne i učitane prije ovog modula:
 
@@ -28,7 +42,7 @@ Opcionalne integracije:
   ICS kao novi zajednički kalendar ili poveže već vidljiv kalendar.
 - Workspace Search automatski obnavlja izvedeni indeks nakon importa.
 
-Interni paketi koriste kompatibilna izdanja `^0.1.0`; ovaj modul ne sprema `composer.lock`.
+Interni paketi koriste kompatibilna izdanja `^0.3.0`; ovaj modul ne sprema `composer.lock`.
 
 ## Što importer radi
 
@@ -133,7 +147,7 @@ kao prijedlog koji administrator i dalje mora izričito potvrditi.
 ## Brzi početak
 
 ```bash
-composer require aaieduhr/simbioza-module-confluence-import:^0.1.13
+composer require aaieduhr/simbioza-module-confluence-import:^0.3.0
 vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```

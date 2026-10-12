@@ -23,12 +23,17 @@ use function str_starts_with;
 use function unlink;
 
 /**
- * HR: Čisti samo Confluence metapodatke stranica koje se trajno uklanjaju.
  * EN: Cleans only Confluence metadata for pages being permanently removed.
+ *
+ * HR: Čisti samo Confluence metapodatke stranica koje se trajno uklanjaju.
  */
 final readonly class PurgeConfluencePageImport
 {
-    /** HR: Prima ORM i granicu privatnog spremišta modula. EN: Receives the ORM and module-private storage boundary. */
+    /**
+     * EN: Receives the ORM and module-private storage boundary.
+     *
+     * HR: Prima ORM i granicu privatnog spremišta modula.
+     */
     public function __construct(
         private Database $database,
         private ConfluenceImportConfig $config,
@@ -36,8 +41,9 @@ final readonly class PurgeConfluencePageImport
     }
 
     /**
-     * HR: Uklanja mapiranja, izlazne veze i privatne privitke samo ciljanih stranica.
      * EN: Removes mappings, outgoing links, and private attachments only for targeted pages.
+     *
+     * HR: Uklanja mapiranja, izlazne veze i privatne privitke samo ciljanih stranica.
      */
     public function __invoke(WorkspacePagesPermanentlyDeleting $event): void
     {
@@ -167,8 +173,9 @@ final readonly class PurgeConfluencePageImport
     }
 
     /**
-     * HR: Vraća jedinstvene retke povezane identifikatorom čvora ili dokumenta.
      * EN: Returns unique rows linked by either node or document identifier.
+     *
+     * HR: Vraća jedinstvene retke povezane identifikatorom čvora ili dokumenta.
      *
      * @param list<int> $nodeIds
      * @param list<string> $documentKeys
@@ -199,7 +206,11 @@ final readonly class PurgeConfluencePageImport
         return $rows;
     }
 
-    /** HR: Briše samo datoteku ispod direktorija ovog modula. EN: Deletes only a file below this module's directory. */
+    /**
+     * EN: Deletes only a file below this module's directory.
+     *
+     * HR: Briše samo datoteku ispod direktorija ovog modula.
+     */
     private function deleteManagedFile(string $path): void
     {
         if (!is_file($path)) {

@@ -41,13 +41,13 @@ use function str_replace;
 use function trim;
 
 /**
- * HR: Prenosi Confluence izvorna mapiranja i privatne privitke koji pripadaju
- *     samo jednom području. Provider radi nakon dokumenta i stabla kako bi
- *     brojčane identitete ponovno povezao preko prenosivih ključeva i UUID-ova.
- *
  * EN: Transfers Confluence provenance mappings and private attachments that
  *     belong to one Workspace only. The provider runs after documents and the
  *     tree so numeric identities can be reconnected through portable keys and UUIDs.
+ *
+ * HR: Prenosi Confluence izvorna mapiranja i privatne privitke koji pripadaju
+ *     samo jednom području. Provider radi nakon dokumenta i stabla kako bi
+ *     brojčane identitete ponovno povezao preko prenosivih ključeva i UUID-ova.
  */
 final class ConfluenceImportWorkspaceBackupProvider implements
     BackupProviderInterface,
@@ -68,8 +68,9 @@ final class ConfluenceImportWorkspaceBackupProvider implements
     private array $removedFiles = [];
 
     /**
-     * HR: Prima bazu te ograničene privatne direktorije Backup i import modula.
      * EN: Receives the database and scoped private directories of Backup and the import module.
+     *
+     * HR: Prima bazu te ograničene privatne direktorije Backup i import modula.
      */
     public function __construct(
         private readonly Database $database,
@@ -78,7 +79,11 @@ final class ConfluenceImportWorkspaceBackupProvider implements
     ) {
     }
 
-    /** HR: Opisuje Confluence podatke jednog područja. EN: Describes one Workspace's Confluence data. */
+    /**
+     * EN: Describes one Workspace's Confluence data.
+     *
+     * HR: Opisuje Confluence podatke jednog područja.
+     */
     public function metadata(): BackupProviderMetadata
     {
         return new BackupProviderMetadata(
@@ -96,8 +101,9 @@ final class ConfluenceImportWorkspaceBackupProvider implements
     }
 
     /**
-     * HR: Izvozi samo dovršene poslove, mapiranja i privatne datoteke odabranog područja.
      * EN: Exports completed jobs, mappings, and private files for the selected Workspace only.
+     *
+     * HR: Izvozi samo dovršene poslove, mapiranja i privatne datoteke odabranog područja.
      */
     public function export(BackupExportContext $context, BackupArchiveWriter $writer): void
     {
@@ -147,7 +153,11 @@ final class ConfluenceImportWorkspaceBackupProvider implements
         $this->exportAttachments($workspaceId, $jobIds, $nodes, $writer);
     }
 
-    /** HR: Provjerava prenosive reference i svaki privatni blob. EN: Validates portable references and every private blob. */
+    /**
+     * EN: Validates portable references and every private blob.
+     *
+     * HR: Provjerava prenosive reference i svaki privatni blob.
+     */
     public function preflight(BackupImportContext $context, BackupArchiveReader $reader): BackupPreflightResult
     {
         $scope = $this->singleRecord($reader, 'scope');
@@ -193,10 +203,11 @@ final class ConfluenceImportWorkspaceBackupProvider implements
     }
 
     /**
-     * HR: Za replace uklanja samo module-owned zapise ciljnog područja, dok se
-     *     stare datoteke čuvaju do potvrđenog DB commita.
      * EN: For replace, removes only module-owned target Workspace records while
      *     preserving old files until the database commit is confirmed.
+     *
+     * HR: Za replace uklanja samo module-owned zapise ciljnog područja, dok se
+     *     stare datoteke čuvaju do potvrđenog DB commita.
      */
     public function prepareImport(BackupImportContext $context, BackupArchiveReader $reader): void
     {
@@ -243,7 +254,11 @@ final class ConfluenceImportWorkspaceBackupProvider implements
         }
     }
 
-    /** HR: Vraća Confluence zapise i priprema privatne datoteke za atomsku objavu. EN: Restores Confluence records and stages private files for atomic publication. */
+    /**
+     * EN: Restores Confluence records and stages private files for atomic publication.
+     *
+     * HR: Vraća Confluence zapise i priprema privatne datoteke za atomsku objavu.
+     */
     public function import(BackupImportContext $context, BackupArchiveReader $reader): void
     {
         $scope = $this->singleRecord($reader, 'scope');
@@ -309,7 +324,11 @@ final class ConfluenceImportWorkspaceBackupProvider implements
         $this->rewriteDocuments($context, $reader, $sourceSlug, $targetSlug, $attachmentMap);
     }
 
-    /** HR: Atomski objavljuje nove i sklanja zamijenjene privatne datoteke. EN: Atomically publishes new and retires replaced private files. */
+    /**
+     * EN: Atomically publishes new and retires replaced private files.
+     *
+     * HR: Atomski objavljuje nove i sklanja zamijenjene privatne datoteke.
+     */
     public function finalizeImport(BackupImportContext $context, BackupArchiveReader $reader): void
     {
         $removed = [];
@@ -353,7 +372,11 @@ final class ConfluenceImportWorkspaceBackupProvider implements
         $this->removedFiles = $removed;
     }
 
-    /** HR: Vraća datoteke nakon neuspjelog DB importa. EN: Restores files after a failed database import. */
+    /**
+     * EN: Restores files after a failed database import.
+     *
+     * HR: Vraća datoteke nakon neuspjelog DB importa.
+     */
     public function abortImport(BackupImportContext $context): void
     {
         $this->restoreFiles($this->publishedFiles, $this->removedFiles);
@@ -365,7 +388,11 @@ final class ConfluenceImportWorkspaceBackupProvider implements
         $this->resetFileState();
     }
 
-    /** HR: Nakon DB commita briše rollback kopije. EN: Deletes rollback copies after the database commit. */
+    /**
+     * EN: Deletes rollback copies after the database commit.
+     *
+     * HR: Nakon DB commita briše rollback kopije.
+     */
     public function completeImport(BackupImportContext $context): void
     {
         foreach ([...$this->publishedFiles, ...$this->removedFiles] as $file) {
@@ -377,8 +404,9 @@ final class ConfluenceImportWorkspaceBackupProvider implements
     }
 
     /**
-     * HR: Izvozi izvorno mapiranje područja bez lokalnih brojčanih identiteta.
      * EN: Exports the source Workspace mapping without local numeric identities.
+     *
+     * HR: Izvozi izvorno mapiranje područja bez lokalnih brojčanih identiteta.
      *
      * @param list<int> $jobIds
      */
@@ -396,8 +424,9 @@ final class ConfluenceImportWorkspaceBackupProvider implements
     }
 
     /**
-     * HR: Izvozi mapiranja stranica odabranog područja.
      * EN: Exports page mappings for the selected Workspace.
+     *
+     * HR: Izvozi mapiranja stranica odabranog područja.
      *
      * @param list<int> $jobIds
      * @param array<int,array<string,mixed>> $nodes
@@ -422,8 +451,9 @@ final class ConfluenceImportWorkspaceBackupProvider implements
     }
 
     /**
-     * HR: Izvozi riješene i neriješene poveznice poslova odabranog područja.
      * EN: Exports resolved and unresolved links for the selected Workspace jobs.
+     *
+     * HR: Izvozi riješene i neriješene poveznice poslova odabranog područja.
      *
      * @param list<int> $jobIds
      */
@@ -441,8 +471,9 @@ final class ConfluenceImportWorkspaceBackupProvider implements
     }
 
     /**
-     * HR: Izvozi metapodatke i binarne privatne privitke područja.
      * EN: Exports Workspace private attachment metadata and binaries.
+     *
+     * HR: Izvozi metapodatke i binarne privatne privitke područja.
      *
      * @param list<int> $jobIds
      * @param array<int,array<string,mixed>> $nodes
@@ -479,7 +510,11 @@ final class ConfluenceImportWorkspaceBackupProvider implements
         }
     }
 
-    /** HR: Vraća izvorno mapiranje područja na novi cilj. EN: Restores the source Workspace mapping onto the new target. */
+    /**
+     * EN: Restores the source Workspace mapping onto the new target.
+     *
+     * HR: Vraća izvorno mapiranje područja na novi cilj.
+     */
     private function importSpaces(
         BackupImportContext $context,
         BackupArchiveReader $reader,
@@ -508,7 +543,11 @@ final class ConfluenceImportWorkspaceBackupProvider implements
         }
     }
 
-    /** HR: Vraća mapiranja Confluence sadržaja na obnovljene stranice. EN: Restores Confluence content mappings onto restored pages. */
+    /**
+     * EN: Restores Confluence content mappings onto restored pages.
+     *
+     * HR: Vraća mapiranja Confluence sadržaja na obnovljene stranice.
+     */
     private function importContent(
         BackupImportContext $context,
         BackupArchiveReader $reader,
@@ -546,8 +585,9 @@ final class ConfluenceImportWorkspaceBackupProvider implements
     }
 
     /**
-     * HR: Vraća privatne privitke i mapu starih i novih UUID-ova.
      * EN: Restores private attachments and returns the old-to-new UUID map.
+     *
+     * HR: Vraća privatne privitke i mapu starih i novih UUID-ova.
      *
      * @return array<string,string>
      */
@@ -610,7 +650,11 @@ final class ConfluenceImportWorkspaceBackupProvider implements
         return $uuidMap;
     }
 
-    /** HR: Vraća trajne zapise unutarnjih i međupodručnih poveznica. EN: Restores durable internal and cross-Workspace link records. */
+    /**
+     * EN: Restores durable internal and cross-Workspace link records.
+     *
+     * HR: Vraća trajne zapise unutarnjih i međupodručnih poveznica.
+     */
     private function importLinks(
         BackupImportContext $context,
         BackupArchiveReader $reader,
@@ -635,8 +679,9 @@ final class ConfluenceImportWorkspaceBackupProvider implements
     }
 
     /**
-     * HR: U kopiji područja prepisuje slug područja i UUID-ove privatnih privitaka.
      * EN: Rewrites the Workspace slug and private attachment UUIDs in a Workspace copy.
+     *
+     * HR: U kopiji područja prepisuje slug područja i UUID-ove privatnih privitaka.
      *
      * @param array<string,string> $attachmentMap
      */
@@ -693,8 +738,9 @@ final class ConfluenceImportWorkspaceBackupProvider implements
     }
 
     /**
-     * HR: Učitava stranice područja jednom kako bi izvoz izbjegao N+1 upite.
      * EN: Loads Workspace pages once so the export avoids N+1 queries.
+     *
+     * HR: Učitava stranice područja jednom kako bi izvoz izbjegao N+1 upite.
      *
      * @return array<int,array<string,mixed>>
      */
@@ -711,8 +757,9 @@ final class ConfluenceImportWorkspaceBackupProvider implements
     }
 
     /**
-     * HR: Čita prvi zapis skupa koji po ugovoru smije sadržavati samo jedan redak.
      * EN: Reads the first record from a dataset that is contractually singular.
+     *
+     * HR: Čita prvi zapis skupa koji po ugovoru smije sadržavati samo jedan redak.
      *
      * @return array<string,mixed>|null
      */
@@ -725,8 +772,9 @@ final class ConfluenceImportWorkspaceBackupProvider implements
     }
 
     /**
-     * HR: Dohvaća područje prema stabilnom slugu ili UUID-u.
      * EN: Finds a Workspace by stable slug or UUID.
+     *
+     * HR: Dohvaća područje prema stabilnom slugu ili UUID-u.
      *
      * @return array<string,mixed>|null
      */
@@ -743,8 +791,9 @@ final class ConfluenceImportWorkspaceBackupProvider implements
     }
 
     /**
-     * HR: Umeće ili osvježava zapis prema stabilnom poslovnom ključu.
      * EN: Inserts or updates a record by its stable business key.
+     *
+     * HR: Umeće ili osvježava zapis prema stabilnom poslovnom ključu.
      *
      * @param array<string,mixed> $match
      * @param array<string,mixed> $values
@@ -773,7 +822,11 @@ final class ConfluenceImportWorkspaceBackupProvider implements
         return BackupValue::integer($row['id'], $label . '.id');
     }
 
-    /** HR: Razrješava novi brojčani identitet import posla. EN: Resolves the imported job's new numeric identity. */
+    /**
+     * EN: Resolves the imported job's new numeric identity.
+     *
+     * HR: Razrješava novi brojčani identitet import posla.
+     */
     private function jobId(BackupImportContext $context, mixed $source): int
     {
         return $this->mappedInteger(
@@ -783,19 +836,31 @@ final class ConfluenceImportWorkspaceBackupProvider implements
         );
     }
 
-    /** HR: Zahtijeva cjelobrojno mapiranje prenosivog identiteta. EN: Requires an integer mapping for a portable identity. */
+    /**
+     * EN: Requires an integer mapping for a portable identity.
+     *
+     * HR: Zahtijeva cjelobrojno mapiranje prenosivog identiteta.
+     */
     private function mappedInteger(BackupImportContext $context, string $namespace, int|string $source): int
     {
         return BackupValue::integer($context->state->require($namespace, $source), 'state.' . $namespace);
     }
 
-    /** HR: Kopiji dodaje izolacijski sufiks izvornog identiteta. EN: Adds a source-identity isolation suffix to a copy. */
+    /**
+     * EN: Adds a source-identity isolation suffix to a copy.
+     *
+     * HR: Kopiji dodaje izolacijski sufiks izvornog identiteta.
+     */
     private function withSuffix(mixed $value, string $suffix): string
     {
         return (is_scalar($value) ? (string)$value : '') . $suffix;
     }
 
-    /** HR: Pamti samo postojeću datoteku unutar privatnog korijena modula. EN: Remembers only an existing file inside the module's private root. */
+    /**
+     * EN: Remembers only an existing file inside the module's private root.
+     *
+     * HR: Pamti samo postojeću datoteku unutar privatnog korijena modula.
+     */
     private function rememberObsoleteFile(mixed $path): void
     {
         if (is_scalar($path) && $this->isPrivateAttachment((string)$path) && is_file((string)$path)) {
@@ -803,7 +868,11 @@ final class ConfluenceImportWorkspaceBackupProvider implements
         }
     }
 
-    /** HR: Provjerava pripada li putanja privatnom direktoriju privitaka. EN: Checks whether a path belongs to the private attachment directory. */
+    /**
+     * EN: Checks whether a path belongs to the private attachment directory.
+     *
+     * HR: Provjerava pripada li putanja privatnom direktoriju privitaka.
+     */
     private function isPrivateAttachment(string $path): bool
     {
         $root = rtrim($this->config->attachmentDirectory(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
@@ -811,8 +880,9 @@ final class ConfluenceImportWorkspaceBackupProvider implements
     }
 
     /**
-     * HR: Uklanja objavljene datoteke i vraća njihove rollback kopije.
      * EN: Removes published files and restores their rollback copies.
+     *
+     * HR: Uklanja objavljene datoteke i vraća njihove rollback kopije.
      *
      * @param list<array{target:string,rollback:string|null}> $published
      * @param list<array{target:string,rollback:string}> $removed
@@ -834,7 +904,11 @@ final class ConfluenceImportWorkspaceBackupProvider implements
         }
     }
 
-    /** HR: Čisti kratkotrajno stanje nakon potvrde ili rollbacka. EN: Clears transient state after commit or rollback. */
+    /**
+     * EN: Clears transient state after commit or rollback.
+     *
+     * HR: Čisti kratkotrajno stanje nakon potvrde ili rollbacka.
+     */
     private function resetFileState(): void
     {
         $this->pendingFiles = [];
@@ -843,7 +917,11 @@ final class ConfluenceImportWorkspaceBackupProvider implements
         $this->removedFiles = [];
     }
 
-    /** HR: Stvara RFC 4122 UUID v4 za izoliranu kopiju. EN: Creates an RFC 4122 UUID v4 for an isolated copy. */
+    /**
+     * EN: Creates an RFC 4122 UUID v4 for an isolated copy.
+     *
+     * HR: Stvara RFC 4122 UUID v4 za izoliranu kopiju.
+     */
     private function uuid(): string
     {
         $bytes = random_bytes(16);

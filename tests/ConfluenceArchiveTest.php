@@ -32,7 +32,11 @@ final class ConfluenceArchiveTest extends TestCase
         @rmdir($this->directory);
     }
 
-    /** HR: Čita valjani export i pronalazi fizičku verziju privitka kada XML broj odstupa. EN: Reads a valid export and finds the physical attachment version when its XML number differs. */
+    /**
+     * EN: Reads a valid export and finds the physical attachment version when its XML number differs.
+     *
+     * HR: Čita valjani export i pronalazi fizičku verziju privitka kada XML broj odstupa.
+     */
     public function testInspectAndAttachmentVersionFallback(): void
     {
         $path = $this->archive([
@@ -50,7 +54,11 @@ final class ConfluenceArchiveTest extends TestCase
         self::assertSame('attachment-body', file_get_contents($target));
     }
 
-    /** HR: Povijesni XML zapis čita traženu verziju iz direktorija izvornog privitka. EN: A historical XML record reads the requested version from the original attachment directory. */
+    /**
+     * EN: A historical XML record reads the requested version from the original attachment directory.
+     *
+     * HR: Povijesni XML zapis čita traženu verziju iz direktorija izvornog privitka.
+     */
     public function testHistoricalAttachmentUsesLogicalIdAndExactVersion(): void
     {
         $path = $this->archive([
@@ -63,7 +71,11 @@ final class ConfluenceArchiveTest extends TestCase
         self::assertSame('historical-body', file_get_contents($target));
     }
 
-    /** HR: Točna verzija zapisa ima prednost pred najnovijom zamjenskom verzijom. EN: An exact record version takes precedence over the newest fallback version. */
+    /**
+     * EN: An exact record version takes precedence over the newest fallback version.
+     *
+     * HR: Točna verzija zapisa ima prednost pred najnovijom zamjenskom verzijom.
+     */
     public function testHistoricalAttachmentSupportsPhysicalRecordDirectory(): void
     {
         $path = $this->archive([
@@ -76,7 +88,11 @@ final class ConfluenceArchiveTest extends TestCase
         self::assertSame('historical-body', file_get_contents($target));
     }
 
-    /** HR: Ni logički ID privitka ne može izaći iz sigurnog puta. EN: The logical attachment ID cannot escape the safe path either. */
+    /**
+     * EN: The logical attachment ID cannot escape the safe path either.
+     *
+     * HR: Ni logički ID privitka ne može izaći iz sigurnog puta.
+     */
     public function testRejectsUnsafeLogicalAttachmentId(): void
     {
         $path = $this->archive(['attachments/10/21/1' => 'body']);
@@ -85,7 +101,11 @@ final class ConfluenceArchiveTest extends TestCase
         $this->service()->copyAttachment($path, '10', '21', 1, $this->directory . '/unsafe.bin', '../20');
     }
 
-    /** HR: Odbija traversal zapis prije ikakva izdvajanja. EN: Rejects a traversal entry before extracting anything. */
+    /**
+     * EN: Rejects a traversal entry before extracting anything.
+     *
+     * HR: Odbija traversal zapis prije ikakva izdvajanja.
+     */
     public function testRejectsTraversalEntry(): void
     {
         $path = $this->archive([

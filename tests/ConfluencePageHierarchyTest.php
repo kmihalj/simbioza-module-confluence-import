@@ -11,7 +11,11 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(ConfluencePageHierarchy::class)]
 final class ConfluencePageHierarchyTest extends TestCase
 {
-    /** HR: Dijete izostavljenog nacrta ostaje pod najbližim uvezenim pretkom. EN: A child of an excluded draft remains below its nearest imported ancestor. */
+    /**
+     * EN: A child of an excluded draft remains below its nearest imported ancestor.
+     *
+     * HR: Dijete izostavljenog nacrta ostaje pod najbližim uvezenim pretkom.
+     */
     public function testSkipsExcludedDraftParentWithoutPromotingChildToRoot(): void
     {
         $ancestor = ['logical_source_id' => '10', 'parent_id' => '', 'status' => 'current'];
@@ -27,7 +31,11 @@ final class ConfluencePageHierarchyTest extends TestCase
         self::assertSame('10', $parents['12']);
     }
 
-    /** HR: Nepostojeći i ciklički roditelji sigurno završavaju u korijenu. EN: Missing and cyclic parents safely fall back to the root. */
+    /**
+     * EN: Missing and cyclic parents safely fall back to the root.
+     *
+     * HR: Nepostojeći i ciklički roditelji sigurno završavaju u korijenu.
+     */
     public function testFallsBackToRootForMissingOrCyclicParents(): void
     {
         $missing = ['logical_source_id' => '20', 'parent_id' => '404', 'status' => 'current'];

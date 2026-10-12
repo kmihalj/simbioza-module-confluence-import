@@ -18,23 +18,29 @@ use const PHP_URL_PATH;
 use const PHP_URL_QUERY;
 use const PHP_URL_SCHEME;
 
-/** HR: Čita URL bez oštećivanja valjanih UTF-8 znakova. EN: Parses URLs without corrupting valid UTF-8 characters. */
+/**
+ * EN: Parses URLs without corrupting valid UTF-8 characters.
+ *
+ * HR: Čita URL bez oštećivanja valjanih UTF-8 znakova.
+ */
 final class Utf8Url
 {
     /**
-     * HR: Vraća URL dijelove i čuva sirove Unicode znakove te postojeće percent-encoded sekvence.
      * EN: Returns URL parts while preserving raw Unicode characters and existing percent-encoded sequences.
+     *
+     * HR: Vraća URL dijelove i čuva sirove Unicode znakove te postojeće percent-encoded sekvence.
      *
      * @return array<string,int|string>|null
      */
     public static function parts(string $url): ?array
     {
-        // HR: PHP-ov parse_url može promijeniti UTF-8 continuation bajtove koji
-        //     odgovaraju kontrolnim znakovima. Postojeći znak % prvo štitimo,
-        //     a sirove non-ASCII bajtove privremeno percent-encodeamo.
         // EN: PHP's parse_url can alter UTF-8 continuation bytes that match
         //     control characters. Protect existing percent signs first, then
         //     temporarily percent-encode raw non-ASCII bytes.
+        //
+        // HR: PHP-ov parse_url može promijeniti UTF-8 continuation bajtove koji
+        //     odgovaraju kontrolnim znakovima. Postojeći znak % prvo štitimo,
+        //     a sirove non-ASCII bajtove privremeno percent-encodeamo.
         $protected = preg_replace_callback(
             '/%|[\x80-\xFF]/',
             static fn (array $match): string => $match[0] === '%'
@@ -60,7 +66,11 @@ final class Utf8Url
         return $parts;
     }
 
-    /** HR: Vraća tekstni dio URL-a. EN: Returns a textual URL component. */
+    /**
+     * EN: Returns a textual URL component.
+     *
+     * HR: Vraća tekstni dio URL-a.
+     */
     public static function component(string $url, int $component): ?string
     {
         $key = match ($component) {

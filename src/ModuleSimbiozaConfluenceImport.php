@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace AaiEduHr\SimbiozaModuleConfluenceImport;
 
 /**
- * HR: Sadrži stabilne identifikatore Confluence importa koji pripadaju samo ovom modulu.
  * EN: Contains stable Confluence-import identifiers owned exclusively by this module.
+ *
+ * HR: Sadrži stabilne identifikatore Confluence importa koji pripadaju samo ovom modulu.
  */
 final class ModuleSimbiozaConfluenceImport
 {
@@ -26,7 +27,11 @@ final class ModuleSimbiozaConfluenceImport
 
     public const TABLE_ATTACHMENTS = 'simbioza_confluence_import_attachments';
 
-    /** HR: Statički katalog nije moguće instancirati. EN: The static catalog cannot be instantiated. */
+    /**
+     * EN: The static catalog cannot be instantiated.
+     *
+     * HR: Statički katalog nije moguće instancirati.
+     */
     private function __construct()
     {
     }

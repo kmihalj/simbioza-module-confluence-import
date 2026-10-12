@@ -15,7 +15,32 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(ConfluenceHtmlConverter::class)]
 final class ConfluenceHtmlConverterTest extends TestCase
 {
-    /** HR: Visina bez širine i centriranje ostaju vidljivi nakon sanitizacije. EN: Height-only sizing and centering remain effective after sanitization. */
+    /**
+     * EN: The DABAR meeting date and adjacent literal time survive conversion and sanitization.
+     * The same empty date materialized by an HTML-table macro must also stay visible.
+     *
+     * HR: Datum sastanka DABAR-a i susjedno vrijeme preživljavaju pretvorbu i sanitizaciju.
+     * I prazan datum koji nastaje pretvorbom HTML-tabličnog makroa mora ostati vidljiv.
+     */
+    public function testDabarMeetingDateAndMacroDatesSurviveSanitization(): void
+    {
+        $body = '<h2>Datum</h2><p><time datetime="2019-01-22" />, 13:00, Srce</p>'
+            . '<ac:structured-macro ac:name="html"><ac:plain-text-body><![CDATA['
+            . '<table><tr><td><time datetime="2026-10-12T13:00:00+02:00"></time></td></tr></table>'
+            . ']]></ac:plain-text-body></ac:structured-macro>';
+        $result = (new ConfluenceHtmlConverter())->convert($body, 'DABAR', '27690849');
+        $sanitizer = new EditorHtmlSanitizer();
+        $html = $sanitizer->sanitize($result->html);
+        self::assertStringContainsString('<p>2019-01-22, 13:00, Srce</p>', $html);
+        self::assertStringContainsString('2026-10-12T13:00:00+02:00', $html);
+        self::assertSame($html, $sanitizer->sanitize($html));
+    }
+
+    /**
+     * EN: Height-only sizing and centering remain effective after sanitization.
+     *
+     * HR: Visina bez širine i centriranje ostaju vidljivi nakon sanitizacije.
+     */
     public function testPreservesResponsiveSourceImageDimensions(): void
     {
         $body = '<p><ac:image ac:align="center" ac:height="400"><ri:attachment ri:filename="height.png" /></ac:image></p>'
@@ -31,7 +56,11 @@ final class ConfluenceHtmlConverterTest extends TestCase
         self::assertSame($html, (new EditorHtmlSanitizer())->sanitize($html));
     }
 
-    /** HR: Datumi postaju vidljivi prije čišćenja HTML-a, uključujući ćelije i makroe. EN: Dates become visible before HTML sanitization, including cells and macros. */
+    /**
+     * EN: Dates become visible before HTML sanitization, including cells and macros.
+     *
+     * HR: Datumi postaju vidljivi prije čišćenja HTML-a, uključujući ćelije i makroe.
+     */
     public function testPreservesEmptyConfluenceDatesAfterEditorSanitization(): void
     {
         $body = '<table><tbody><tr><td>Activated</td><td><time datetime="2023-05-10" /></td>'
@@ -52,7 +81,11 @@ final class ConfluenceHtmlConverterTest extends TestCase
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Ne zamjenjuje postojeće oznake niti pretvara atribut datuma u izvršni HTML. EN: Does not replace existing labels or turn date attributes into executable HTML. */
+    /**
+     * EN: Does not replace existing labels or turn date attributes into executable HTML.
+     *
+     * HR: Ne zamjenjuje postojeće oznake niti pretvara atribut datuma u izvršni HTML.
+     */
     public function testPreservesDateLabelsAndEscapesAttributeText(): void
     {
         $body = '<p><time datetime="2023-05-10"><strong>10 May 2023</strong></time></p>'
@@ -67,7 +100,11 @@ final class ConfluenceHtmlConverterTest extends TestCase
         self::assertStringNotContainsString('<img', $html);
     }
 
-    /** HR: Makroi s istim izvornim ID-ovima zadržavaju odvojene veze ćelija. EN: Macros with identical source IDs retain separate cell associations. */
+    /**
+     * EN: Macros with identical source IDs retain separate cell associations.
+     *
+     * HR: Makroi s istim izvornim ID-ovima zadržavaju odvojene veze ćelija.
+     */
     public function testHtmlTableHeadersAreRemappedWithinEachMacro(): void
     {
         $macro = '<ac:structured-macro ac:name="html"><ac:plain-text-body><![CDATA['
@@ -99,7 +136,11 @@ final class ConfluenceHtmlConverterTest extends TestCase
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Nevaljane i vanjske reference ne postaju prividno valjane veze. EN: Invalid and external references must not become seemingly valid associations. */
+    /**
+     * EN: Invalid and external references must not become seemingly valid associations.
+     *
+     * HR: Nevaljane i vanjske reference ne postaju prividno valjane veze.
+     */
     public function testHtmlTableRejectsAmbiguousAndExternalHeaderReferences(): void
     {
         $macro = '<ac:structured-macro ac:name="html"><ac:plain-text-body><![CDATA['
@@ -117,7 +158,11 @@ final class ConfluenceHtmlConverterTest extends TestCase
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Zaglavlja ne prelaze granice ugniježđenih tablica. EN: Headers cannot cross nested table boundaries. */
+    /**
+     * EN: Headers cannot cross nested table boundaries.
+     *
+     * HR: Zaglavlja ne prelaze granice ugniježđenih tablica.
+     */
     public function testHtmlTableKeepsNestedHeaderAssociationsLocal(): void
     {
         $macro = '<ac:structured-macro ac:name="html"><ac:plain-text-body><![CDATA['
@@ -139,7 +184,11 @@ final class ConfluenceHtmlConverterTest extends TestCase
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Naslov informativnog makroa ostaje vidljiv i kada je tijelo prazno. EN: An information macro title remains visible when its body is empty. */
+    /**
+     * EN: An information macro title remains visible when its body is empty.
+     *
+     * HR: Naslov informativnog makroa ostaje vidljiv i kada je tijelo prazno.
+     */
     public function testPreservesTipTitleWhenRichBodyIsEmpty(): void
     {
         $body = <<<'XML'
@@ -153,7 +202,11 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Pretvara interne URL-ove, privitke, task-listu i podržani makro, a vanjski URL ostavlja netaknut. EN: Converts internal URLs, attachments, a task list, and a supported macro while preserving an external URL. */
+    /**
+     * EN: Converts internal URLs, attachments, a task list, and a supported macro while preserving an external URL.
+     *
+     * HR: Pretvara interne URL-ove, privitke, task-listu i podržani makro, a vanjski URL ostavlja netaknut.
+     */
     public function testConvertsStorageFormatAndKeepsPortableReferences(): void
     {
         $body = <<<'XML'
@@ -186,7 +239,11 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Calendar makro ostaje označen za izričiti ručni izbor bez automatskog povezivanja. EN: A Calendar macro remains marked for an explicit manual choice without automatic linking. */
+    /**
+     * EN: A Calendar macro remains marked for an explicit manual choice without automatic linking.
+     *
+     * HR: Calendar makro ostaje označen za izričiti ručni izbor bez automatskog povezivanja.
+     */
     public function testMarksCalendarMacroForManualResolution(): void
     {
         $sourceUuid = '3c1a6576-55e6-4776-9296-b95a00f980b7';
@@ -224,7 +281,11 @@ XML;
         self::assertStringContainsString('CroRIS javni kalendar događanja', $result->html);
     }
 
-    /** HR: Čuva status, bogati sadržaj i ugniježđenost Confluence zadataka bez udvostručavanja teksta. EN: Preserves status, rich content, and nesting of Confluence tasks without duplicating text. */
+    /**
+     * EN: Preserves status, rich content, and nesting of Confluence tasks without duplicating text.
+     *
+     * HR: Čuva status, bogati sadržaj i ugniježđenost Confluence zadataka bez udvostručavanja teksta.
+     */
     public function testPreservesNestedConfluenceTaskLists(): void
     {
         $body = <<<'XML'
@@ -257,7 +318,11 @@ XML;
         self::assertFalse($summaries[1]['complete']);
     }
 
-    /** HR: Tekst predloška nije objavljeni zadatak i ne smije ući u stranicu ni izvještaj. EN: Template placeholder text is not a published task and must not enter the page or report. */
+    /**
+     * EN: Template placeholder text is not a published task and must not enter the page or report.
+     *
+     * HR: Tekst predloška nije objavljeni zadatak i ne smije ući u stranicu ni izvještaj.
+     */
     public function testOmitsConfluenceTemplatePlaceholderTasks(): void
     {
         $body = <<<'XML'
@@ -279,7 +344,11 @@ XML;
         self::assertSame('Stvarni zadatak', $summaries[0]['text']);
     }
 
-    /** HR: tasks-report-macro postaje samostalna nativna tablica zadataka s običnim lokalnim poveznicama. EN: tasks-report-macro becomes an independent native task table with regular local links. */
+    /**
+     * EN: tasks-report-macro becomes an independent native task table with regular local links.
+     *
+     * HR: tasks-report-macro postaje samostalna nativna tablica zadataka s običnim lokalnim poveznicama.
+     */
     public function testConvertsTaskReportMacroToStaticLocalTable(): void
     {
         $body = <<<'XML'
@@ -336,7 +405,11 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Čuva sva valjana Unicode slova i emoji u URL-ovima. EN: Preserves all valid Unicode letters and emoji in URLs. */
+    /**
+     * EN: Preserves all valid Unicode letters and emoji in URLs.
+     *
+     * HR: Čuva sva valjana Unicode slova i emoji u URL-ovima.
+     */
     public function testPreservesUnicodeInPlainUrlsAndReferenceTokens(): void
     {
         $body = <<<'XML'
@@ -367,7 +440,11 @@ XML;
         );
     }
 
-    /** HR: Završni prolaz prepoznaje korijene područja, kratke URL-ove i veze koje proizvede HTML makro. EN: The final pass recognizes Workspace roots, short URLs, and links materialized by an HTML macro. */
+    /**
+     * EN: The final pass recognizes Workspace roots, short URLs, and links materialized by an HTML macro.
+     *
+     * HR: Završni prolaz prepoznaje korijene područja, kratke URL-ove i veze koje proizvede HTML makro.
+     */
     public function testFinalLinkPassRecognizesAllConfluenceUrlShapes(): void
     {
         $body = <<<'XML'
@@ -408,7 +485,11 @@ XML;
         self::assertStringContainsString('https://en.wikipedia.org/wiki/Computer_cluster', $result->html);
     }
 
-    /** HR: Bez administratorski odabranog izvornog hosta apsolutni URL ne nagađa se kao Confluence poveznica. EN: Without an administrator-selected source host, an absolute URL is not guessed to be a Confluence link. */
+    /**
+     * EN: Without an administrator-selected source host, an absolute URL is not guessed to be a Confluence link.
+     *
+     * HR: Bez administratorski odabranog izvornog hosta apsolutni URL ne nagađa se kao Confluence poveznica.
+     */
     public function testAbsoluteConfluenceShapedUrlRequiresSelectedSourceHost(): void
     {
         $body = '<p><a href="https://wiki.example/display/DEMO/Page">Page</a></p>';
@@ -419,7 +500,11 @@ XML;
         self::assertStringContainsString('https://wiki.example/display/DEMO/Page', $result->html);
     }
 
-    /** HR: Normalizira nestandardni CDATA završetak i HTML entitete iz stvarnih Atlassian XML izvoza. EN: Normalizes the non-standard CDATA terminator and HTML entities found in real Atlassian XML exports. */
+    /**
+     * EN: Normalizes the non-standard CDATA terminator and HTML entities found in real Atlassian XML exports.
+     *
+     * HR: Normalizira nestandardni CDATA završetak i HTML entitete iz stvarnih Atlassian XML izvoza.
+     */
     public function testNormalizesAtlassianExportStorageQuirks(): void
     {
         $body = <<<'XML'
@@ -449,7 +534,11 @@ XML;
         self::assertNotContains('invalid-storage-format', $result->unsupportedMacros);
     }
 
-    /** HR: Pretvara makroe stabla, privitaka, multimedije, statusa i sidra stvarnim lokalnim podacima. EN: Converts tree, attachment, multimedia, status, and anchor macros with real local data. */
+    /**
+     * EN: Converts tree, attachment, multimedia, status, and anchor macros with real local data.
+     *
+     * HR: Pretvara makroe stabla, privitaka, multimedije, statusa i sidra stvarnim lokalnim podacima.
+     */
     public function testConvertsContextAwareMacros(): void
     {
         $body = <<<'XML'
@@ -476,7 +565,11 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Include postaje dinamička referenca, a neispravan graf čuva tablicu i upozorenje. EN: Include becomes a dynamic reference, while an invalid chart keeps its table and warning. */
+    /**
+     * EN: Include becomes a dynamic reference, while an invalid chart keeps its table and warning.
+     *
+     * HR: Include postaje dinamička referenca, a neispravan graf čuva tablicu i upozorenje.
+     */
     public function testUsesSafeFallbacksForIncludeAndChart(): void
     {
         $body = <<<'XML'
@@ -506,7 +599,11 @@ XML;
         self::assertSame(['chart'], $result->unsupportedMacros);
     }
 
-    /** HR: Valjani Confluence chart postaje uređivi nativni grafikon bez upozorenja. EN: A valid Confluence chart becomes an editable native chart without a warning. */
+    /**
+     * EN: A valid Confluence chart becomes an editable native chart without a warning.
+     *
+     * HR: Valjani Confluence chart postaje uređivi nativni grafikon bez upozorenja.
+     */
     public function testConvertsConfluenceChartToNativeEditorChart(): void
     {
         $body = <<<'XML'
@@ -531,7 +628,11 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Čuva raspored, slike i poveznice, a izvorni TOC prepušta nativnom prikazu. EN: Preserves layout, images, and links while leaving the source TOC to the native view. */
+    /**
+     * EN: Preserves layout, images, and links while leaving the source TOC to the native view.
+     *
+     * HR: Čuva raspored, slike i poveznice, a izvorni TOC prepušta nativnom prikazu.
+     */
     public function testPreservesPagePresentationDetails(): void
     {
         $body = <<<'XML'
@@ -566,7 +667,11 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Confluence TOC uključuje nativni sadržaj, a njegov prazan panel ne ostaje u HTML-u. EN: A Confluence TOC enables native contents without leaving its empty panel in HTML. */
+    /**
+     * EN: A Confluence TOC enables native contents without leaving its empty panel in HTML.
+     *
+     * HR: Confluence TOC uključuje nativni sadržaj, a njegov prazan panel ne ostaje u HTML-u.
+     */
     public function testPromotesPanelWrappedTocToNativePageContents(): void
     {
         $body = <<<'XML'
@@ -591,7 +696,11 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Slika unutar Confluence poveznice ostaje vidljiva i klikabilna. EN: An image inside a Confluence link remains visible and clickable. */
+    /**
+     * EN: An image inside a Confluence link remains visible and clickable.
+     *
+     * HR: Slika unutar Confluence poveznice ostaje vidljiva i klikabilna.
+     */
     public function testPreservesLinkedAttachmentImage(): void
     {
         $body = <<<'XML'
@@ -618,7 +727,11 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Slika bez izvornog opisa ne prikazuje naziv datoteke kao caption. EN: An image without source description does not expose its filename as a caption. */
+    /**
+     * EN: An image without source description does not expose its filename as a caption.
+     *
+     * HR: Slika bez izvornog opisa ne prikazuje naziv datoteke kao caption.
+     */
     public function testImageWithoutDescriptionKeepsEmptyAlternativeText(): void
     {
         $body = <<<'XML'
@@ -632,7 +745,11 @@ XML;
         self::assertStringNotContainsString('figure-caption', $result->html);
     }
 
-    /** HR: Expand postaje nativni accordion i čuva izvornu vrstu liste. EN: Expand becomes a native accordion and keeps the original list type. */
+    /**
+     * EN: Expand becomes a native accordion and keeps the original list type.
+     *
+     * HR: Expand postaje nativni accordion i čuva izvornu vrstu liste.
+     */
     public function testConvertsExpandMacroWithItsTitle(): void
     {
         $body = <<<'XML'
@@ -649,7 +766,11 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Samo uzastopni Expand makroi ulaze u istu accordion grupu. EN: Only consecutive Expand macros join the same accordion group. */
+    /**
+     * EN: Only consecutive Expand macros join the same accordion group.
+     *
+     * HR: Samo uzastopni Expand makroi ulaze u istu accordion grupu.
+     */
     public function testGroupsOnlyAdjacentExpandMacros(): void
     {
         $body = <<<'XML'
@@ -668,7 +789,11 @@ XML;
         self::assertLessThan(strpos($result->html, 'Treći'), strpos($result->html, 'Razdjelnik'));
     }
 
-    /** HR: Zamjena susjeda ne smije ponoviti ID sklopivog bloka. EN: Replacing siblings must not duplicate collapsible-block IDs. */
+    /**
+     * EN: Replacing siblings must not duplicate collapsible-block IDs.
+     *
+     * HR: Zamjena susjeda ne smije ponoviti ID sklopivog bloka.
+     */
     public function testSeparatedExpandIdentifiersUseOriginalMacroPositions(): void
     {
         $expand = '<ac:structured-macro ac:name="expand"><ac:parameter ac:name="title">Naslov</ac:parameter>'
@@ -682,7 +807,11 @@ XML;
         self::assertSame($result->html, $converter->convert($body, 'DEMO', '10')->html);
     }
 
-    /** HR: Stari Section/Column makroi postaju responsivne kartice koje čuvaju omjere. EN: Legacy Section/Column macros become responsive cards that retain their proportions. */
+    /**
+     * EN: Legacy Section/Column macros become responsive cards that retain their proportions.
+     *
+     * HR: Stari Section/Column makroi postaju responsivne kartice koje čuvaju omjere.
+     */
     public function testConvertsLegacySectionAndColumnsToResponsiveCards(): void
     {
         $body = <<<'XML'
@@ -701,7 +830,11 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Section bez širina ravnomjerno raspoređuje kartice i uklanja prazne pokazivače. EN: A section without widths distributes cards evenly and removes empty cursor paragraphs. */
+    /**
+     * EN: A section without widths distributes cards evenly and removes empty cursor paragraphs.
+     *
+     * HR: Section bez širina ravnomjerno raspoređuje kartice i uklanja prazne pokazivače.
+     */
     public function testDistributesColumnsWithoutWidthsAndRemovesEmptyCursorParagraphs(): void
     {
         $body = <<<'XML'
@@ -718,7 +851,11 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: HTML makro čuva siguran H5P iframe, ali ne i proizvoljnu skriptu. EN: An HTML macro keeps a safe H5P iframe but never arbitrary script markup. */
+    /**
+     * EN: H5P uses exactly the same pending registry reference as any other script.
+     *
+     * HR: H5P koristi istu referencu registra na čekanju kao i svaka druga skripta.
+     */
     public function testConvertsHtmlMacroToCanonicalSafeIframeEmbed(): void
     {
         $body = <<<'XML'
@@ -728,7 +865,15 @@ XML;
         $result = (new ConfluenceHtmlConverter())->convert($body, 'CEU', '10');
 
         self::assertStringContainsString('data-editor-html-iframe="1"', $result->html);
-        self::assertStringContainsString('data-editor-html-h5p-resizer="1"', $result->html);
+        self::assertStringNotContainsString('data-editor-html-h5p-resizer', $result->html);
+        self::assertStringContainsString('data-editor-html-script-candidate="script-', $result->html);
+        self::assertStringNotContainsString('data-editor-html-external-script=', $result->html);
+        self::assertSame('external_script', $result->reviewIssues[0]['type']);
+        self::assertSame('pending', $result->reviewIssues[0]['script']['status']);
+        self::assertSame(
+            'https://h5p.org/sites/all/modules/h5p/library/js/h5p-resizer.js',
+            $result->reviewIssues[0]['script']['value'],
+        );
         self::assertStringContainsString('src="https://h5p.org/h5p/embed/509150"', $result->html);
         self::assertStringContainsString('width="100%"', $result->html);
         self::assertStringContainsString('height="81"', $result->html);
@@ -737,7 +882,11 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Facebook iframe ne treba skriptu i čuva potrebne mogućnosti uz responzivnu širinu. EN: A Facebook iframe needs no script and retains required features with responsive width. */
+    /**
+     * EN: A Facebook iframe needs no script and retains required features with responsive width.
+     *
+     * HR: Facebook iframe ne treba skriptu i čuva potrebne mogućnosti uz responzivnu širinu.
+     */
     public function testConvertsFacebookIframeWithoutJavascript(): void
     {
         $body = <<<'XML'
@@ -756,7 +905,11 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Siguran HTML gumb postaje funkcionalna poveznica bez izvornog stila ili JS-a. EN: A safe HTML button becomes a functional link without source styling or JavaScript. */
+    /**
+     * EN: A safe HTML button becomes a functional link without source styling or JavaScript.
+     *
+     * HR: Siguran HTML gumb postaje funkcionalna poveznica bez izvornog stila ili JS-a.
+     */
     public function testConvertsSafeHtmlButtonLink(): void
     {
         $body = <<<'XML'
@@ -775,7 +928,11 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Statična tablica iz HTML makroa postaje tematska Editor tablica bez izvornog CSS-a. EN: A static HTML-macro table becomes a themed Editor table without source CSS. */
+    /**
+     * EN: A static HTML-macro table becomes a themed Editor table without source CSS.
+     *
+     * HR: Statična tablica iz HTML makroa postaje tematska Editor tablica bez izvornog CSS-a.
+     */
     public function testConvertsSafeStaticHtmlTable(): void
     {
         $body = <<<'XML'
@@ -800,8 +957,12 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Skripta, čak i unutar tablice, sprječava automatski uvoz HTML makroa. EN: A script, even inside a table, prevents automatic HTML-macro import. */
-    public function testRejectsHtmlTableContainingJavascript(): void
+    /**
+     * EN: A table is imported while its script waits for explicit approval.
+     *
+     * HR: Tablica se uvozi, a njezina skripta čeka izričito odobrenje.
+     */
+    public function testImportsHtmlTableWithPendingScriptReference(): void
     {
         $body = <<<'XML'
 <ac:structured-macro ac:name="html"><ac:plain-text-body><![CDATA[<table><tbody><tr><td>Sadržaj<script src="https://pristupacnost.netlify.app/assets/js/pristupacnost_1.0.1.js"></script></td></tr></tbody></table>]]></ac:plain-text-body></ac:structured-macro>
@@ -809,12 +970,19 @@ XML;
 
         $result = (new ConfluenceHtmlConverter())->convert($body, 'UNIZG', '10');
 
-        self::assertStringContainsString('Confluence makro: html', $result->html);
+        self::assertStringContainsString('<table', $result->html);
+        self::assertStringContainsString('data-editor-html-script-candidate=', $result->html);
         self::assertStringNotContainsString('<script', $result->html);
-        self::assertSame(['html'], $result->unsupportedMacros);
+        self::assertSame('external_script', $result->reviewIssues[0]['type']);
+        self::assertSame('pending', $result->reviewIssues[0]['script']['status']);
+        self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Nesigurna shema HTML gumba ostaje označena za ručni pregled. EN: An unsafe HTML button scheme remains marked for manual review. */
+    /**
+     * EN: An unsafe HTML button scheme remains marked for manual review.
+     *
+     * HR: Nesigurna shema HTML gumba ostaje označena za ručni pregled.
+     */
     public function testRejectsUnsafeHtmlButtonLink(): void
     {
         $body = <<<'XML'
@@ -827,7 +995,11 @@ XML;
         self::assertSame(['html'], $result->unsupportedMacros);
     }
 
-    /** HR: Prazan izvorni stupac ne smanjuje širinu stvarnoga sadržaja. EN: An empty source column does not narrow the real content. */
+    /**
+     * EN: An empty source column does not narrow the real content.
+     *
+     * HR: Prazan izvorni stupac ne smanjuje širinu stvarnoga sadržaja.
+     */
     public function testRemovesEmptyLayoutCellsAndUsesAvailableWidth(): void
     {
         $body = <<<'XML'
@@ -847,7 +1019,11 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Opisi ostaju vidljivi, a editor cursor odlomci ne razmiču retke kartica. EN: Captions remain visible while editor cursor paragraphs do not separate card rows. */
+    /**
+     * EN: Captions remain visible while editor cursor paragraphs do not separate card rows.
+     *
+     * HR: Opisi ostaju vidljivi, a editor cursor odlomci ne razmiču retke kartica.
+     */
     public function testPreservesImageTitlesAndRemovesLayoutBoundaryCursorParagraphs(): void
     {
         $body = <<<'XML'
@@ -878,7 +1054,11 @@ XML;
         self::assertStringContainsString('Namjerni <br> prijelom ostaje.', $result->html);
     }
 
-    /** HR: Prazan početni layout redak ne smije pomaknuti kartice pod alatnu traku. EN: An empty leading layout row must not pull cards under the toolbar. */
+    /**
+     * EN: An empty leading layout row must not pull cards under the toolbar.
+     *
+     * HR: Prazan početni layout redak ne smije pomaknuti kartice pod alatnu traku.
+     */
     public function testOmitsEmptyLeadingConfluenceLayoutRow(): void
     {
         $body = <<<'XML'
@@ -896,7 +1076,11 @@ XML;
         self::assertStringContainsString('Druga', $result->html);
     }
 
-    /** HR: Nepoznati JavaScript ostaje vidljiv u izvještaju umjesto tihog odbacivanja. EN: Unknown JavaScript remains visible in the report instead of being silently discarded. */
+    /**
+     * EN: Unknown JavaScript remains visible in the report instead of being silently discarded.
+     *
+     * HR: Nepoznati JavaScript ostaje vidljiv u izvještaju umjesto tihog odbacivanja.
+     */
     public function testReportsHtmlMacroWithUnknownJavascript(): void
     {
         $body = <<<'XML'
@@ -905,13 +1089,19 @@ XML;
 
         $result = (new ConfluenceHtmlConverter())->convert($body, 'CEU', '10');
 
-        self::assertSame(['html'], $result->unsupportedMacros);
-        self::assertStringContainsString('Confluence makro: html', $result->html);
-        self::assertStringNotContainsString('data-editor-html-iframe="1"', $result->html);
+        self::assertSame([], $result->unsupportedMacros);
+        self::assertSame('external_script', $result->reviewIssues[0]['type']);
+        self::assertSame('https://widgets.example/required.js', $result->reviewIssues[0]['script']['value']);
+        self::assertStringContainsString('data-editor-html-iframe="1"', $result->html);
+        self::assertStringContainsString('data-editor-html-script-candidate=', $result->html);
         self::assertStringNotContainsString('<script', $result->html);
     }
 
-    /** HR: Više iframeova u jednom HTML makrou ne gubi se djelomičnim uvozom. EN: Multiple iframes in one HTML macro are not silently reduced to a partial import. */
+    /**
+     * EN: Multiple iframes in one HTML macro are not silently reduced to a partial import.
+     *
+     * HR: Više iframeova u jednom HTML makrou ne gubi se djelomičnim uvozom.
+     */
     public function testReportsHtmlMacroWithMultipleIframes(): void
     {
         $body = <<<'XML'
@@ -925,7 +1115,11 @@ XML;
         self::assertStringNotContainsString('data-editor-html-iframe="1"', $result->html);
     }
 
-    /** HR: Confluence file-list makroi postaju običan statički HTML. EN: Confluence file-list macros become ordinary static HTML. */
+    /**
+     * EN: Confluence file-list macros become ordinary static HTML.
+     *
+     * HR: Confluence file-list makroi postaju običan statički HTML.
+     */
     public function testConvertsFileListMacrosToOrdinaryStaticHtml(): void
     {
         $body = <<<'XML'
@@ -984,7 +1178,11 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Blueprint izvještaj čuva autora i prikazuje zadnje izmijenjene stranice prve. EN: A blueprint report preserves the creator and lists most recently modified pages first. */
+    /**
+     * EN: A blueprint report preserves the creator and lists most recently modified pages first.
+     *
+     * HR: Blueprint izvještaj čuva autora i prikazuje zadnje izmijenjene stranice prve.
+     */
     public function testContentReportIncludesCreatorAndSortsNewestFirst(): void
     {
         $body = <<<'XML'
@@ -1022,7 +1220,11 @@ XML;
         );
     }
 
-    /** HR: SOKI makroi postaju nativni dinamički blokovi, a Page Properties strukturirani podaci. EN: SOKI macros become native dynamic blocks and Page Properties become structured data. */
+    /**
+     * EN: SOKI macros become native dynamic blocks and Page Properties become structured data.
+     *
+     * HR: SOKI makroi postaju nativni dinamički blokovi, a Page Properties strukturirani podaci.
+     */
     public function testConvertsSokiDashboardMacrosAndProperties(): void
     {
         $body = <<<'XML'
@@ -1072,7 +1274,11 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Ciljani Confluence livesearch sprema lokalni slug i ne ovisi o import tablicama. EN: Targeted Confluence livesearch stores a local slug without depending on import tables. */
+    /**
+     * EN: Targeted Confluence livesearch stores a local slug without depending on import tables.
+     *
+     * HR: Ciljani Confluence livesearch sprema lokalni slug i ne ovisi o import tablicama.
+     */
     public function testLiveSearchMaterializesTargetWorkspaceSlugFromXml(): void
     {
         $body = <<<'XML'
@@ -1109,7 +1315,11 @@ XML;
         self::assertSame([], $result->reviewIssues);
     }
 
-    /** HR: Neriješeno ciljano područje ne pada pogrešno na trenutačno područje. EN: An unresolved targeted Workspace does not incorrectly fall back to the current Workspace. */
+    /**
+     * EN: An unresolved targeted Workspace does not incorrectly fall back to the current Workspace.
+     *
+     * HR: Neriješeno ciljano područje ne pada pogrešno na trenutačno područje.
+     */
     public function testLiveSearchKeepsUnresolvedTargetAsEmptyLocalScopeForReview(): void
     {
         $body = '<ac:structured-macro ac:name="livesearch">'
@@ -1131,7 +1341,11 @@ XML;
         self::assertSame('MISSING', $result->reviewIssues[0]['source_space_key'] ?? '');
     }
 
-    /** HR: Livesearch bez `spaceKey` ostaje uređiva pretraga trenutačnog područja. EN: Livesearch without `spaceKey` remains an editable current-Workspace search. */
+    /**
+     * EN: Livesearch without `spaceKey` remains an editable current-Workspace search.
+     *
+     * HR: Livesearch bez `spaceKey` ostaje uređiva pretraga trenutačnog područja.
+     */
     public function testLiveSearchWithoutTargetKeepsImplicitCurrentWorkspace(): void
     {
         $result = (new ConfluenceHtmlConverter())->convert(
@@ -1152,7 +1366,11 @@ XML;
         self::assertSame(['title' => ''], $configuration);
     }
 
-    /** HR: SOKI horizontalna Page Properties tablica zadržava sva četiri polja. EN: A horizontal SOKI Page Properties table preserves all four fields. */
+    /**
+     * EN: A horizontal SOKI Page Properties table preserves all four fields.
+     *
+     * HR: SOKI horizontalna Page Properties tablica zadržava sva četiri polja.
+     */
     public function testConvertsHorizontalSokiPageProperties(): void
     {
         $body = <<<'XML'
@@ -1171,7 +1389,11 @@ XML;
         self::assertSame('status', $result->properties[1]['type']);
     }
 
-    /** HR: Korisničke reference u Page Properties tablici koriste mapirano ime umjesto prazne poveznice. EN: User references in Page Properties use the mapped name instead of an empty link. */
+    /**
+     * EN: User references in Page Properties use the mapped name instead of an empty link.
+     *
+     * HR: Korisničke reference u Page Properties tablici koriste mapirano ime umjesto prazne poveznice.
+     */
     public function testResolvesUsersInsideSokiPageProperties(): void
     {
         $body = <<<'XML'
@@ -1198,7 +1420,11 @@ XML;
         self::assertStringNotContainsString('Poveznica', implode(' ', array_column($result->properties, 'value')));
     }
 
-    /** HR: Nema li mapiranja, vidljive korisničke reference koriste administratora importa umjesto bezvrijednog izvornog ključa. EN: Without a mapping, visible user references use the importing administrator instead of a meaningless source key. */
+    /**
+     * EN: Without a mapping, visible user references use the importing administrator instead of a meaningless source key.
+     *
+     * HR: Nema li mapiranja, vidljive korisničke reference koriste administratora importa umjesto bezvrijednog izvornog ključa.
+     */
     public function testUnmappedVisibleUserReferencesUseImportAdministrator(): void
     {
         $body = <<<'XML'
@@ -1220,7 +1446,11 @@ XML;
         self::assertStringNotContainsString('opaque-source-user', $result->html);
     }
 
-    /** HR: Poslužiteljski dodaci bez posebne lokalne logike postaju običan HTML. EN: Server-side add-ons without distinct local logic become ordinary HTML. */
+    /**
+     * EN: Server-side add-ons without distinct local logic become ordinary HTML.
+     *
+     * HR: Poslužiteljski dodaci bez posebne lokalne logike postaju običan HTML.
+     */
     public function testConvertsFileViewerTableEnhancerAndPageTreeSearchWithoutUnsupportedBoxes(): void
     {
         $body = <<<'XML'
@@ -1242,7 +1472,11 @@ XML;
         self::assertSame([], $result->unsupportedMacros);
     }
 
-    /** HR: Obične Confluence tablice dobivaju Editorov tematski i responzivni HTML ugovor. EN: Ordinary Confluence tables receive Editor's themed responsive HTML contract. */
+    /**
+     * EN: Ordinary Confluence tables receive Editor's themed responsive HTML contract.
+     *
+     * HR: Obične Confluence tablice dobivaju Editorov tematski i responzivni HTML ugovor.
+     */
     public function testNormalizesOrdinaryTablesToEditorMarkup(): void
     {
         $body = <<<'XML'
@@ -1263,7 +1497,11 @@ XML;
         self::assertStringContainsString('<tr><td>Prvi redak</td><td>42</td></tr>', $result->html);
     }
 
-    /** HR: Roadmap Planner postaje uređivi vremenski plan, a podržani widgeti siguran sadržaj. EN: Roadmap Planner becomes an editable timeline and supported widgets become safe content. */
+    /**
+     * EN: Roadmap Planner becomes an editable timeline and supported widgets become safe content.
+     *
+     * HR: Roadmap Planner postaje uređivi vremenski plan, a podržani widgeti siguran sadržaj.
+     */
     public function testConvertsRoadmapAndSupportedWidgets(): void
     {
         $source = rawurlencode(json_encode([

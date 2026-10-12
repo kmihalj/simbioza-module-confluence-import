@@ -9,12 +9,17 @@ use function is_scalar;
 use function max;
 use function trim;
 
-/** HR: Razdvaja ishode aktualnih privitaka od njihove povijesti. EN: Separates current attachment outcomes from their history. */
+/**
+ * EN: Separates current attachment outcomes from their history.
+ *
+ * HR: Razdvaja ishode aktualnih privitaka od njihove povijesti.
+ */
 final class ConfluenceAttachmentReport
 {
     /**
-     * HR: Sažima trajne zapise, uključujući importe dovršene starijim modulom.
-     * EN: Summarizes durable records, including imports completed by older modules.
+     * EN: Summarizes current durable records using their explicit logical attachment identity.
+     *
+     * HR: Sažima aktualne trajne zapise prema izričitom logičkom identitetu privitka.
      *
      * @param iterable<array<string,mixed>> $records
      * @return array{current_total:int,current_imported:int,current_failed:int,historical_total:int,historical_imported:int,historical_failed:int,current_failures:list<array{name:string,version:int,error:string}>,historical_failures:list<array{name:string,version:int,error:string}>}
@@ -25,7 +30,7 @@ final class ConfluenceAttachmentReport
         $current = [];
         foreach ($records as $record) {
             $sourceId = self::text($record['source_attachment_id'] ?? '');
-            $logicalId = self::text($record['logical_source_id'] ?? '') ?: $sourceId;
+            $logicalId = self::text($record['logical_source_id'] ?? '');
             if ($sourceId === '' || $logicalId === '') {
                 continue;
             }
@@ -69,7 +74,11 @@ final class ConfluenceAttachmentReport
         return $report;
     }
 
-    /** HR: Odbija implicitne pretvorbe nescalarnih metapodataka. EN: Rejects implicit conversions of non-scalar metadata. */
+    /**
+     * EN: Rejects implicit conversions of non-scalar metadata.
+     *
+     * HR: Odbija implicitne pretvorbe nescalarnih metapodataka.
+     */
     private static function text(mixed $value): string
     {
         return is_scalar($value) ? trim((string)$value) : '';

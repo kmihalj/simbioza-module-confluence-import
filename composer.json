@@ -67,12 +67,12 @@
         "ext-xmlreader": "*",
         "ext-zip": "*",
         "aaieduhr/heartphrame-framework": "^0.0.25",
-        "aaieduhr/heartphrame-module-auth": "^0.1.15",
-        "aaieduhr/heartphrame-module-editor-html": "^0.1.39",
-        "aaieduhr/heartphrame-module-menu": "^0.1.25",
-        "aaieduhr/heartphrame-module-orm": "^0.1.7",
-        "aaieduhr/simbioza-module-workspace": "^0.1.37",
-        "aaieduhr/simbioza-module-user": "^0.1.11"
+        "aaieduhr/heartphrame-module-auth": "^0.3.0",
+        "aaieduhr/heartphrame-module-editor-html": "^0.3.0",
+        "aaieduhr/heartphrame-module-menu": "^0.3.0",
+        "aaieduhr/heartphrame-module-orm": "^0.3.0",
+        "aaieduhr/simbioza-module-workspace": "^0.3.0",
+        "aaieduhr/simbioza-module-user": "^0.3.0"
     },
     "suggest": {
         "aaieduhr/heartphrame-module-audit": "Records import decisions and outcomes in the business audit log.",
@@ -83,11 +83,11 @@
         "aaieduhr/simbioza-module-workspace-search": "Rebuilds the derived Workspace index after a successful import."
     },
     "require-dev": {
-        "aaieduhr/heartphrame-module-api": "^0.1.6",
-        "aaieduhr/heartphrame-module-audit": "^0.1.5",
-        "aaieduhr/heartphrame-module-backup": "^0.1.8",
-        "aaieduhr/heartphrame-module-comment": "^0.1.4",
-        "aaieduhr/simbioza-module-workspace-search": "^0.1.12",
+        "aaieduhr/heartphrame-module-api": "^0.3.0",
+        "aaieduhr/heartphrame-module-audit": "^0.3.0",
+        "aaieduhr/heartphrame-module-backup": "^0.3.0",
+        "aaieduhr/heartphrame-module-comment": "^0.3.0",
+        "aaieduhr/simbioza-module-workspace-search": "^0.3.0",
         "phpstan/phpstan": "^2.2.15",
         "phpunit/phpunit": "^10.5.65 || ^11.5.56",
         "rector/rector": "^2.6.7",
@@ -140,7 +140,7 @@
     },
     "extra": {
         "branch-alias": {
-            "dev-main": "0.1.x-dev"
+            "dev-main": "0.3.x-dev"
         }
     }
 }

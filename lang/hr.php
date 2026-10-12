@@ -2,9 +2,29 @@
 
 declare(strict_types=1);
 
-// HR: Izvorni hrvatski ključevi i prijevodi jezika hr.
 // EN: Canonical Croatian source keys and hr translations.
+//
+// HR: Izvorni hrvatski ključevi i prijevodi jezika hr.
 return array (
+  'Pronađene vanjske skripte' => 'Pronađene vanjske skripte',
+  'Točno podudaranje s lokalno odobrenom skriptom automatski se uključuje samo na uvezenim stranicama koje je sadrže. Nove i odbijene skripte ostaju neizvršive. Za novu skriptu odaberite jednu ili sve stranice ovog importa. Povijest ne izvršava skripte.' => 'Točno podudaranje s lokalno odobrenom skriptom automatski se uključuje samo na uvezenim stranicama koje je sadrže. Nove i odbijene skripte ostaju neizvršive. Za novu skriptu odaberite jednu ili sve stranice ovog importa. Povijest ne izvršava skripte.',
+  'Odobreno' => 'Odobreno',
+  'Odbijeno' => 'Odbijeno',
+  'Čeka odobrenje' => 'Čeka odobrenje',
+  'Prepoznata postojeća lokalna dozvola' => 'Prepoznata postojeća lokalna dozvola',
+  'Uključena kroz izvještaj' => 'Uključena kroz izvještaj',
+  'Odobri i uključi na ovoj stranici' => 'Odobri i uključi na ovoj stranici',
+  'Odobri i uključi na svim stranicama ovog importa' => 'Odobri i uključi na svim stranicama ovog importa',
+  'Zadrži u registru bez uključivanja' => 'Zadrži u registru bez uključivanja',
+  'Odaberite stranicu' => 'Odaberite stranicu',
+  'Stranica ima neobjavljeni nacrt ili nije objavljena. Skriptu uključite nakon objave ili odbacivanja nacrta.' => 'Stranica ima neobjavljeni nacrt ili nije objavljena. Skriptu uključite nakon objave ili odbacivanja nacrta.',
+  'Status' => 'Status',
+  'Vanjska skripta' => 'Vanjska skripta',
+  'Blokirana definicija' => 'Blokirana definicija',
+  'Odobrenje vrijedi za ovu točnu skriptu na cijelom siteu, samo na stranicama koje je uključuju. Skripta ima pristup sadržaju i sesiji čitatelja.' => 'Odobrenje vrijedi za ovu točnu skriptu na cijelom siteu, samo na stranicama koje je uključuju. Skripta ima pristup sadržaju i sesiji čitatelja.',
+  'Odobri' => 'Odobri',
+  'Odbij' => 'Odbij',
+  'Odluka je spremljena.' => 'Odluka je spremljena.',
   'Povijest stranica i privitaka' => 'Povijest stranica i privitaka',
   'Ranije verzije stranica i privitaka uvoze se samo kada je ova opcija uključena.' => 'Ranije verzije stranica i privitaka uvoze se samo kada je ova opcija uključena.',
   'Aktualni privitci' => 'Aktualni privitci',

@@ -42,7 +42,7 @@ lifecycle therefore applies to this importer and any future migration tool.
 
 Bulk page, workflow and ACL writes run through the public Workspace `WorkspaceContentChangeBatch` service. Source events are collected during that unit and one `bulk_content_changed` event is emitted per changed Workspace at the end. This prevents backlink and Search listeners from rebuilding derived data after every individual page. The `finally` completion deliberately emits the consolidated event after a partial failure as well, so derived indexes do not remain older than source content that was actually stored.
 
-`confluence_import.import_execution_time_limit` is the upper bound for one
+`import_execution_time_limit` is the upper bound for one
 processing step. `queue()` writes the large immutable plan once to
 `manifest.json` and keeps small mutable progress in `state.json`. It also selects
 current attachment versions and prepares the cross-page macro context once.
@@ -139,3 +139,18 @@ data and semantics, not competing presentation rules.
 ## Schema ownership
 
 The reversible module migration is a template. Installation copies it into the host application's migration history. New columns and tables must remain prefixed through the module constants and have MySQL, PostgreSQL and SQLite coverage in the host matrix.
+
+## Confluence dates and literal times
+
+Confluence date widgets often store their value only in an empty
+`<time datetime="2019-01-22" />` element. The converter materializes that
+attribute as safe visible text before Editor sanitization removes unsupported
+tags, and repeats this after macro conversion for time elements introduced by
+an HTML-table macro. Existing visible labels are preserved; date/time/timezone
+strings are not silently reformatted or shifted. Attribute values never become
+executable markup. Adjacent literal text such as `, 13:00, Srce` remains intact.
+
+The DABAR meeting-date regression covers the source form from the supplied
+archive and the final sanitized HTML. A previously imported version which
+already lost its date cannot infer it without the original archive; converter
+changes protect future imports, not a fabricated date based on the page title.

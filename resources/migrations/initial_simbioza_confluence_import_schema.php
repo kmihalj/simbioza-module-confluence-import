@@ -9,8 +9,9 @@ use AaiEduHr\SimbiozaModuleConfluenceImport\ModuleSimbiozaConfluenceImport;
 
 return new class implements ReversibleMigrationInterface {
     /**
-     * HR: Kreira prenosivu shemu poslova, mapiranja, neriješenih poveznica i privatnih privitaka.
      * EN: Creates the portable jobs, mapping, unresolved-link, and private-attachment schema.
+     *
+     * HR: Kreira prenosivu shemu poslova, mapiranja, neriješenih poveznica i privatnih privitaka.
      */
     public function up(Database $db): void
     {
@@ -159,7 +160,11 @@ return new class implements ReversibleMigrationInterface {
         }
     }
 
-    /** HR: Uklanja isključivo podatke kojima upravlja ovaj modul, obrnutim redom. EN: Drops only module-owned data in reverse order. */
+    /**
+     * EN: Drops only module-owned data in reverse order.
+     *
+     * HR: Uklanja isključivo podatke kojima upravlja ovaj modul, obrnutim redom.
+     */
     public function down(Database $db): void
     {
         $schema = $db->schema();

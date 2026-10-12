@@ -10,8 +10,9 @@ use PHPUnit\Framework\TestCase;
 final class ConfluenceMacroContextTest extends TestCase
 {
     /**
-     * HR: Veliki Confluence izvozi često daju brojčane PHP ključeve i oni se moraju normalizirati prije pretvorbe makroa.
      * EN: Large Confluence exports often yield numeric PHP keys and they must be normalized before macro conversion.
+     *
+     * HR: Veliki Confluence izvozi često daju brojčane PHP ključeve i oni se moraju normalizirati prije pretvorbe makroa.
      */
     public function testNumericConfluencePageIdentifierIsNormalizedToString(): void
     {

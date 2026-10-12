@@ -20,7 +20,11 @@ final class PurgeConfluencePageImportTest extends TestCase
 {
     private string $directory;
 
-    /** HR: Čisti izolirano privatno spremište nakon testa. EN: Cleans isolated private storage after the test. */
+    /**
+     * EN: Cleans isolated private storage after the test.
+     *
+     * HR: Čisti izolirano privatno spremište nakon testa.
+     */
     protected function tearDown(): void
     {
         if (isset($this->directory)) {
@@ -29,8 +33,9 @@ final class PurgeConfluencePageImportTest extends TestCase
     }
 
     /**
-     * HR: Dokazuje da trajno brisanje jedne stranice ne uklanja ostatak uvezenog područja.
      * EN: Proves permanently deleting one page does not remove the rest of the imported Workspace.
+     *
+     * HR: Dokazuje da trajno brisanje jedne stranice ne uklanja ostatak uvezenog područja.
      */
     public function testOnlyDeletedPageMappingsLinksAndFilesArePurged(): void
     {
@@ -47,7 +52,11 @@ final class PurgeConfluencePageImportTest extends TestCase
                 parent::__construct($helper, $data);
             }
 
-            /** HR: Vraća izolirani aplikacijski korijen. EN: Returns the isolated application root. */
+            /**
+             * EN: Returns the isolated application root.
+             *
+             * HR: Vraća izolirani aplikacijski korijen.
+             */
             public function getAppRootDir(): string
             {
                 return $this->root;
@@ -103,7 +112,11 @@ final class PurgeConfluencePageImportTest extends TestCase
             ->where('uuid', '=', 'same-id-other-space')->first());
     }
 
-    /** HR: Sprema dvije stranice i njihove neovisne veze. EN: Seeds two pages and their independent links. */
+    /**
+     * EN: Seeds two pages and their independent links.
+     *
+     * HR: Sprema dvije stranice i njihove neovisne veze.
+     */
     private function seed(Database $database, string $deletedFile, string $retainedFile): void
     {
         foreach (

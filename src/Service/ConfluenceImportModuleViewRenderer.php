@@ -8,17 +8,26 @@ use AaiEduHr\SimbiozaModuleConfluenceImport\ModuleSimbiozaConfluenceImport;
 use HeartPhrame\Http\ResponseFactory;
 use Psr\Http\Message\ResponseInterface;
 
-/** HR: Renderira Confluence-import prikaze kroz glavni layout aplikacije. EN: Renders Confluence-import views through the main application layout. */
+/**
+ * EN: Renders Confluence-import views through the main application layout.
+ *
+ * HR: Renderira Confluence-import prikaze kroz glavni layout aplikacije.
+ */
 final readonly class ConfluenceImportModuleViewRenderer
 {
-    /** HR: Prima zajedničku HTTP tvornicu. EN: Receives the shared HTTP factory. */
+    /**
+     * EN: Receives the shared HTTP factory.
+     *
+     * HR: Prima zajedničku HTTP tvornicu.
+     */
     public function __construct(private ResponseFactory $responses)
     {
     }
 
     /**
-     * HR: Renderira modularni predložak uz temu, izbornike i lokalizaciju host aplikacije.
      * EN: Renders a module template with the host application's theme, menus, and localization.
+     *
+     * HR: Renderira modularni predložak uz temu, izbornike i lokalizaciju host aplikacije.
      *
      * @param array<string,mixed> $data
      */

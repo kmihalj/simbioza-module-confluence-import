@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace AaiEduHr\SimbiozaModuleConfluenceImport\Value;
 
-/** HR: Prenosi HTML, reference i strojno čitljive stavke za ručnu provjeru. EN: Carries HTML, references, and machine-readable manual-review items. */
+/**
+ * EN: Carries HTML, references, and machine-readable manual-review items.
+ *
+ * HR: Prenosi HTML, reference i strojno čitljive stavke za ručnu provjeru.
+ */
 final readonly class ConvertedConfluenceBody
 {
     /**
-     * HR: Sprema rezultat jedne pretvorbe bez dodatne obrade.
      * EN: Stores one conversion result without further processing.
+     *
+     * HR: Sprema rezultat jedne pretvorbe bez dodatne obrade.
      *
      * @param list<array<string,string>> $links
      * @param list<array<string,string>> $attachments

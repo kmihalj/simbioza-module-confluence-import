@@ -8,7 +8,11 @@ use PHPUnit\Framework\TestCase;
 
 final class ConfluenceImportViewTest extends TestCase
 {
-    /** HR: Izvještaj razdvaja stare verzije od aktualnih grešaka i sigurno prikazuje nazive. EN: The report separates historical versions from current failures and safely displays filenames. */
+    /**
+     * EN: The report separates historical versions from current failures and safely displays filenames.
+     *
+     * HR: Izvještaj razdvaja stare verzije od aktualnih grešaka i sigurno prikazuje nazive.
+     */
     public function testAttachmentReportSeparatesHistoryAndEscapesNames(): void
     {
         $view = file_get_contents(__DIR__ . '/../views/settings/index.php');
@@ -22,7 +26,11 @@ final class ConfluenceImportViewTest extends TestCase
         self::assertStringContainsString('To ne znači da nedostaju aktualne datoteke.', $report);
     }
 
-    /** HR: Mapiranja imaju vlastite oznake bez nepotpunog combobox ugovora. EN: Mappings have their own labels without an incomplete combobox contract. */
+    /**
+     * EN: Mappings have their own labels without an incomplete combobox contract.
+     *
+     * HR: Mapiranja imaju vlastite oznake bez nepotpunog combobox ugovora.
+     */
     public function testMappingPickersExposeNativeControlsAndStatus(): void
     {
         $view = file_get_contents(__DIR__ . '/../views/settings/index.php');
@@ -35,7 +43,11 @@ final class ConfluenceImportViewTest extends TestCase
         self::assertStringContainsString("event.key === 'Escape'", $view);
     }
 
-    /** HR: File picker mora koristiti prevedive oznake umjesto tekstova preglednika. EN: The file picker must use translatable labels instead of browser-owned text. */
+    /**
+     * EN: The file picker must use translatable labels instead of browser-owned text.
+     *
+     * HR: File picker mora koristiti prevedive oznake umjesto tekstova preglednika.
+     */
     public function testFilePickerUsesLocalizedCustomControls(): void
     {
         $view = file_get_contents(__DIR__ . '/../views/settings/index.php');
@@ -62,7 +74,11 @@ final class ConfluenceImportViewTest extends TestCase
         self::assertSame('No file selected.', $english['Nije odabrana nijedna datoteka.']);
     }
 
-    /** HR: Import kartice moraju koristiti stvarne površine aktivne teme. EN: Import cards must use the active theme's real surfaces. */
+    /**
+     * EN: Import cards must use the active theme's real surfaces.
+     *
+     * HR: Import kartice moraju koristiti stvarne površine aktivne teme.
+     */
     public function testImportCardsUseDefinedThemeSurfaceVariables(): void
     {
         $styles = file_get_contents(__DIR__ . '/../resources/assets/confluence-import.css');
@@ -83,7 +99,11 @@ final class ConfluenceImportViewTest extends TestCase
         self::assertStringNotContainsString('--hph-muted-bg', $styles);
     }
 
-    /** HR: Razrješenje kalendara ne traži ručni naziv koji ICS već sadrži. EN: Calendar resolution does not request a manual name already carried by the ICS file. */
+    /**
+     * EN: Calendar resolution does not request a manual name already carried by the ICS file.
+     *
+     * HR: Razrješenje kalendara ne traži ručni naziv koji ICS već sadrži.
+     */
     public function testCalendarImportUsesTheIcsCalendarName(): void
     {
         $view = file_get_contents(__DIR__ . '/../views/settings/report.php');
@@ -114,7 +134,11 @@ final class ConfluenceImportViewTest extends TestCase
         );
     }
 
-    /** HR: Trajni izvještaj prikazuje živu listu samo nerazriješenih Confluence veza. EN: The durable report shows a live list of unresolved Confluence links only. */
+    /**
+     * EN: The durable report shows a live list of unresolved Confluence links only.
+     *
+     * HR: Trajni izvještaj prikazuje živu listu samo nerazriješenih Confluence veza.
+     */
     public function testReportShowsDynamicUnresolvedLinks(): void
     {
         $view = file_get_contents(__DIR__ . '/../views/settings/report.php');
@@ -128,7 +152,11 @@ final class ConfluenceImportViewTest extends TestCase
         self::assertStringContainsString('Uspješno lokalno razriješene poveznice više se ne prikazuju.', $view);
     }
 
-    /** HR: Administrator može potvrditi ručnu korekciju veze ili makroa, a riješena upozorenja nestaju iz aktivnog izvještaja. EN: An administrator can confirm a manual link or macro correction and resolved warnings leave the active report. */
+    /**
+     * EN: An administrator can confirm a manual link or macro correction and resolved warnings leave the active report.
+     *
+     * HR: Administrator može potvrditi ručnu korekciju veze ili makroa, a riješena upozorenja nestaju iz aktivnog izvještaja.
+     */
     public function testReportSupportsDurableManualCorrections(): void
     {
         $view = file_get_contents(__DIR__ . '/../views/settings/report.php');
@@ -152,7 +180,11 @@ final class ConfluenceImportViewTest extends TestCase
         );
     }
 
-    /** HR: Batch nudi pravilo za nemapirane korisnike bez umjetnog produljivanja sesije. EN: Batch exposes the unmapped-user policy without artificially extending the session. */
+    /**
+     * EN: Batch exposes the unmapped-user policy without artificially extending the session.
+     *
+     * HR: Batch nudi pravilo za nemapirane korisnike bez umjetnog produljivanja sesije.
+     */
     public function testBatchImportHasUserPolicyAndRemoteUserPickerWithoutHeartbeat(): void
     {
         $view = file_get_contents(__DIR__ . '/../views/settings/index.php');
@@ -183,7 +215,11 @@ final class ConfluenceImportViewTest extends TestCase
         self::assertStringNotContainsString('listUsersForSetup()', substr($service, 0, (int)strpos($service, 'public function queue(')));
     }
 
-    /** HR: Oznaka verzije ne ovisi o prijevodima drugih modula. EN: The version label does not depend on other modules' translations. */
+    /**
+     * EN: The version label does not depend on other modules' translations.
+     *
+     * HR: Oznaka verzije ne ovisi o prijevodima drugih modula.
+     */
     public function testAttachmentReportVersionLabelHasModuleTranslations(): void
     {
         $english = require __DIR__ . '/../lang/en.php';
@@ -193,7 +229,11 @@ final class ConfluenceImportViewTest extends TestCase
         self::assertSame('Verzija', $croatian['Verzija'] ?? null);
     }
 
-    /** HR: Veliki import ne ponavlja globalnu pripremu ni optimizaciju svih slika u svakom koraku. EN: A large import does not repeat global preparation or eager image optimization in every step. */
+    /**
+     * EN: A large import does not repeat global preparation or eager image optimization in every step.
+     *
+     * HR: Veliki import ne ponavlja globalnu pripremu ni optimizaciju svih slika u svakom koraku.
+     */
     public function testLargeImportDefersRepeatedGlobalWork(): void
     {
         $service = file_get_contents(__DIR__ . '/../src/Service/ConfluenceImportService.php');

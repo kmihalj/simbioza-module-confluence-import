@@ -30,8 +30,9 @@ use function trim;
 use function unlink;
 
 /**
- * HR: Otvara Confluence ZIP bez raspakiravanja cijelog arhiva i odbija traversal, linkove i ZIP bombe.
  * EN: Opens a Confluence ZIP without extracting it wholesale and rejects traversal, links, and ZIP bombs.
+ *
+ * HR: Otvara Confluence ZIP bez raspakiravanja cijelog arhiva i odbija traversal, linkove i ZIP bombe.
  */
 final readonly class ConfluenceArchive
 {
@@ -39,14 +40,19 @@ final readonly class ConfluenceArchive
 
     public const DESCRIPTOR_ENTRY = 'exportDescriptor.properties';
 
-    /** HR: Prima centralne sigurnosne limite. EN: Receives the central security limits. */
+    /**
+     * EN: Receives the central security limits.
+     *
+     * HR: Prima centralne sigurnosne limite.
+     */
     public function __construct(private ConfluenceImportConfig $config)
     {
     }
 
     /**
-     * HR: Vraća provjerene metapodatke bez izdvajanja privitaka.
      * EN: Returns validated metadata without extracting attachments.
+     *
+     * HR: Vraća provjerene metapodatke bez izdvajanja privitaka.
      *
      * @return array{path:string,size:int,entries:int,uncompressed_size:int,descriptor:array<string,string>}
      */
@@ -123,8 +129,9 @@ final readonly class ConfluenceArchive
     }
 
     /**
-     * HR: Privremeno izdvaja samo entities.xml radi stream parsiranja.
      * EN: Temporarily extracts only entities.xml for streaming parsing.
+     *
+     * HR: Privremeno izdvaja samo entities.xml radi stream parsiranja.
      */
     public function entitiesFile(string $archivePath): string
     {
@@ -163,8 +170,9 @@ final readonly class ConfluenceArchive
     }
 
     /**
-     * HR: Kopira jedan provjereni attachment zapis u privatnu ciljnu datoteku.
      * EN: Copies one validated attachment entry to a private target file.
+     *
+     * HR: Kopira jedan provjereni attachment zapis u privatnu ciljnu datoteku.
      */
     public function copyEntry(string $archivePath, string $entryName, string $targetPath): void
     {
@@ -197,12 +205,13 @@ final readonly class ConfluenceArchive
     }
 
     /**
-     * HR: Kopira traženu ili najnoviju dostupnu binarnu verziju privitka.
-     * Confluence ponekad u XML-u zadrži broj koji ne odgovara fizičkom zapisu.
-     * Povijesni zapisi mogu koristiti direktorij logičkog (izvornog) privitka.
      * EN: Copies the requested or newest available binary attachment version.
      * Confluence may retain an XML version that differs from the physical entry.
      * Historical records may use the logical (original) attachment directory.
+     *
+     * HR: Kopira traženu ili najnoviju dostupnu binarnu verziju privitka.
+     * Confluence ponekad u XML-u zadrži broj koji ne odgovara fizičkom zapisu.
+     * Povijesni zapisi mogu koristiti direktorij logičkog (izvornog) privitka.
      */
     public function copyAttachment(
         string $archivePath,
@@ -269,7 +278,11 @@ final readonly class ConfluenceArchive
         $this->copyEntry($archivePath, $selected, $targetPath);
     }
 
-    /** HR: Otvara ZIP i prevodi status u poslovnu pogrešku. EN: Opens a ZIP and translates status into a business error. */
+    /**
+     * EN: Opens a ZIP and translates status into a business error.
+     *
+     * HR: Otvara ZIP i prevodi status u poslovnu pogrešku.
+     */
     private function open(string $archivePath): ZipArchive
     {
         $zip = new ZipArchive();
@@ -280,7 +293,11 @@ final readonly class ConfluenceArchive
         return $zip;
     }
 
-    /** HR: Odbija apsolutne, traversal, NUL i simboličke ZIP zapise. EN: Rejects absolute, traversal, NUL, and symbolic ZIP entries. */
+    /**
+     * EN: Rejects absolute, traversal, NUL, and symbolic ZIP entries.
+     *
+     * HR: Odbija apsolutne, traversal, NUL i simboličke ZIP zapise.
+     */
     private function assertSafeEntry(ZipArchive $zip, int $index, string $name): void
     {
         $normalized = str_replace('\\', '/', trim($name));
@@ -307,8 +324,9 @@ final readonly class ConfluenceArchive
     }
 
     /**
-     * HR: Raščlanjuje Confluence exportDescriptor.properties.
      * EN: Parses Confluence exportDescriptor.properties.
+     *
+     * HR: Raščlanjuje Confluence exportDescriptor.properties.
      *
      * @return array<string,string>
      */
@@ -331,7 +349,11 @@ final readonly class ConfluenceArchive
         return $result;
     }
 
-    /** HR: Čita mali obavezni tekstualni zapis. EN: Reads a small required textual entry. */
+    /**
+     * EN: Reads a small required textual entry.
+     *
+     * HR: Čita mali obavezni tekstualni zapis.
+     */
     private function entryContents(ZipArchive $zip, string $name): string
     {
         $contents = $zip->getFromName($name);

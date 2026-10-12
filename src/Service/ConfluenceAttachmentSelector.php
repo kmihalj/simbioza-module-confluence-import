@@ -11,12 +11,17 @@ use function ksort;
 use function strtolower;
 use function trim;
 
-/** HR: Odabire stvarne aktualne privitke iz Confluence verzijskih zapisa. EN: Selects actual current attachments from Confluence version records. */
+/**
+ * EN: Selects actual current attachments from Confluence version records.
+ *
+ * HR: Odabire stvarne aktualne privitke iz Confluence verzijskih zapisa.
+ */
 final class ConfluenceAttachmentSelector
 {
     /**
-     * HR: Povijest privitaka prenosi se samo uz izričit odabir povijesti.
      * EN: Attachment history is transferred only when history is explicitly selected.
+     *
+     * HR: Povijest privitaka prenosi se samo uz izričit odabir povijesti.
      *
      * @param iterable<array<string,mixed>> $attachments
      * @return list<array<string,mixed>>
@@ -36,8 +41,9 @@ final class ConfluenceAttachmentSelector
     }
 
     /**
-     * HR: Grupira zapise preko izvornog logičkog ID-a i zadržava najnoviju aktualnu verziju.
      * EN: Groups records by source logical ID and retains the newest current version.
+     *
+     * HR: Grupira zapise preko izvornog logičkog ID-a i zadržava najnoviju aktualnu verziju.
      *
      * @param iterable<array<string,mixed>> $attachments
      * @return array<string,array<string,mixed>>

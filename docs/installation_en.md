@@ -15,7 +15,7 @@ The module must appear after ORM, Menu, Auth, HTML Editor, Workspace and Simbioz
 ## Install
 
 ```bash
-composer require aaieduhr/simbioza-module-confluence-import:^0.1.13
+composer require aaieduhr/simbioza-module-confluence-import:^0.3.0
 vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```
@@ -24,7 +24,13 @@ The install command copies a timestamped reversible migration into the host appl
 
 ## Configuration
 
-Application values under `confluence_import.*` override module defaults:
+Put installation overrides in
+`HPH_CONFIG_PATH/confluence-import/confluence-import.php`. Without an environment
+override, the path is `<application>/config/confluence-import/confluence-import.php`.
+The unchanged framework loads these PHP arrays and ordered
+`HPH_CONFIG_OVERRIDE_PATHS` layers before constructing module services. Omitted
+keys keep package defaults; an empty higher-layer array resets this policy.
+The old flat `confluence_import` tree is not used.
 
 | Key | Default | Purpose |
 | --- | ---: | --- |
@@ -37,23 +43,29 @@ Application values under `confluence_import.*` override module defaults:
 | `max_entry_size` | 4 GiB | Per-entry uncompressed limit |
 | `max_compression_ratio` | 250 | ZIP-bomb protection |
 | `import_execution_time_limit` | 900 seconds | Upper bound for a large-archive preflight or one import processing step |
+| `import_memory_limit_mb` | 512 MiB | Memory requested only during administrator import processing |
 | `default_language` | `hr` | Content language when the export has no locale |
 | `source_base_url` | empty | Initial source Confluence URL; the administrator confirms or changes it for each individual or batch import |
 
-Example host configuration:
+Example file (not an additional wrapper array):
 
 ```php
-'confluence_import' => [
+<?php
+
+return [
     'chunk_size' => 16 * 1024 * 1024,
     'max_archive_size' => 8 * 1024 * 1024 * 1024,
     'import_execution_time_limit' => 1200,
     'default_language' => 'hr',
     'source_base_url' => 'https://wiki.example.org',
-],
+];
 ```
 
 `source_base_url` is not a fixed installation setting. It only pre-fills the
 administrator field, while the actual value is stored with every started import.
+`data_path` must be a relative subdirectory without `..`, absolute paths or
+backslashes. Uploads and import state stay under the application's private `data`.
+The existing GUI, per-job mapping and source choices remain unchanged.
 
 Upload and content import both run in resumable phases. After mappings are
 confirmed, the server prepares a stable plan and each subsequent request

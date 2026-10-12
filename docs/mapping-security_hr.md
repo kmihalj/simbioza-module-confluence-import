@@ -1,6 +1,6 @@
 # Mapiranje identiteta, ACL i sigurnost
 
-English version: [mapping-security_en.md](mapping-security_en.md)
+Engleska verzija: [mapping-security_en.md](mapping-security_en.md)
 
 ## Korisnici
 

@@ -21,7 +21,11 @@ use function trim;
 use const ENT_QUOTES;
 use const ENT_SUBSTITUTE;
 
-/** HR: Izvodi read-only pregled prostora, sadržaja, identiteta, ACL-a, makroa i privitaka. EN: Builds a read-only inventory of space, content, identities, ACL, macros, and attachments. */
+/**
+ * EN: Builds a read-only inventory of space, content, identities, ACL, macros, and attachments.
+ *
+ * HR: Izvodi read-only pregled prostora, sadržaja, identiteta, ACL-a, makroa i privitaka.
+ */
 final readonly class ConfluenceExportScanner
 {
     /** @var list<string> */
@@ -56,7 +60,11 @@ final readonly class ConfluenceExportScanner
         'warning',
     ];
 
-    /** HR: Prima provjereni arhiv i stream XML čitač. EN: Receives the validated archive and streaming XML reader. */
+    /**
+     * EN: Receives the validated archive and streaming XML reader.
+     *
+     * HR: Prima provjereni arhiv i stream XML čitač.
+     */
     public function __construct(
         private ConfluenceArchive $archive,
         private ConfluenceExportReader $reader,
@@ -64,8 +72,9 @@ final readonly class ConfluenceExportScanner
     }
 
     /**
-     * HR: Skenira bez promjene baze ili sadržaja aplikacije.
      * EN: Scans without changing application data or content.
+     *
+     * HR: Skenira bez promjene baze ili sadržaja aplikacije.
      *
      * @return array<string,mixed>
      */
@@ -240,8 +249,9 @@ final readonly class ConfluenceExportScanner
     }
 
     /**
-     * HR: Pretvara Confluence prostor u prenosivi zapis.
      * EN: Converts a Confluence space into a portable record.
+     *
+     * HR: Pretvara Confluence prostor u prenosivi zapis.
      *
      * @return array<string,mixed>
      */
@@ -261,8 +271,9 @@ final readonly class ConfluenceExportScanner
     }
 
     /**
-     * HR: Pretvara Confluence stranicu u zapis pregleda.
      * EN: Converts a Confluence page into an inventory record.
+     *
+     * HR: Pretvara Confluence stranicu u zapis pregleda.
      *
      * @return array<string,mixed>
      */
@@ -290,8 +301,9 @@ final readonly class ConfluenceExportScanner
     }
 
     /**
-     * HR: Pretvara Confluence privitak u zapis pregleda.
      * EN: Converts a Confluence attachment into an inventory record.
+     *
+     * HR: Pretvara Confluence privitak u zapis pregleda.
      *
      * @return array<string,mixed>
      */
@@ -312,8 +324,9 @@ final readonly class ConfluenceExportScanner
     }
 
     /**
-     * HR: Pretvara Confluence identitet u prijedlog mapiranja.
      * EN: Converts a Confluence identity into a mapping suggestion.
+     *
+     * HR: Pretvara Confluence identitet u prijedlog mapiranja.
      *
      * @return array<string,mixed>
      */
@@ -331,8 +344,9 @@ final readonly class ConfluenceExportScanner
     }
 
     /**
-     * HR: Pretvara jedan izvorni ACL zapis.
      * EN: Converts one source ACL record.
+     *
+     * HR: Pretvara jedan izvorni ACL zapis.
      *
      * @return array<string,mixed>
      */
@@ -349,8 +363,9 @@ final readonly class ConfluenceExportScanner
     }
 
     /**
-     * HR: Pretvara skup ograničenja jedne stranice.
      * EN: Converts one page restriction set.
+     *
+     * HR: Pretvara skup ograničenja jedne stranice.
      *
      * @return array<string,mixed>
      */
@@ -365,10 +380,11 @@ final readonly class ConfluenceExportScanner
     }
 
     /**
-     * HR: Space export često ne sadrži InternalGroup objekte, iako ACL izravno
-     * navodi grupe. Takve nazive svejedno nudimo za eksplicitno mapiranje.
      * EN: A space export often omits InternalGroup objects even though ACL rows
      * directly name groups. Those names are still offered for explicit mapping.
+     *
+     * HR: Space export često ne sadrži InternalGroup objekte, iako ACL izravno
+     * navodi grupe. Takve nazive svejedno nudimo za eksplicitno mapiranje.
      *
      * @param array<string,mixed> $permission
      * @param array<string,array<string,mixed>> $groups
@@ -382,8 +398,9 @@ final readonly class ConfluenceExportScanner
     }
 
     /**
-     * HR: Broji makroe pronađene u tijelu stranice.
      * EN: Counts macros found in a page body.
+     *
+     * HR: Broji makroe pronađene u tijelu stranice.
      *
      * @param array<string,int> $macros
      */
@@ -404,8 +421,9 @@ final readonly class ConfluenceExportScanner
     }
 
     /**
-     * HR: Gradi jasna upozorenja preflight pregleda.
      * EN: Builds clear preflight inventory warnings.
+     *
+     * HR: Gradi jasna upozorenja preflight pregleda.
      *
      * @param list<array<string,mixed>> $pages
      * @param array<string,array<string,mixed>> $users

@@ -24,10 +24,18 @@ use function trim;
 use const PHP_URL_HOST;
 use const PHP_URL_SCHEME;
 
-/** HR: Razrješava Confluence reference nakon što su sve ciljne stranice poznate. EN: Resolves Confluence references after all target pages are known. */
+/**
+ * EN: Resolves Confluence references after all target pages are known.
+ *
+ * HR: Razrješava Confluence reference nakon što su sve ciljne stranice poznate.
+ */
 final readonly class ConfluenceReferenceResolver
 {
-    /** HR: Prima mapiranja i generator prenosivih URL-ova. EN: Receives mappings and the portable URL generator. */
+    /**
+     * EN: Receives mappings and the portable URL generator.
+     *
+     * HR: Prima mapiranja i generator prenosivih URL-ova.
+     */
     public function __construct(
         private ConfluenceImportRepository $repository,
         private UrlGenerator $urls,
@@ -35,8 +43,9 @@ final readonly class ConfluenceReferenceResolver
     }
 
     /**
-     * HR: Zamjenjuje privremene tokene stvarnim URL-ovima i bilježi neriješene cross-space poveznice.
      * EN: Replaces temporary tokens with real URLs and records unresolved cross-space links.
+     *
+     * HR: Zamjenjuje privremene tokene stvarnim URL-ovima i bilježi neriješene cross-space poveznice.
      *
      * @param array<string,string> $attachmentUrlsByName
      * @param array<string,string> $localTargetsById
@@ -103,10 +112,11 @@ final readonly class ConfluenceReferenceResolver
                     'destination_space_key' => $destinationSpace,
                     'destination_page_id' => $destinationId,
                     'destination_page_title' => $destinationTitle,
-                    // HR: Semantička ac:link referenca nema izvorni URL. Interni
-                    //     pretvorbeni token nije korisnički URL i ne smije u izvještaj.
                     // EN: A semantic ac:link reference has no source URL. The
                     //     internal conversion token is not user-facing report data.
+                    //
+                    // HR: Semantička ac:link referenca nema izvorni URL. Interni
+                    //     pretvorbeni token nije korisnički URL i ne smije u izvještaj.
                     'original_target' => $originalTarget,
                     'resolved_target' => $target !== '#' ? $target : '',
                     'status' => $target !== '#' ? 'resolved' : 'unresolved',
@@ -129,10 +139,11 @@ final readonly class ConfluenceReferenceResolver
                 $filename = trim((string)($reference['filename'] ?? ''));
                 $target = $attachmentUrlsByName[$filename] ?? '#';
 
-                // HR: Slike ostaju prikazive unutar sadržaja, dok poveznica na
-                //     datoteku koristi javni Editor ugovor za preuzimanje.
                 // EN: Images remain renderable inside the content, while a file
                 //     link uses Editor's public download contract.
+                //
+                // HR: Slike ostaju prikazive unutar sadržaja, dok poveznica na
+                //     datoteku koristi javni Editor ugovor za preuzimanje.
                 if ($target !== '#' && ($reference['kind'] ?? 'file') !== 'image') {
                     return $target . (str_contains($target, '?') ? '&' : '?') . 'download=1';
                 }
@@ -144,8 +155,9 @@ final readonly class ConfluenceReferenceResolver
     }
 
     /**
-     * HR: Dekodira provjereni privremeni token reference.
      * EN: Decodes a validated temporary reference token.
+     *
+     * HR: Dekodira provjereni privremeni token reference.
      *
      * @return array<string,mixed>
      */
@@ -158,8 +170,9 @@ final readonly class ConfluenceReferenceResolver
     }
 
     /**
-     * HR: Gradi lokalnu putanju iz trajnog mapiranja stranice.
      * EN: Builds a local path from a durable page mapping.
+     *
+     * HR: Gradi lokalnu putanju iz trajnog mapiranja stranice.
      *
      * @param array<string,mixed> $mapping
      */
@@ -182,7 +195,11 @@ final readonly class ConfluenceReferenceResolver
             . rawurlencode($space) . '/' . rawurlencode($slug);
     }
 
-    /** HR: Dohvaća ciljni slug područja iz repozitorija mapiranja. EN: Fetches the target Workspace slug from the mapping repository. */
+    /**
+     * EN: Fetches the target Workspace slug from the mapping repository.
+     *
+     * HR: Dohvaća ciljni slug područja iz repozitorija mapiranja.
+     */
     private function repositorySpaceSlug(int $workspaceId): string
     {
         if ($workspaceId <= 0) {
@@ -194,7 +211,11 @@ final readonly class ConfluenceReferenceResolver
         return is_array($mapping) ? trim((string)($mapping['target_workspace_slug'] ?? '')) : '';
     }
 
-    /** HR: Čuva sigurni fragment iz izvornog URL-a bez utjecaja na ciljnu putanju. EN: Preserves a safe source-URL fragment without affecting the target path. */
+    /**
+     * EN: Preserves a safe source-URL fragment without affecting the target path.
+     *
+     * HR: Čuva sigurni fragment iz izvornog URL-a bez utjecaja na ciljnu putanju.
+     */
     private function withFragment(string $target, string $fragment): string
     {
         $fragment = preg_replace(
@@ -206,7 +227,11 @@ final readonly class ConfluenceReferenceResolver
         return $fragment !== '' ? $target . '#' . $fragment : $target;
     }
 
-    /** HR: Nepoznatu Confluence poveznicu ostavlja uporabljivom samo kao siguran HTTP(S) URL. EN: Keeps an unknown Confluence link usable only as a safe HTTP(S) URL. */
+    /**
+     * EN: Keeps an unknown Confluence link usable only as a safe HTTP(S) URL.
+     *
+     * HR: Nepoznatu Confluence poveznicu ostavlja uporabljivom samo kao siguran HTTP(S) URL.
+     */
     private function safeExternalTarget(string $target): bool
     {
         $scheme = strtolower((string)(parse_url($target, PHP_URL_SCHEME) ?? ''));
@@ -215,7 +240,11 @@ final readonly class ConfluenceReferenceResolver
         return in_array($scheme, ['http', 'https'], true) && $host !== '';
     }
 
-    /** HR: Gradi stabilnu posredničku poveznicu koja može proraditi nakon kasnijeg importa prostora. EN: Builds a stable intermediary link that can resolve after a later space import. */
+    /**
+     * EN: Builds a stable intermediary link that can resolve after a later space import.
+     *
+     * HR: Gradi stabilnu posredničku poveznicu koja može proraditi nakon kasnijeg importa prostora.
+     */
     private function unresolvedPath(string $linkUuid): string
     {
         if ($this->urls->namedRouteExists('simbioza-confluence-import.link')) {

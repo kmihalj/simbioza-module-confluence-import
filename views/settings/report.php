@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-// HR: Glavni orijentir daje aplikacijski raspored; ovaj je prikaz samo njegov sadržaj.
 // EN: The host layout owns the main landmark; this view only supplies its content.
+//
+// HR: Glavni orijentir daje aplikacijski raspored; ovaj je prikaz samo njegov sadržaj.
 
 /**
  * @var string $title
@@ -153,6 +154,53 @@ $normalizeCalendarName = static function (string $name): string {
                     <?php endif; ?>
                 <?php endforeach; ?>
 
+                <?php $scriptGroups = \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceExternalScriptReport::groups($reviewPages); ?>
+                <?php if ($scriptGroups !== []) : ?>
+                    <section class="mb-4" data-confluence-script-groups>
+                        <h2 class="h4"><?= $this->escape(__('Pronađene vanjske skripte')) ?></h2>
+                        <p><?= $this->escape(__('Točno podudaranje s lokalno odobrenom skriptom automatski se uključuje samo na uvezenim stranicama koje je sadrže. Nove i odbijene skripte ostaju neizvršive. Za novu skriptu odaberite jednu ili sve stranice ovog importa. Povijest ne izvršava skripte.')) ?></p>
+                        <?php foreach ($scriptGroups as $scriptId => $group) : ?>
+                            <details class="border rounded p-3 mb-3" data-confluence-script-group="<?= $this->escape($scriptId) ?>">
+                                <summary><?= $this->escape(is_string($group['definition']['name'] ?? null) ? $group['definition']['name'] : '') ?> — <?= count($group['pages']) ?> <?= $this->escape(__('Stranice')) ?></summary>
+                                <pre class="text-wrap text-break mt-3"><code><?= $this->escape(is_string($group['definition']['value'] ?? null) ? $group['definition']['value'] : '') ?></code></pre>
+                                <p><?= $this->escape(__('Status')) ?>:
+                                    <?= $this->escape(match ($externalScriptStatuses[$scriptId] ?? 'pending') {
+                                        'approved' => __('Odobreno'), 'rejected' => __('Odbijeno'),
+                                        default => __('Čeka odobrenje'),
+                                    }) ?>
+                                </p>
+                                <ul>
+                                    <?php foreach ($group['pages'] as $scriptPage) : ?>
+                                        <li>
+                                            <a href="<?= $this->escape($scriptPage['url']) ?>">
+                                                <?= $this->escape($scriptPage['title']) ?>
+                                            </a>
+                                            <?php if ($scriptPage['resolution'] === 'existing_script_approval') : ?>
+                                                — <?= $this->escape(__('Prepoznata postojeća lokalna dozvola')) ?>
+                                            <?php elseif ($scriptPage['resolution'] === 'script_activation') : ?>
+                                                — <?= $this->escape(__('Uključena kroz izvještaj')) ?>
+                                            <?php endif; ?>
+                                        </li>
+                                    <?php endforeach; ?>
+                                </ul>
+                                <form method="post" action="<?= $this->escape($externalScriptDecisionPath) ?>">
+                                    <?= $this->csrfHandler->generateCsrfTokenInputField() ?>
+                                    <input type="hidden" name="script_id" value="<?= $this->escape($scriptId) ?>">
+                                    <input type="hidden" name="decision" value="approve">
+                                    <label class="form-label" for="script-page-<?= $this->escape($scriptId) ?>"><?= $this->escape(__('Odaberite stranicu')) ?></label>
+                                    <select class="form-select mb-2" name="source_page_id" id="script-page-<?= $this->escape($scriptId) ?>">
+                                        <?php foreach ($group['pages'] as $scriptPage) : ?>
+                                            <option value="<?= $this->escape($scriptPage['id']) ?>"><?= $this->escape($scriptPage['title']) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <button class="btn btn-success" name="scope" value="page"><?= $this->escape(__('Odobri i uključi na ovoj stranici')) ?></button>
+                                    <button class="btn btn-outline-success" name="scope" value="all"><?= $this->escape(__('Odobri i uključi na svim stranicama ovog importa')) ?></button>
+                                </form>
+                            </details>
+                        <?php endforeach; ?>
+                    </section>
+                <?php endif; ?>
+
                 <h2 class="h4 mb-2"><?= $this->escape(__('Nerazriješene Confluence poveznice')) ?></h2>
                 <p class="text-body-secondary"><?= $this->escape(__('Popis se automatski osvježava nakon svakog importa područja. Uspješno lokalno razriješene poveznice više se ne prikazuju.')) ?></p>
                 <?php if ($unresolvedLinkPages === []) : ?>
@@ -240,6 +288,35 @@ $normalizeCalendarName = static function (string $name): string {
                                 </div>
                                 <div class="d-grid gap-3 mt-3">
                                     <?php foreach ($issues as $issue) : ?>
+                                        <?php if (is_array($issue) && ($issue['type'] ?? '') === 'external_script') : ?>
+                                            <?php $script = is_array($issue['script'] ?? null) ? $issue['script'] : []; ?>
+                                            <section class="border rounded p-3 mb-3" data-confluence-external-script>
+                                                <h4 class="h6"><?= $this->escape(__('Vanjska skripta')) ?>: <?= $this->escape((string)($script['name'] ?? __('Blokirana definicija'))) ?></h4>
+                                                <p><?= $this->escape(__('Odobrenje vrijedi za ovu točnu skriptu na cijelom siteu, samo na stranicama koje je uključuju. Skripta ima pristup sadržaju i sesiji čitatelja.')) ?></p>
+                                                <pre class="text-wrap text-break"><code><?= $this->escape((string)($script['value'] ?? $issue['source'] ?? '')) ?></code></pre>
+                                                <?php if ($script !== []) : ?>
+                                                    <p><?= $this->escape(__('Status')) ?>: <?= $this->escape((string)($externalScriptStatuses[$script['id']] ?? 'pending')) ?></p>
+                                                    <form method="post" action="<?= $this->escape($externalScriptDecisionPath) ?>" class="d-flex gap-2">
+                                                        <?= $this->csrfHandler->generateCsrfTokenInputField() ?>
+                                                        <input type="hidden" name="script_id" value="<?= $this->escape($script['id']) ?>">
+                                                        <input type="hidden" name="source_page_id" value="<?= $this->escape((string)($page['source_page_id'] ?? '')) ?>">
+                                                        <input type="hidden" name="decision" value="approve">
+                                                        <button class="btn btn-success" name="scope" value="page"><?= $this->escape(__('Odobri i uključi na ovoj stranici')) ?></button>
+                                                        <button class="btn btn-outline-success" name="scope" value="all"><?= $this->escape(__('Odobri i uključi na svim stranicama ovog importa')) ?></button>
+                                                    </form>
+                                                    <form method="post" action="<?= $this->escape($externalScriptDecisionPath) ?>" class="d-flex gap-2 mt-2">
+                                                        <?= $this->csrfHandler->generateCsrfTokenInputField() ?>
+                                                        <input type="hidden" name="script_id" value="<?= $this->escape($script['id']) ?>">
+                                                        <input type="hidden" name="scope" value="none">
+                                                        <button class="btn btn-outline-secondary" name="decision" value="register"><?= $this->escape(__('Zadrži u registru bez uključivanja')) ?></button>
+                                                        <button class="btn btn-outline-danger" name="decision" value="reject"><?= $this->escape(__('Odbij')) ?></button>
+                                                    </form>
+                                                <?php else : ?>
+                                                    <p class="text-danger"><?= $this->escape((string)($issue['error'] ?? '')) ?></p>
+                                                <?php endif; ?>
+                                            </section>
+                                            <?php continue; ?>
+                                        <?php endif; ?>
                                         <?php if (is_array($issue) && ($issue['type'] ?? '') === 'calendar') :
                                             $sourceCalendarName = trim((string)($issue['source_calendar_name'] ?? ''));
                                             $calendarName = $sourceCalendarName !== ''

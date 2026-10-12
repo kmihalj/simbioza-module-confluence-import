@@ -17,7 +17,11 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ConfluenceImportRepository::class)]
 final class ConfluenceWorkspaceReferenceProviderTest extends TestCase
 {
-    /** HR: Ključ ostaje neriješen do stvarnog uvoza ciljnog područja. EN: A key remains unresolved until the target Workspace is actually imported. */
+    /**
+     * EN: A key remains unresolved until the target Workspace is actually imported.
+     *
+     * HR: Ključ ostaje neriješen do stvarnog uvoza ciljnog područja.
+     */
     public function testReferenceStartsResolvingAfterSpaceMappingIsStored(): void
     {
         $helper = new Helper();

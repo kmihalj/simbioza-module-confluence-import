@@ -43,10 +43,18 @@ use function time;
 use function trim;
 use function unlink;
 
-/** HR: Prima velike Confluence arhive u provjerenim nastavivim dijelovima. EN: Receives large Confluence archives in validated resumable chunks. */
+/**
+ * EN: Receives large Confluence archives in validated resumable chunks.
+ *
+ * HR: Prima velike Confluence arhive u provjerenim nastavivim dijelovima.
+ */
 final readonly class ConfluenceImportUploadService
 {
-    /** HR: Prima repozitorij, limite i preflight scanner. EN: Receives the repository, limits, and preflight scanner. */
+    /**
+     * EN: Receives the repository, limits, and preflight scanner.
+     *
+     * HR: Prima repozitorij, limite i preflight scanner.
+     */
     public function __construct(
         private ConfluenceImportRepository $repository,
         private ConfluenceImportConfig $config,
@@ -55,8 +63,9 @@ final readonly class ConfluenceImportUploadService
     }
 
     /**
-     * HR: Vraća izravne XML ZIP datoteke koje je administrator postavio za batch import.
      * EN: Returns direct XML ZIP files placed by an administrator for batch import.
+     *
+     * HR: Vraća izravne XML ZIP datoteke koje je administrator postavio za batch import.
      *
      * @return list<array{name:string,size:int}>
      */
@@ -95,12 +104,13 @@ final readonly class ConfluenceImportUploadService
     }
 
     /**
-     * HR: Priprema jednu serversku batch arhivu istim preflight putem kao ručni upload.
-     * Izvor ostaje u batch direktoriju do uspješnog završetka, a tvrda poveznica
-     * izbjegava privremeno udvostručavanje velikih arhiva.
      * EN: Prepares one server-side batch archive through the same preflight path as
      * a manual upload. The source remains in the batch directory until completion,
      * while a hard link avoids temporarily duplicating large archives.
+     *
+     * HR: Priprema jednu serversku batch arhivu istim preflight putem kao ručni upload.
+     * Izvor ostaje u batch direktoriju do uspješnog završetka, a tvrda poveznica
+     * izbjegava privremeno udvostručavanje velikih arhiva.
      *
      * @return array<string,mixed>
      */
@@ -164,8 +174,9 @@ final readonly class ConfluenceImportUploadService
     }
 
     /**
-     * HR: Otvara novi nastavivi upload nakon provjere naziva i veličine.
      * EN: Starts a new resumable upload after validating its name and size.
+     *
+     * HR: Otvara novi nastavivi upload nakon provjere naziva i veličine.
      *
      * @return array<string,mixed>
      */
@@ -207,8 +218,9 @@ final readonly class ConfluenceImportUploadService
     }
 
     /**
-     * HR: Upisuje točno sljedeći dio; različiti offset odbija i vraća sigurno stanje za nastavak.
      * EN: Writes exactly the next chunk; a different offset is rejected while preserving resumable state.
+     *
+     * HR: Upisuje točno sljedeći dio; različiti offset odbija i vraća sigurno stanje za nastavak.
      *
      * @param resource $stream
      * @return array<string,mixed>
@@ -303,8 +315,9 @@ final readonly class ConfluenceImportUploadService
     }
 
     /**
-     * HR: Zaključuje upload, provjerava ZIP i odmah radi read-only preflight.
      * EN: Finalizes upload, validates ZIP, and immediately runs a read-only preflight.
+     *
+     * HR: Zaključuje upload, provjerava ZIP i odmah radi read-only preflight.
      *
      * @return array<string,mixed>
      */
@@ -348,12 +361,13 @@ final readonly class ConfluenceImportUploadService
             ]);
             $scan = $this->scanner->scan($finalPath);
             /*
-             * HR: Pojedinačne stranice i privitke ponovno čitamo iz arhive tek
-             *     pri importu. Za mapiranje su potrebni samo sažeci; spremanje
-             *     desetaka tisuća zapisa u posao bi iscrpilo FPM memoriju.
              * EN: Individual pages and attachments are read from the archive
              *     again during import. Mapping only needs summaries; retaining
              *     tens of thousands of records in the job exhausts FPM memory.
+             *
+             * HR: Pojedinačne stranice i privitke ponovno čitamo iz arhive tek
+             *     pri importu. Za mapiranje su potrebni samo sažeci; spremanje
+             *     desetaka tisuća zapisa u posao bi iscrpilo FPM memoriju.
              */
             unset($scan['pages'], $scan['attachments']);
             $this->repository->saveScan((int)$job['id'], $scan);
@@ -369,10 +383,11 @@ final readonly class ConfluenceImportUploadService
     }
 
     /**
-     * HR: Velikoj završnoj provjeri daje isti konfigurabilni vremenski okvir kao
-     *     potvrđenom importu, umjesto zadanih 30 sekundi web zahtjeva.
      * EN: Gives a large final preflight the same configurable execution window
      *     as a confirmed import instead of the web request's default 30 seconds.
+     *
+     * HR: Velikoj završnoj provjeri daje isti konfigurabilni vremenski okvir kao
+     *     potvrđenom importu, umjesto zadanih 30 sekundi web zahtjeva.
      */
     private function extendPreflightExecutionTime(): void
     {
@@ -383,18 +398,20 @@ final readonly class ConfluenceImportUploadService
         try {
             set_time_limit($this->config->importExecutionTimeLimit());
         } catch (\Throwable) {
-            // HR: Nastavljamo s poslužiteljskim limitom; scanner i dalje može
-            //     završiti kada je PHP konfiguriran bez vremenskog ograničenja.
             // EN: Continue with the server limit; the scanner can still finish
             //     when PHP is configured without an execution-time limit.
+            //
+            // HR: Nastavljamo s poslužiteljskim limitom; scanner i dalje može
+            //     završiti kada je PHP konfiguriran bez vremenskog ograničenja.
         }
     }
 
     /**
-     * HR: Uklanja samo istekle privremene poslove koji još nisu započeli
-     *     mijenjati aplikacijski sadržaj.
      * EN: Removes only expired temporary jobs that have not started mutating
      *     application content.
+     *
+     * HR: Uklanja samo istekle privremene poslove koji još nisu započeli
+     *     mijenjati aplikacijski sadržaj.
      */
     public function cleanupExpired(): int
     {
@@ -416,20 +433,22 @@ final readonly class ConfluenceImportUploadService
             }
         }
 
-        // HR: Novi prijenos ujedno ponavlja sigurno čišćenje dovršenih poslova
-        //     ako je prethodni zahtjev prekinut između finalizacije i brisanja.
         // EN: A new upload also retries safe cleanup for completed jobs when a
         //     previous request stopped between finalization and deletion.
+        //
+        // HR: Novi prijenos ujedno ponavlja sigurno čišćenje dovršenih poslova
+        //     ako je prethodni zahtjev prekinut između finalizacije i brisanja.
         $this->cleanupCompletedArtifacts();
 
         return $removed;
     }
 
     /**
-     * HR: Uklanja samo privremene artefakte dovršenih poslova. Ne dira
-     *     nastavive ili neuspjele importe jer njihovi podaci trebaju za oporavak.
      * EN: Removes only transient artifacts of completed jobs. Resumable or
      *     failed imports remain untouched because their data is needed for recovery.
+     *
+     * HR: Uklanja samo privremene artefakte dovršenih poslova. Ne dira
+     *     nastavive ili neuspjele importe jer njihovi podaci trebaju za oporavak.
      */
     public function cleanupCompletedArtifacts(): int
     {
@@ -451,12 +470,13 @@ final readonly class ConfluenceImportUploadService
     }
 
     /**
-     * HR: Provjerava može li administrator sigurno odustati prije nego što je
-     * import počeo mijenjati aplikacijski sadržaj. Neuspjela početna provjera
-     * također je privremeni posao ako potvrđene opcije još nisu spremljene.
      * EN: Checks whether an administrator may safely cancel before the import
      * starts mutating application content. A failed preflight is also transient
      * while no confirmed options have been stored.
+     *
+     * HR: Provjerava može li administrator sigurno odustati prije nego što je
+     * import počeo mijenjati aplikacijski sadržaj. Neuspjela početna provjera
+     * također je privremeni posao ako potvrđene opcije još nisu spremljene.
      *
      * @param array<string,mixed> $job
      */
@@ -476,12 +496,13 @@ final readonly class ConfluenceImportUploadService
     }
 
     /**
-     * HR: Otkazuje vlastiti privremeni posao, briše prenesenu arhivu ili
-     * nedovršenu `.upload` datoteku i tek potom uklanja zapis posla. Posao koji
-     * je počeo izrađivati sadržaj nije dopušteno otkazati ovim putem.
      * EN: Cancels the actor's transient job, deletes its uploaded archive or
      * incomplete `.upload` file, and only then removes the job record. A job
      * that started creating content cannot be cancelled through this path.
+     *
+     * HR: Otkazuje vlastiti privremeni posao, briše prenesenu arhivu ili
+     * nedovršenu `.upload` datoteku i tek potom uklanja zapis posla. Posao koji
+     * je počeo izrađivati sadržaj nije dopušteno otkazati ovim putem.
      *
      * @return array<string,mixed>
      */
@@ -510,8 +531,9 @@ final readonly class ConfluenceImportUploadService
     }
 
     /**
-     * HR: Briše završenu izvornu arhivu nakon uspješnog importa.
      * EN: Deletes the completed source archive after a successful import.
+     *
+     * HR: Briše završenu izvornu arhivu nakon uspješnog importa.
      *
      * @param array<string,mixed> $job
      */
@@ -541,10 +563,11 @@ final readonly class ConfluenceImportUploadService
     }
 
     /**
-     * HR: Uklanja datoteku samo iz izričito zadanog upravljanog direktorija.
-     *     Datoteka koja je već nestala smatra se očišćenom.
      * EN: Removes a file only from the explicitly supplied managed directory.
      *     A file that is already absent is considered cleaned.
+     *
+     * HR: Uklanja datoteku samo iz izričito zadanog upravljanog direktorija.
+     *     Datoteka koja je već nestala smatra se očišćenom.
      */
     private function deleteManagedFile(string $path, string $directory): bool
     {
@@ -566,8 +589,9 @@ final readonly class ConfluenceImportUploadService
     }
 
     /**
-     * HR: Uklanja završeni staging samo iz izravnog direktorija poznatog posla.
      * EN: Removes completed staging only from the direct directory of a known job.
+     *
+     * HR: Uklanja završeni staging samo iz izravnog direktorija poznatog posla.
      */
     private function deleteManagedStagingDirectory(string $jobUuid): bool
     {
@@ -593,7 +617,11 @@ final readonly class ConfluenceImportUploadService
         return !is_dir($real);
     }
 
-    /** HR: Rekurzivno uklanja već provjeren staging direktorij. EN: Recursively removes an already verified staging directory. */
+    /**
+     * EN: Recursively removes an already verified staging directory.
+     *
+     * HR: Rekurzivno uklanja već provjeren staging direktorij.
+     */
     private function removeManagedDirectory(string $directory): void
     {
         foreach (scandir($directory) ?: [] as $item) {
@@ -617,8 +645,9 @@ final readonly class ConfluenceImportUploadService
     }
 
     /**
-     * HR: Briše isključivo stvarnu datoteku unutar privatnog upload direktorija.
      * EN: Deletes only a real file located inside the private upload directory.
+     *
+     * HR: Briše isključivo stvarnu datoteku unutar privatnog upload direktorija.
      *
      * @param array<string,mixed> $job
      */
@@ -644,7 +673,11 @@ final readonly class ConfluenceImportUploadService
         }
     }
 
-    /** HR: Stvara privatni direktorij uploada. EN: Creates the private upload directory. */
+    /**
+     * EN: Creates the private upload directory.
+     *
+     * HR: Stvara privatni direktorij uploada.
+     */
     private function ensureDirectory(string $directory): void
     {
         if (!is_dir($directory) && !mkdir($directory, 0770, true) && !is_dir($directory)) {
@@ -653,8 +686,9 @@ final readonly class ConfluenceImportUploadService
     }
 
     /**
-     * HR: Odbija nastavak isteklog uploada.
      * EN: Rejects continuation of an expired upload.
+     *
+     * HR: Odbija nastavak isteklog uploada.
      *
      * @param array<string,mixed> $job
      */
