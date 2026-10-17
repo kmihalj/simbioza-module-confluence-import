@@ -649,39 +649,48 @@ final readonly class ConfluenceHtmlConverter
         $rich = $this->firstElement($xpath->query('.//ac:rich-text-body', $macro));
 
         if ($name === 'calendar') {
-            $sourceCalendarId = $this->macroParameter($xpath, $macro, 'id');
-            $sourceCalendarName = $context instanceof ConfluenceMacroContext
-                ? ($context->calendars[$sourceCalendarId] ?? '')
-                : '';
+            $rawIds = $this->macroParameter($xpath, $macro, 'id');
+            try {
+                $sourceIds = ConfluenceCalendarMacro::ids($rawIds);
+                $invalidSelection = false;
+            } catch (\InvalidArgumentException) {
+                $sourceIds = [''];
+                $invalidSelection = true;
+            }
             $macroId = $this->attribute($macro, self::AC_NAMESPACE, 'macro-id');
-            $marker = 'confluence-calendar-' . substr(hash(
+            $group = 'confluence-calendar-group-' . substr(hash(
                 'sha256',
-                $sourcePageId . '|' . $sourceCalendarId . '|' . ($macroId !== '' ? $macroId : $macro->getNodePath()),
+                $sourcePageId . '|' . $rawIds . '|' . $macroId . '|' . $macro->getNodePath(),
             ), 0, 20);
-            $reviewIssues[] = [
-                'type' => 'calendar',
-                'macro' => 'calendar',
-                'source_calendar_id' => $sourceCalendarId,
-                'source_calendar_name' => $sourceCalendarName,
-                'marker' => $marker,
-            ];
-
-            $box = $document->createElement('div');
-            $box->setAttribute('id', $marker);
-            $box->setAttribute('class', 'alert alert-secondary');
-            $title = $document->createElement('strong');
-            $title->appendChild($document->createTextNode(sprintf(
-                __('Confluence kalendar: %s'),
-                $sourceCalendarName !== '' ? $sourceCalendarName : ($sourceCalendarId !== '' ? $sourceCalendarId : __('nepoznat')),
-            )));
-            $box->appendChild($title);
-            $description = $document->createElement('div');
-            $description->appendChild($document->createTextNode(
-                __('Kalendar treba povezati ili uvesti u izvještaju Confluence importa.'),
-            ));
-            $box->appendChild($description);
-
-            return $box;
+            $requestedView = strtolower($this->macroParameter($xpath, $macro, 'defaultView'));
+            $view = in_array($requestedView, ['month', 'week', 'day'], true) ? $requestedView : 'month';
+            $container = $document->createElement('div');
+            $container->setAttribute('id', $group);
+            $container->setAttribute('class', 'confluence-import-calendar-group');
+            foreach ($sourceIds as $sourceCalendarId) {
+                $sourceCalendarName = $context instanceof ConfluenceMacroContext ? ($context->calendars[$sourceCalendarId] ?? '') : '';
+                $marker = 'confluence-calendar-' . substr(hash('sha256', $group . '|' . $sourceCalendarId), 0, 20);
+                $reviewIssues[] = ['type' => 'calendar', 'macro' => 'calendar',
+                    'source_calendar_id' => $sourceCalendarId, 'source_calendar_name' => $sourceCalendarName,
+                    'marker' => $marker, 'group_marker' => $group, 'calendar_view' => $view,
+                    'invalid_selection' => $invalidSelection];
+                $box = $document->createElement('div');
+                $box->setAttribute('id', $marker);
+                $box->setAttribute('class', 'alert alert-secondary');
+                $title = $document->createElement('strong');
+                $title->appendChild($document->createTextNode(sprintf(
+                    __('Confluence kalendar: %s'),
+                    $sourceCalendarName !== '' ? $sourceCalendarName : ($sourceCalendarId !== '' ? $sourceCalendarId : __('nepoznat'))
+                )));
+                $box->appendChild($title);
+                $description = $document->createElement('div');
+                $description->appendChild($document->createTextNode($invalidSelection
+                    ? __('Odabir kalendara u izvornom makrou nije valjan. Pregledajte ga ručno.')
+                    : __('Kalendar treba povezati ili uvesti u izvještaju Confluence importa.')));
+                $box->appendChild($description);
+                $container->appendChild($box);
+            }
+            return $container;
         }
 
         if (in_array($name, ['code', 'noformat'], true)) {

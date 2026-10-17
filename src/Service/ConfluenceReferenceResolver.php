@@ -6,6 +6,7 @@ namespace AaiEduHr\SimbiozaModuleConfluenceImport\Service;
 
 use HeartPhrame\Routing\UrlGenerator;
 
+use function array_key_exists;
 use function base64_decode;
 use function in_array;
 use function is_array;
@@ -61,6 +62,14 @@ final readonly class ConfluenceReferenceResolver
         array $localTargetsByTitle = [],
     ): string {
         $links = [];
+        $localSourceIds = [];
+        foreach ($localTargetsById as $sourceId => $path) {
+            if (!array_key_exists($path, $localSourceIds)) {
+                $localSourceIds[$path] = (string)$sourceId;
+            } elseif ($localSourceIds[$path] !== (string)$sourceId) {
+                $localSourceIds[$path] = '';
+            }
+        }
         $html = preg_replace_callback(
             '~__SIMBIOZA_CONFLUENCE_LINK__([^"\'<>\s]+)~',
             function (array $match) use (
@@ -69,6 +78,7 @@ final readonly class ConfluenceReferenceResolver
                 $sourceSpaceKey,
                 $localTargetsById,
                 $localTargetsByTitle,
+                $localSourceIds,
             ): string {
                 $reference = $this->decode($match[1]);
                 $destinationSpace = trim((string)($reference['destination_space_key'] ?? $sourceSpaceKey));
@@ -85,6 +95,15 @@ final readonly class ConfluenceReferenceResolver
                     $target = $destinationId !== ''
                         ? ($localTargetsById[$destinationId] ?? '#')
                         : ($destinationTitle !== '' ? ($localTargetsByTitle[$destinationTitle] ?? '#') : '#');
+                    // EN: Persist the scan-verified page identity behind an unambiguous title link.
+                    // A preserved page may keep a different local title; later reconciliation uses its ID.
+                    //
+                    // HR: Za jednoznačnu vezu po naslovu čuva identitet stranice potvrđen pregledom.
+                    // Sačuvana stranica smije imati drugi lokalni naslov; kasnije usklađivanje koristi ID.
+                    if ($destinationId === '' && $target !== '#') {
+                        $destinationId = $localSourceIds[$target] ?? '';
+                        $destinationSpace = $destinationSpace !== '' ? $destinationSpace : $sourceSpaceKey;
+                    }
                 }
                 if ($target === '#' && $referenceType !== 'unknown') {
                     if ($destinationId !== '') {

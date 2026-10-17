@@ -6,7 +6,15 @@ Nove skripte ostaju na čekanju; grupirani izvještaj omogućuje odobrenje/uklju
 jedne ili svih pripadajućih stranica. H5P nema iznimku. Editorov
 `docs/external-scripts_hr.md` opisuje sigurnost, pregled upotrebe i backup.
 
-> Priprema izdanja 0.3.0: navedene naredbe za označena izdanja vrijede nakon koordinirane objave aplikacije i modula. Razvojna provjera koristi lokalne pakete; starija izdanja nisu zamjena za ovu konfiguraciju i shemu.
+> Neobjavljeni kandidat 0.3.1: pregled sitea/više područja, postavke identiteta, [sadržaj odabranih područja](docs/site-content_hr.md) i [kalendari](docs/site-calendars_hr.md) koriste jedan pregledani postupak sitea. Završna potvrda izvršava identitete, kalendare, područja i povezivanje referenci redoslijedom ovisnosti. Postojeći izvještaji korisnika/grupa, kalendara i svakog područja ostaju zasebni i prikazuju kasnija razrješenja linkova. Implementacija, lokalne provjere i preostali HFC prihvat zapisani su u [planu](docs/site-import-plan_hr.md). Naredbe za tagirano izdanje ispod vrijede tek nakon koordinirane objave.
+
+Pregled identiteta sitea razlikuje neaktivnost računa/imenika i povijesne autore;
+automatska izrada preskače poznate neaktivne izvore osim uz izričit dodatni odabir.
+Odabrani neaktivni osobni sadržaj može dobiti zasebna arhivska područja pod upravom
+administratora, bez zamjenskog mapiranja identiteta/ovlasti na administratora.
+Makroi s više kalendara zadržavaju jedan nativni blok sa zasebno prijavljenim
+nedostajućim referencama. Pravila koriste izvorne metapodatke i izričite odabire,
+ne identifikatore pojedine instalacije.
 
 Engleska verzija: [README.md](README.md)
 
@@ -42,7 +50,10 @@ Opcionalne integracije:
   ICS kao novi zajednički kalendar ili poveže već vidljiv kalendar.
 - Workspace Search automatski obnavlja izvedeni indeks nakon importa.
 
-Interni paketi koriste kompatibilna izdanja `^0.3.0`; ovaj modul ne sprema `composer.lock`.
+Simbioza User zahtijeva `^0.3.1`; ostale runtime ovisnosti zadržavaju deklarirane
+uvjete `^0.3.0`. Calendar je opcionalan, ali instalirani Calendar mora biti barem
+`0.3.1`; razvojni testovi izričito ga uključuju. Ovaj modul ne sprema `composer.lock`.
+Auth i Framework ne trebaju novo izdanje.
 
 ## Što importer radi
 
@@ -79,7 +90,7 @@ Interni paketi koriste kompatibilna izdanja `^0.3.0`; ovaj modul ne sprema `comp
 - neriješene ACL identitete obrađuje zatvoreno, bez proširenja pristupa;
 - osobni Confluence space mapira u osobno područje potvrđenog vlasnika;
 - nepodržane makroe i druge odluke bilježi u trajnom izvještaju importa povezanom iz popisa **Nedavni Confluence importi**;
-- svaki Confluence Team Calendar makro bilježi u tom izvještaju jer XML sadrži
+- svaki Confluence Team Calendar makro bilježi u tom izvještaju jer XML jednog područja sadrži
   identitet kalendara, ali ne i njegove događaje; kalendar se ne traži niti
   izrađuje automatski;
 - omogućuje odustajanje od nedovršenog importa uz trenutačno brisanje prenesene arhive i podataka pripreme;
@@ -147,7 +158,7 @@ kao prijedlog koji administrator i dalje mora izričito potvrditi.
 ## Brzi početak
 
 ```bash
-composer require aaieduhr/simbioza-module-confluence-import:^0.3.0
+composer require aaieduhr/simbioza-module-confluence-import:^0.3.1
 vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```
@@ -162,6 +173,10 @@ vendor/bin/hph simbioza-confluence-import:inspect /srv/import/podrucje-tima.xml.
 
 ## Dokumentacija
 
+- [Pregled sitea i više područja](docs/site-inventory_hr.md)
+- [Plan implementacije importa sitea](docs/site-import-plan_hr.md)
+- [Site kalendari, C2 mapiranja i povezivanje stranica](docs/site-calendars_hr.md)
+- [Zajednički izvještaji sitea, čišćenje i završne provjere](docs/site-reports_hr.md)
 - [Indeks dokumentacije](docs/index_hr.md)
 - [Instalacija i konfiguracija](docs/installation_hr.md)
 - [Vodič za administratore](docs/administrator-guide_hr.md)

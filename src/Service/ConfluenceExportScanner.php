@@ -68,6 +68,7 @@ final readonly class ConfluenceExportScanner
     public function __construct(
         private ConfluenceArchive $archive,
         private ConfluenceExportReader $reader,
+        private ?ConfluenceSiteInventory $siteInventory = null,
     ) {
     }
 
@@ -78,9 +79,31 @@ final readonly class ConfluenceExportScanner
      *
      * @return array<string,mixed>
      */
-    public function scan(string $archivePath): array
+    public function scan(string $archivePath, ?string $indexPath = null): array
     {
         $archive = $this->archive->inspect($archivePath);
+        if (($archive['archive_type'] ?? 'space') !== 'space') {
+            if (!$this->siteInventory instanceof \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteInventory) {
+                throw new ConfluenceImportException(__('Pregled sitea nije registriran u aplikaciji.'));
+            }
+            return $this->siteInventory->scan($archivePath, $indexPath);
+        }
+        return $this->scanObjects($this->reader->objects($archivePath), $archive);
+    }
+
+    /**
+     * EN: Reuses the single-space inventory rules with a private space-scoped object stream.
+     * No site archive is rescanned or extracted by this method.
+     *
+     * HR: Koristi pravila pregleda jednog područja s privatnim tokom njegovih objekata.
+     * Ova metoda ne čita ponovno niti raspakirava arhivu sitea.
+     *
+     * @param iterable<ConfluenceObject> $objects
+     * @param array<string,mixed> $archive
+     * @return array<string,mixed>
+     */
+    public function scanObjects(iterable $objects, array $archive): array
+    {
         $counts = [];
         $statuses = [];
         $macros = [];
@@ -98,7 +121,7 @@ final readonly class ConfluenceExportScanner
         $calendarContents = [];
         $calendarProperties = [];
 
-        foreach ($this->reader->objects($archivePath) as $object) {
+        foreach ($objects as $object) {
             $counts[$object->className] = ($counts[$object->className] ?? 0) + 1;
             switch ($object->className) {
                 case 'Space':

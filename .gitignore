@@ -1,5 +1,6 @@
 /.phpunit.result.cache
 /build/
+/output/playwright/
 /composer.lock
 /composer.local.json
 /composer.local.lock

@@ -15,6 +15,8 @@ use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportModuleViewRe
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportRepository;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportService;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportUploadService;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteAccessService;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteContentService;
 use DateTimeImmutable;
 use DateTimeZone;
 use HeartPhrame\Config\ConfigInterface;
@@ -60,6 +62,11 @@ final readonly class ConfluenceImportController
         private TranslatorInterface $translator,
         private ConfigInterface $applicationConfig,
         private MenuRenderer $menuRenderer,
+        private ?ConfluenceSiteAccessService $siteAccess = null,
+        private ?ConfluenceSiteContentService $siteContent = null,
+        private ?\AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteCalendarService $siteCalendars = null,
+        private ?\AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteReportService $siteReports = null,
+        private ?\AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteWorkflow $siteWorkflow = null,
     ) {
     }
 
@@ -78,12 +85,36 @@ final readonly class ConfluenceImportController
         $jobUuid = $this->text($request->getQueryParams()['job'] ?? '');
         $preparation = null;
         $error = '';
+        $siteAccessState = null;
+        $siteContentState = null;
+        $siteCalendarState = null;
         if ($jobUuid !== '') {
             try {
                 $preparation = $this->imports->preparation($jobUuid, $actorUserId);
+                if (($preparation['scan']['inventory_only'] ?? false) === true) {
+                    if (($preparation['job']['status'] ?? '') === 'ready') {
+                        $siteAccessState = $this->siteAccess?->state($jobUuid, $actorUserId);
+                    }
+                    $siteContentState = $this->siteContent?->state($jobUuid, $actorUserId);
+                    $siteCalendarState = $this->siteCalendars?->state($jobUuid, $actorUserId);
+                }
             } catch (Throwable $throwable) {
                 $error = $throwable->getMessage();
             }
+        }
+        if (($request->getQueryParams()['mapping_review'] ?? '') === '1') {
+            if (($siteAccessState['ready'] ?? false) !== true) {
+                return $this->responses->text(__('Najprije pripremite pregled identiteta sitea.'), 409);
+            }
+            return $this->views->render('settings/site-mapping-review', [
+                'title' => __('Prijedlozi mapiranja sitea'), 'jobUuid' => $jobUuid,
+                'review' => \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteMappingReview::build($siteAccessState, $siteCalendarState ?? []),
+                'targetLabels' => array_column($siteAccessState['target_users'], 'display_name', 'id'),
+                'calendarReady' => ($siteCalendarState['catalog'] ?? null) !== null,
+                'settingsPath' => $this->path('simbioza-confluence-import.settings', '/settings/confluence-import'),
+                'stylesPath' => $this->path('simbioza-confluence-import.assets.css', '/confluence-import/assets.css'),
+                'settingsMenuActiveSection' => 'simbioza-confluence-import.settings', 'menuRenderer' => $this->menuRenderer,
+            ])->withHeader('Cache-Control', 'no-store, private');
         }
         $activeBatchJob = $this->repository->activeBatchJob($actorUserId);
         $currentAdministrator = $this->access->currentUser();
@@ -91,8 +122,22 @@ final readonly class ConfluenceImportController
         return $this->views->render('settings/index', [
             'title' => __('Confluence import'),
             'preparation' => $preparation,
+            'siteAccessState' => $siteAccessState,
+            'siteContentState' => $siteContentState,
+            'siteCalendarState' => $siteCalendarState,
+            'siteWorkflowState' => $preparation !== null && ($preparation['scan']['inventory_only'] ?? false)
+                ? $this->siteWorkflow?->state($jobUuid, $actorUserId) : null,
+            'siteWorkflowPath' => $this->path('simbioza-confluence-import.site.workflow', '/settings/confluence-import/site/workflow'),
+            'siteCalendarPath' => $this->path('simbioza-confluence-import.site.calendars', '/settings/confluence-import/site/calendars'),
+            'siteContentPath' => $this->path('simbioza-confluence-import.site.content', '/settings/confluence-import/site/content'),
+            'siteAccessQuery' => $request->getQueryParams(),
+            'siteAccessPath' => $this->path('simbioza-confluence-import.site.access', '/settings/confluence-import/site/access'),
+            'siteUsersPath' => $this->path('simbioza-confluence-import.site.users', '/settings/confluence-import/site/users'),
             'initialError' => $error,
             'jobs' => $this->jobPayloads(),
+            'siteOverview' => $preparation !== null && ($preparation['scan']['inventory_only'] ?? false) === true
+                ? $this->siteReports?->overview($preparation['job']) : null,
+            'siteCleanupPath' => $this->path('simbioza-confluence-import.site.cleanup', '/settings/confluence-import/site/cleanup'),
             'settingsPath' => $this->path('simbioza-confluence-import.settings', '/settings/confluence-import'),
             'jobsPath' => $this->path('simbioza-confluence-import.jobs', '/settings/confluence-import/jobs'),
             'csrfPath' => $this->path('simbioza-confluence-import.csrf', '/settings/confluence-import/csrf'),
@@ -103,6 +148,7 @@ final readonly class ConfluenceImportController
             'cancelPath' => $this->path('simbioza-confluence-import.cancel', '/settings/confluence-import/cancel'),
             'importPath' => $this->path('simbioza-confluence-import.run', '/settings/confluence-import/run'),
             'processPath' => $this->path('simbioza-confluence-import.process', '/settings/confluence-import/process'),
+            'inventorySelectionPath' => $this->path('simbioza-confluence-import.inventory.selection', '/settings/confluence-import/inventory/selection'),
             'stylesPath' => $this->path('simbioza-confluence-import.assets.css', '/confluence-import/assets.css'),
             'userSearchPath' => $this->path('workspace.acl.subjects', '/workspaces/acl/subjects'),
             'batchArchives' => $this->uploads->batchArchives(),
@@ -148,11 +194,32 @@ final readonly class ConfluenceImportController
 
         try {
             $job = $this->repository->jobByUuid($this->text($request->getAttribute('uuid')));
+            $siteParent = ($job['summary']['inventory_only'] ?? false) === true || ($job['operation'] ?? '') === 'site_import';
+            if ($siteParent) {
+                return $this->views->render('settings/site-content-report', [
+                    'title' => __('Zajednički izvještaj uvoza sitea'), 'job' => $job, 'summary' => $job['summary'],
+                    'siteOverview' => $this->siteReports?->overview($job),
+                    'settingsPath' => $this->path('simbioza-confluence-import.settings', '/settings/confluence-import'),
+                ]);
+            }
             if (($job['status'] ?? '') !== 'completed') {
                 return $this->responses->text(__('Izvještaj je dostupan tek nakon dovršenog importa.'), 404);
             }
 
             $summary = is_array($job['summary'] ?? null) ? $job['summary'] : [];
+            if (($job['operation'] ?? '') === 'site_calendars') {
+                return $this->views->render('settings/site-calendar-report', [
+                    'title' => __('Izvještaj uvoza kalendara sitea'), 'job' => $job, 'summary' => $summary,
+                    'settingsPath' => $this->path('simbioza-confluence-import.settings', '/settings/confluence-import'),
+                ]);
+            }
+            if (($job['operation'] ?? '') === 'site_access') {
+                return $this->views->render('settings/site-access-report', [
+                    'title' => __('Izvještaj identiteta Confluence sitea'), 'job' => $job, 'summary' => $summary,
+                    'settingsPath' => $this->path('simbioza-confluence-import.settings', '/settings/confluence-import'),
+                    'settingsMenuActiveSection' => 'simbioza-confluence-import.settings', 'menuRenderer' => $this->menuRenderer,
+                ]);
+            }
             $summary['attachment_report'] = $this->repository->attachmentReport((int)($job['id'] ?? 0));
             $reviewPages = [];
             foreach (is_array($summary['review_pages'] ?? null) ? $summary['review_pages'] : [] as $page) {
@@ -569,7 +636,13 @@ final readonly class ConfluenceImportController
             }
 
             $this->session->close();
-            $progress = $this->imports->queue($uuid, $body, $actor);
+            $job = $this->repository->jobByUuid($uuid, (int)$actor['id']);
+            if ($job['operation'] === 'site_space') {
+                throw new ConfluenceImportException(__('Koristite roditeljski posao za uvoz sitea.'));
+            }
+            $progress = ($job['summary']['inventory_only'] ?? false) && $this->siteWorkflow instanceof \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteWorkflow
+                ? $this->siteWorkflow->start($uuid, $actor, $this->text($body['token'] ?? ''))
+                : $this->imports->queue($uuid, $body, $actor);
 
             return $this->responses->json([
                 'imported' => false,
@@ -601,7 +674,13 @@ final readonly class ConfluenceImportController
             }
 
             $this->session->close();
-            $progress = $this->imports->process($this->text($body['uuid'] ?? ''), $actor);
+            $uuid = $this->text($body['uuid'] ?? '');
+            $job = $this->repository->jobByUuid($uuid, (int)$actor['id']);
+            if ($job['operation'] === 'site_space') {
+                throw new ConfluenceImportException(__('Koristite roditeljski posao za uvoz sitea.'));
+            }
+            $progress = $job['operation'] === 'site_import' && $this->siteWorkflow instanceof \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteWorkflow
+                ? $this->siteWorkflow->process($uuid, $actor) : $this->imports->process($uuid, $actor);
             $summary = is_array($progress['summary'] ?? null) ? $progress['summary'] : [];
             $slug = $this->text($summary['workspace_slug'] ?? '');
 
@@ -617,6 +696,253 @@ final readonly class ConfluenceImportController
             ]);
         } catch (Throwable $throwable) {
             return $this->errorJson($throwable);
+        }
+    }
+
+    /**
+     * EN: Saves the authenticated owner's reviewed site selection without importing content.
+     *
+     * HR: Sprema pregledani odabir sitea prijavljenog vlasnika bez uvoza sadržaja.
+     */
+    public function inventorySelection(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->access->isAdministrator()) {
+            return $this->deniedJson();
+        }
+        try {
+            $body = $this->body($request);
+            $ids = $body['space_ids'] ?? [];
+            if (!is_array($ids)) {
+                throw new ConfluenceImportException(__('Odabir područja nije valjan.'));
+            }
+            $selected = $this->uploads->saveInventorySelection(
+                $this->text($body['uuid'] ?? ''),
+                $this->actorUserId(),
+                $this->text($body['source_sha256'] ?? ''),
+                $ids,
+            );
+            return $this->responses->json(['saved' => true, 'space_ids' => $selected,
+                'message' => __('Odabir područja je spremljen. Sadržaj nije uvezen.')]);
+        } catch (Throwable $error) {
+            return $this->errorJson($error);
+        }
+    }
+
+    /**
+     * EN: The existing administrator/CSRF boundary protects preparation, review and explicit apply.
+     * Release the session before the potentially long read-only catalog scan.
+     *
+     * HR: Postojeća administratorska/CSRF granica štiti pripremu, pregled i izričitu primjenu.
+     * Prije mogućeg dugog čitanja pregleda otpusti sjednicu.
+     */
+    public function siteAccess(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->access->isAdministrator() || !$this->siteAccess instanceof \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteAccessService) {
+            return $this->deniedJson();
+        }
+        try {
+            $body = $this->body($request);
+            $uuid = $this->text($body['uuid'] ?? '');
+            $actor = $this->actorUserId();
+            $action = $this->text($body['action'] ?? '');
+            $this->session->close();
+            if ($action === 'prepare') {
+                $result = $this->siteAccess->prepare($uuid, $actor);
+            } elseif ($action === 'reset') {
+                $result = $this->siteAccess->resetReview($uuid, $actor);
+            } elseif ($action === 'review') {
+                if (!is_array($body['users'] ?? null) || !is_array($body['groups'] ?? null) || !is_bool($body['memberships'] ?? null)) {
+                    throw new ConfluenceImportException(__('Odabir identiteta nije valjan.'));
+                }
+                foreach (['auto_map_users', 'create_unmapped_users', 'auto_map_groups', 'create_unmapped_groups', 'create_archival_users'] as $flag) {
+                    if (isset($body[$flag]) && !is_bool($body[$flag])) {
+                        throw new ConfluenceImportException(__('Odabir identiteta nije valjan.'));
+                    }
+                }
+                $result = $this->siteAccess->review(
+                    $uuid,
+                    $actor,
+                    $this->text($body['source_url'] ?? ''),
+                    $body['users'],
+                    $body['groups'],
+                    $body['memberships'],
+                    $body['auto_map_users'] ?? false,
+                    $body['create_unmapped_users'] ?? false,
+                    $body['auto_map_groups'] ?? false,
+                    $body['create_unmapped_groups'] ?? false,
+                    $body['create_archival_users'] ?? false
+                );
+            } elseif ($action === 'apply') {
+                throw new ConfluenceImportException(__('Najprije potvrdite zajednički pregled uvoza sitea.'));
+            } else {
+                throw new ConfluenceImportException(__('Odabir identiteta nije valjan.'));
+            }
+            return $this->responses->json($result);
+        } catch (Throwable $error) {
+            return $this->errorJson($error);
+        }
+    }
+
+    /**
+     * EN: Searches only non-secret user fields for the authenticated owner of this site preview.
+     *
+     * HR: Pretražuje samo netajna korisnička polja za prijavljenog vlasnika ovog pregleda sitea.
+     */
+    public function siteUsers(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->access->isAdministrator() || !$this->siteAccess instanceof \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteAccessService) {
+            return $this->deniedJson();
+        }
+        try {
+            $query = $request->getQueryParams();
+            if (($query['scope'] ?? '') === 'calendar-owners' && $this->siteCalendars instanceof \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteCalendarService) {
+                return $this->responses->json($this->siteCalendars->ownerPage(
+                    $this->text($query['uuid'] ?? ''),
+                    $this->actorUserId(),
+                    $this->text($query['q'] ?? ''),
+                    min(4001, max(1, $this->integer($query['page'] ?? 1)))
+                ));
+            }
+            return $this->responses->json($this->siteAccess->userPage(
+                $this->text($query['uuid'] ?? ''),
+                $this->actorUserId(),
+                $this->text($query['q'] ?? ''),
+                min(4001, max(1, $this->integer($query['page'] ?? 1)))
+            ));
+        } catch (Throwable $error) {
+            return $this->errorJson($error);
+        }
+    }
+
+    /**
+     * EN: Reviews content configuration only; execution belongs to the unified site coordinator.
+     *
+     * HR: Pregledava samo postavke sadržaja; izvršavanje pripada zajedničkom koordinatoru sitea.
+     */
+    public function siteContent(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->access->isAdministrator() || !$this->siteContent instanceof \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteContentService) {
+            return $this->deniedJson();
+        }
+        try {
+            $body = $this->body($request);
+            $actor = $this->access->currentUser();
+            if (!is_array($actor)) {
+                throw new ConfluenceImportException(__('Prijavljeni administrator nije pronađen.'));
+            }
+            $this->session->close();
+            $uuid = $this->text($body['uuid'] ?? '');
+            if (($body['action'] ?? 'review') === 'retry') {
+                throw new ConfluenceImportException(__('Najprije potvrdite zajednički pregled uvoza sitea.'));
+            }
+            $result = $this->siteContent->review($uuid, (int)$actor['id'], $body);
+            return $this->responses->json($result);
+        } catch (Throwable $error) {
+            return $this->errorJson($error);
+        }
+    }
+
+    /**
+     * EN: Only the authenticated administrator can review, confirm or advance the owned unified site workflow.
+     * Ordinary route middleware provides the same CSRF boundary as the existing importer actions.
+     *
+     * HR: Samo prijavljeni administrator smije pregledati, potvrditi ili pomaknuti vlastiti zajednički uvoz sitea.
+     * Uobičajeni middleware rute daje istu CSRF zaštitu kao postojeće radnje importera.
+     */
+    public function siteWorkflow(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->access->isAdministrator() || !$this->siteWorkflow instanceof \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteWorkflow) {
+            return $this->deniedJson();
+        }
+        try {
+            $body = $this->body($request);
+            $actor = $this->access->currentUser();
+            if (!is_array($actor)) {
+                throw new ConfluenceImportException(__('Prijavljeni administrator nije pronađen.'));
+            }
+            $this->session->close();
+            $uuid = $this->text($body['uuid'] ?? '');
+            $result = match ($this->text($body['action'] ?? '')) {
+                'draft' => $this->siteWorkflow->draft($uuid, (int)$actor['id'], $body),
+                'review' => $this->siteWorkflow->review($uuid, $actor, $body),
+                'start' => $this->siteWorkflow->start($uuid, $actor, $this->text($body['token'] ?? '')),
+                'process' => $this->siteWorkflow->process($uuid, $actor),
+                default => throw new ConfluenceImportException(__('Odabir zajedničkog uvoza nije valjan.')),
+            };
+            return $this->responses->json($result);
+        } catch (Throwable $error) {
+            return $this->errorJson($error);
+        }
+    }
+
+    /**
+     * EN: Prepares the calendar catalog only; independent HTTP execution cannot bypass final confirmation.
+     *
+     * HR: Priprema samo pregled kalendara; neovisno HTTP izvršavanje ne smije zaobići završnu potvrdu.
+     */
+    public function siteCalendars(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->access->isAdministrator() || !$this->siteCalendars instanceof \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteCalendarService) {
+            return $this->deniedJson();
+        }
+        try {
+            $body = $this->body($request);
+            $actor = $this->access->currentUser();
+            if (!is_array($actor)) {
+                throw new ConfluenceImportException(__('Prijavljeni administrator nije pronađen.'));
+            }
+            $uuid = $this->text($body['uuid'] ?? '');
+            $this->session->close();
+            $result = match ($body['action'] ?? '') {
+                'prepare' => $this->siteCalendars->prepare($uuid, (int)$actor['id']),
+                default => throw new ConfluenceImportException(__('Najprije potvrdite zajednički pregled uvoza sitea.')),
+            };
+            return $this->responses->json($result);
+        } catch (Throwable $error) {
+            return $this->errorJson($error);
+        }
+    }
+
+    /**
+     * EN: Reads owner-authorized progress without rotating single-use mutation CSRF tokens.
+     * GET cannot start preparation, import data or change an import plan.
+     *
+     * HR: Čita napredak ovlaštenom vlasniku bez rotiranja jednokratnih CSRF tokena za promjene.
+     * GET ne može pokrenuti pripremu, uvesti podatke ili promijeniti plan uvoza.
+     */
+    public function siteCalendarPreparation(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->access->isAdministrator() || !$this->siteCalendars instanceof \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteCalendarService) {
+            return $this->deniedJson();
+        }
+        try {
+            $actor = $this->actorUserId();
+            $this->session->close();
+            $uuid = $this->text($request->getQueryParams()['uuid'] ?? '');
+            return $this->responses->json($this->siteCalendars->preparation($uuid, $actor))->withHeader('Cache-Control', 'no-store');
+        } catch (Throwable $error) {
+            return $this->errorJson($error);
+        }
+    }
+
+    /**
+     * EN: Releases the owner's completed site source only after explicit confirmation and normal CSRF checks.
+     *
+     * HR: Uklanja izvor dovršenog sitea vlasnika samo nakon izričite potvrde i običnih CSRF provjera.
+     */
+    public function siteCleanup(ServerRequestInterface $request): ResponseInterface
+    {
+        if (!$this->access->isAdministrator()) {
+            return $this->deniedJson();
+        }
+        try {
+            $body = $this->body($request);
+            if (($body['confirm'] ?? null) !== 'release-source') {
+                throw new ConfluenceImportException(__('Potvrdite uklanjanje radne kopije arhive.'));
+            }
+            return $this->responses->json($this->uploads->releaseSiteSource($this->text($body['uuid'] ?? ''), $this->actorUserId()));
+        } catch (Throwable $error) {
+            return $this->errorJson($error);
         }
     }
 
@@ -749,8 +1075,8 @@ final readonly class ConfluenceImportController
                 'can_cancel' => $this->integer($job['actor_user_id'] ?? 0) === $actorUserId
                     && $this->uploads->canCancel($job),
                 'can_resume' => $this->integer($job['actor_user_id'] ?? 0) === $actorUserId
-                    && ($job['status'] ?? '') === 'running',
-                'mapping_url' => in_array(($job['status'] ?? ''), ['ready', 'running'], true)
+                    && ($job['status'] ?? '') === 'running' && ($job['operation'] ?? '') !== 'site_space',
+                'mapping_url' => in_array(($job['status'] ?? ''), ['ready', 'running', 'failed'], true) && ($job['operation'] ?? '') !== 'site_space'
                     ? $this->path('simbioza-confluence-import.settings', '/settings/confluence-import')
                         . '?job=' . rawurlencode($this->text($job['uuid'] ?? ''))
                     : null,
@@ -1103,6 +1429,9 @@ final readonly class ConfluenceImportController
         return match ($stage) {
             'upload' => __('Prijenos arhive'),
             'preflight' => __('Provjera arhive'),
+            'inventory' => __('Pregled sitea i odabir područja'),
+            'site_index' => __('Priprema zajedničkog indeksa sadržaja sitea'),
+            'site_spaces' => __('Uvoz odabranih područja sitea'),
             'mapping', 'identity_mapping' => __('Mapiranje identiteta'),
             'workspace' => __('Izrada područja'),
             'attachments' => __('Uvoz privitaka'),

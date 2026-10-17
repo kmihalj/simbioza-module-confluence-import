@@ -50,7 +50,7 @@ use const LIBXML_NONET;
 final readonly class ConfluenceCalendarResolutionService
 {
     private const CALENDAR_MANAGER =
-        'AaiEduHr\\HeartPhrameModuleCalendar\\Service\\CalendarManagerInterface';
+        \AaiEduHr\HeartPhrameModuleCalendar\Service\CalendarManagerInterface::class;
 
     /**
      * EN: Receives only public owner-module boundaries.
@@ -236,7 +236,21 @@ final readonly class ConfluenceCalendarResolutionService
             throw new ConfluenceImportException(__('Odabrani kalendar nema stabilni UUID.'));
         }
 
-        $updatedHtml = $this->replaceMarker($version->html, $marker, $calendarUuid, $calendarName);
+        $group = $this->text($issue['group_marker'] ?? '');
+        $selected = [];
+        foreach ($summary['review_pages'][$pageIndex]['issues'] as $other) {
+            if (!is_array($other) || ($other['type'] ?? '') !== 'calendar' || ($other['group_marker'] ?? '') !== $group) {
+                continue;
+            }
+            if (($other['marker'] ?? '') === $marker) {
+                $selected[$calendarUuid] = $calendarName;
+            } elseif ($group !== '' && ($other['resolved'] ?? false) && ($other['target_calendar_uuid'] ?? '') !== '') {
+                $selected[(string)$other['target_calendar_uuid']] = (string)$other['target_calendar_name'];
+            }
+        }
+        $selected[$calendarUuid] ??= $calendarName;
+        $view = $this->text($issue['calendar_view'] ?? 'month');
+        $updatedHtml = $this->replaceMarker($version->html, $marker, $selected, $group, $view);
         $this->workspaceChanges->run(function () use (
             $actor,
             $documentKey,
@@ -318,11 +332,15 @@ final readonly class ConfluenceCalendarResolutionService
     }
 
     /**
-     * EN: Replaces only the exact marked macro with a native Calendar placeholder.
+     * EN: Accumulates one source macro's resolved calendars into one native embed in source order.
+     * Unresolved siblings keep their own visible markers, so a later import can link them without duplication.
      *
-     * HR: Zamjenjuje samo točno označeni makro nativnim Calendar placeholderom.
+     * HR: Povezane kalendare jednog izvornog makroa skuplja u jednu nativnu ugradnju izvornim redom.
+     * Nerazriješeni susjedi čuvaju vlastite vidljive oznake za kasnije povezivanje bez dupliciranja.
+     *
+     * @param array<string,string> $calendars
      */
-    private function replaceMarker(string $html, string $marker, string $calendarUuid, string $calendarName): string
+    private function replaceMarker(string $html, string $marker, array $calendars, string $group, string $view): string
     {
         $document = new DOMDocument('1.0', 'UTF-8');
         $previous = libxml_use_internal_errors(true);
@@ -340,18 +358,42 @@ final readonly class ConfluenceCalendarResolutionService
         if (!$loaded || !$root instanceof DOMElement || !$source instanceof DOMElement) {
             throw new ConfluenceImportException(__('Oznaka Confluence kalendara više nije prisutna na stranici.'));
         }
+        $existing = null;
+        if ($group !== '') {
+            $parent = $document->getElementById($group);
+            $existing = $document->getElementById($group . '-embed');
+            if (
+                preg_match('/^confluence-calendar-group-[a-f0-9]{20}$/D', $group) !== 1
+                || !$parent instanceof DOMElement || $source->parentNode !== $parent
+                || ($existing !== null && ($existing->parentNode !== $parent || $existing->getAttribute('data-editor-html-calendar') !== '1'))
+            ) {
+                throw new ConfluenceImportException(__('Oznaka Confluence kalendara više nije prisutna na stranici.'));
+            }
+        }
+        $view = in_array($view, ['month', 'week', 'day'], true) ? $view : 'month';
+        $calendarUuid = (string)array_key_first($calendars);
+        $calendarNames = implode(', ', $calendars);
 
         $replacement = $document->createElement('p');
+        if ($group !== '') {
+            $replacement->setAttribute('id', $group . '-embed');
+        }
         $replacement->setAttribute('class', 'editor-html-calendar-embed');
         $replacement->setAttribute('data-editor-html-calendar', '1');
         $replacement->setAttribute('data-calendar-uuid', $calendarUuid);
-        $replacement->setAttribute('data-calendar-uuids', $calendarUuid);
-        $replacement->setAttribute('data-calendar-labels', json_encode(
-            [$calendarUuid => $calendarName],
-            JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
-        ));
+        $replacement->setAttribute('data-calendar-uuids', implode(',', array_keys($calendars)));
+        $labels = json_encode(
+            $calendars,
+            JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG,
+        );
+        // EN: Labels are optional display hints; oversized hints must not erase the full UUID selection.
+        // The native Calendar integration reads authoritative names using the viewer's permissions.
+        //
+        // HR: Nazivi su opcionalni prikazni tragovi; preveliki tragovi ne smiju ukloniti cijeli odabir UUID-eva.
+        // Nativna Calendar integracija čita stvarne nazive u okviru ovlasti gledatelja.
+        $replacement->setAttribute('data-calendar-labels', mb_strlen($labels) <= 2048 ? $labels : '{}');
         $replacement->setAttribute('data-calendar-title', '');
-        $replacement->setAttribute('data-calendar-view', 'month');
+        $replacement->setAttribute('data-calendar-view', $view);
         $replacement->setAttribute('data-calendar-date-mode', 'today');
         $replacement->setAttribute('data-calendar-date', '');
         $replacement->setAttribute('data-calendar-start-hour', '');
@@ -359,14 +401,19 @@ final readonly class ConfluenceCalendarResolutionService
         $container = $document->createElement('span');
         $title = $document->createElement('span');
         $title->setAttribute('class', 'editor-html-calendar-placeholder-title');
-        $title->appendChild($document->createTextNode(sprintf(__('Kalendar: %s'), $calendarName)));
+        $title->appendChild($document->createTextNode(sprintf(__('Kalendar: %s'), $calendarNames)));
         $meta = $document->createElement('span');
         $meta->setAttribute('class', 'editor-html-calendar-placeholder-meta');
-        $meta->appendChild($document->createTextNode('month · today'));
+        $meta->appendChild($document->createTextNode($view . ' · today'));
         $container->appendChild($title);
         $container->appendChild($meta);
         $replacement->appendChild($container);
-        $source->parentNode?->replaceChild($replacement, $source);
+        if ($existing instanceof DOMElement) {
+            $existing->parentNode?->replaceChild($replacement, $existing);
+            $source->parentNode?->removeChild($source);
+        } else {
+            $source->parentNode?->replaceChild($replacement, $source);
+        }
 
         $result = '';
         foreach ($root->childNodes as $child) {

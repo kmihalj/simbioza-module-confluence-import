@@ -31,6 +31,12 @@ Confluence base URL. Recognised relative Confluence paths are treated as
 internal. An absolute link is considered for local resolution and reporting
 only when its host exactly matches the selected source URL host.
 
+For cross-links between a standalone space import and a site import, their saved
+source base URLs must match after normalization, including the context path.
+Unknown or different origins never match merely because their space keys or page
+IDs are equal. This read-only reference bridge does not move mappings or silently
+replace existing targets; copied imports retain their isolated reference scope.
+
 - Same-space links are replaced with the new Workspace route.
 - Page fragments are retained.
 - Links to an already imported space are resolved through source-ID mappings.
@@ -47,7 +53,7 @@ Code, noformat, info, note, tip and warning structures have safe HTML representa
 
 Calendar and Task modules remain the owners of live calendars and tasks.
 Imported tasks use the Task module's normal ACL, CSRF protection, state storage,
-and audit trail. Confluence XML retains a Team Calendar identity but not its
+and audit trail. Single-space Confluence XML retains a Team Calendar identity but not its
 events. A `calendar` macro therefore remains marked in the page and durable
 report until an administrator explicitly imports an ICS file into a new
 team/resource calendar or selects an existing readable calendar. The Calendar

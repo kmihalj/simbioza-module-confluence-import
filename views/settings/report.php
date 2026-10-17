@@ -106,6 +106,14 @@ $normalizeCalendarName = static function (string $name): string {
                     </div>
                 </header>
 
+                <?php if (is_array($summary['source_custody'] ?? null)) :
+                    $custodySource = $summary['source_custody']; ?>
+                    <p class="alert alert-info"><?= $this->escape(sprintf(
+                        __('Arhivski osobni sadržaj pod upravom administratora. Izvorni vlasnik: %s.'),
+                        (string)($custodySource['display_name'] ?: $custodySource['username'])
+                    )) ?></p>
+                <?php endif; ?>
+
                 <?php if ($calendarResolutionStatus === 'success' && $calendarResolutionMessage !== '') : ?>
                     <div class="alert alert-success" role="status"><?= $this->escape($calendarResolutionMessage) ?></div>
                 <?php elseif ($calendarResolutionStatus === 'error' && $calendarResolutionMessage !== '') : ?>
@@ -118,6 +126,9 @@ $normalizeCalendarName = static function (string $name): string {
                 <?php endif; ?>
 
                 <div class="row g-3 mb-4">
+                    <?php if (($summary['import_mode'] ?? '') === 'append') : ?>
+                    <div class="col-sm-6 col-xl"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Sačuvane postojeće stranice')) ?></span><strong><?= $number($summary['pages_preserved'] ?? 0) ?></strong></div></div>
+                    <?php endif; ?>
                     <div class="col-sm-6 col-xl"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Stranice')) ?></span><strong><?= $number($summary['pages_imported'] ?? 0) ?></strong></div></div>
                     <div class="col-sm-6 col-xl"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Aktualni privitci')) ?></span><strong><?= $number($attachmentReport['current_imported'] ?? $summary['attachments_imported'] ?? 0) ?></strong></div></div>
                     <div class="col-sm-6 col-xl"><div class="confluence-import-report-stat"><span><?= $this->escape(__('Komentari')) ?></span><strong><?= $number($summary['comments_imported'] ?? 0) ?></strong></div></div>

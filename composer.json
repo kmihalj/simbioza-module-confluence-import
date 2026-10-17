@@ -32,6 +32,10 @@
         },
         {
             "type": "vcs",
+            "url": "https://gitlab.opencode.hr/srce/aai-eduhr/heartphrame/heartphrame-module-calendar.git"
+        },
+        {
+            "type": "vcs",
             "url": "https://gitlab.opencode.hr/srce/aai-eduhr/heartphrame/heartphrame-module-comment.git"
         },
         {
@@ -72,12 +76,15 @@
         "aaieduhr/heartphrame-module-menu": "^0.3.0",
         "aaieduhr/heartphrame-module-orm": "^0.3.0",
         "aaieduhr/simbioza-module-workspace": "^0.3.0",
-        "aaieduhr/simbioza-module-user": "^0.3.0"
+        "aaieduhr/simbioza-module-user": "^0.3.1"
+    },
+    "conflict": {
+        "aaieduhr/heartphrame-module-calendar": "<0.3.1"
     },
     "suggest": {
         "aaieduhr/heartphrame-module-audit": "Records import decisions and outcomes in the business audit log.",
         "aaieduhr/heartphrame-module-backup": "Includes import mappings and retained source metadata in full-site backups.",
-        "aaieduhr/heartphrame-module-calendar": "Lets administrators manually import or link Confluence calendar macros from the durable report.",
+        "aaieduhr/heartphrame-module-calendar": "Enables native site-calendar migration and manual calendar-macro resolution from durable reports.",
         "aaieduhr/heartphrame-module-comment": "Imports mapped Confluence comments into Simbioza discussions.",
         "aaieduhr/heartphrame-module-task": "Can receive future mappings for Confluence task macros.",
         "aaieduhr/simbioza-module-workspace-search": "Rebuilds the derived Workspace index after a successful import."
@@ -86,6 +93,7 @@
         "aaieduhr/heartphrame-module-api": "^0.3.0",
         "aaieduhr/heartphrame-module-audit": "^0.3.0",
         "aaieduhr/heartphrame-module-backup": "^0.3.0",
+        "aaieduhr/heartphrame-module-calendar": "^0.3.1",
         "aaieduhr/heartphrame-module-comment": "^0.3.0",
         "aaieduhr/simbioza-module-workspace-search": "^0.3.0",
         "phpstan/phpstan": "^2.2.15",

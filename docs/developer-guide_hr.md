@@ -19,7 +19,70 @@ se sudariti sa zamjenom ili zasebno uvezenom kopijom.
 
 Workspace, HTML Editor, Auth, Menu i Simbioza User ostaju vlasnici svojih zapisa. Opcionalne integracije prepoznaju se kroz instalirane javne ugovore servisa, čime importer ne ulazi u privatne sheme drugih modula.
 
-## Faze obrade
+## Zaseban pregled sitea
+
+`ConfluenceArchive::inspect()` iz descriptora određuje vrstu arhive i sigurnosne
+limite. Za site i više područja `ConfluenceExportScanner` delegira obradu servisima
+`ConfluenceSiteInventory`, `ConfluenceInventoryReader` i ograničenom čitaču
+`ConfluenceXmlInventoryFramer`. Izvorni čitač jednog područja i pretvarači ostaju
+na postojećem putu. Servise registrirajte kroz modulov `config/services.php`,
+umjesto izrade scannera bez ovisnosti za pregled sitea.
+
+Pregled je verzionirani, atomski JSON indeks u privatnim podacima modula, vezan
+uz SHA-256 ZIP-a. Sadrži samo brojače i dopuštene metapodatke područja.
+`saveInventorySelection()` zaključava posao prijavljenog vlasnika, provjerava
+otisak izvora i odabrane ID-eve te mijenja samo opcije posla. `queue()`,
+`queueBatch()` i `import()` odbijaju posao koji je samo pregled prije prvog
+sadržajnog upisa. C1 ne traži migraciju sheme. Limite, čišćenje i ponovno
+pokretanje početnog prolaza opisuje [pregled sitea](site-inventory_hr.md).
+
+## Grana identiteta sitea
+
+Grana identiteta sitea je odvojena: `ConfluenceSitePrincipals` tokom čita samo
+dopuštene metapodatke u privatni indeks, `ConfluenceSiteAccessService` upravlja
+pregledom/primjenom/ponavljanjem, a `ConfluenceSiteAuth` povezuje nepromijenjene
+Auth servise. Adapter dodavanja članstava namjerno ne poziva GUI setter za
+zamjenu članstava jer bi time automatske dodjele postale ručne ili bi se
+prepisivala izuzeća. Standardni događaji članstava objavljuju se tek nakon
+potvrde transakcije. Ciljni podaci i potvrđena mapiranja čitaju se skupno, ne
+zasebno za svaki izvorni identitet. Dovršeni posao `site_access` uključuje
+mapiranja u backup neovisno o nedovršenom sadržajnom poslu. Pogledajte
+[C2 uvoz identiteta](site-identities_hr.md).
+
+## Grana sadržaja sitea
+
+`ConfluenceSiteContentService` pregledava/zaključava C3 odabire vlasnika, provjerava
+otiske ciljeva i C2 mapiranja te koordinira roditeljski `site_import` i podposlove
+`site_space` kroz postojeći `ConfluenceImportService`. Zajednički
+`ConfluenceSiteContentIndex` najprije razrješava neuređeno vlasništvo, zatim razdvaja
+samo tražena područja/verzije tijela. Milijuni nepovezanih svojstava odbacuju se
+prije DOM obrade; ne izrađuje se međudatoteka sa svim povijesnim tijelima.
+Postojeći scanner/pretvarač čita te tokove bez novog raspakiravanja XML-a.
+
+`ConfluenceImportRepository::withSiteContext()` ograničava ključeve/ID-eve područja
+na normalizirani izvorni URL i vraća kontekst u `finally`. Potvrđeni C2 korisnici/grupe
+učitavaju se skupno. ID-evi stranica/privitaka ostaju izvorni za putanje u ZIP-u.
+Aliasi kopija i razrješavanje poveznica odvojeni su od glavnih ciljeva i drugih siteova.
+Roditelj čuva arhivu za C4. Trajno brisanje područja čisti cilj i staging podposla,
+ne zajednički ZIP ni trajni UUID podposla, čime omogućuje izričito ponavljanje.
+Backup uklanja izvršive/lokalne opcije posla, a čuva trajna mapiranja.
+Pogledajte [C3 postupak i oporavak](site-content_hr.md); generički Auth/framework ne mijenjaju se.
+Osobna migracija neaktivnih vlasnika traži i odgovarajući razvojni kod modula Simbioza
+User. Prije releasea objavite tu ovisnost i prilagodite ograničenje importera novom
+provjerenom tagu; importer ne objavljivati uz staro ponašanje pripreme područja.
+
+## Grana kalendara sitea
+
+`ConfluenceSiteCalendarService` koristi potvrđene C2 identitete i javni Calendar
+API. Ograničeni AO čitač/indeks ne raspakirava cijeli XML dodataka; pretvorba,
+izvještaji, transakcijski nastavak i povezivanje stranica opisani su u
+[C4 migraciji kalendara](site-calendars_hr.md). Trajni izvorni aliasi imaju zaseban
+backup skup. Calendar ostaje opcionalan: obični uvoz sadržaja ne smije ovisiti o
+njemu niti importer smije izravno čitati/pisati Calendar tablice.
+Prije releasea objavite provjerene Calendar dorade i zahtijevajte njihov tag pri
+uključivanju C4; stariji Calendar nema ugovor potreban za ovu pretvorbu.
+
+## Faze obrade jednog područja
 
 1. `ConfluenceImportUploadService` izrađuje posao i provjerava poredane dijelove prijenosa.
 2. `ConfluenceArchive` provjerava ZIP ograničenja i sigurne nazive zapisa.

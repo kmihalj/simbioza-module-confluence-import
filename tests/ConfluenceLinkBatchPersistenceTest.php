@@ -335,6 +335,52 @@ final class ConfluenceLinkBatchPersistenceTest extends TestCase
         self::assertStringNotContainsString('__SIMBIOZA_CONFLUENCE_LINK__', $html);
     }
 
+    /**
+     * EN: Title aliases retain a verified source ID even when a preserved page keeps its old local title.
+     * An ambiguous path must not invent a source identity.
+     *
+     * HR: Alias naslova čuva potvrđen izvorni ID i kada sačuvana stranica zadrži stari lokalni naslov.
+     * Nejednoznačna putanja ne smije izmišljati izvorni identitet.
+     */
+    public function testTitleAliasPersistsOnlyUnambiguousSourceIdentity(): void
+    {
+        $path = '/workspace/personal/old-local-title';
+        foreach (
+            [
+            ['targets' => ['100' => $path], 'expected' => '100'],
+            ['targets' => ['100' => $path, '200' => $path], 'expected' => null],
+            ] as $case
+        ) {
+            [$repository] = $this->environment();
+            $urls = $this->createMock(UrlGenerator::class);
+            $urls->method('namedRouteExists')->willReturn(false);
+            $urls->method('getBasePath')->willReturn('');
+            $resolver = new ConfluenceReferenceResolver($repository, $urls);
+            $converted = (new ConfluenceHtmlConverter())->convert(
+                '<p><ac:link><ri:page ri:content-title="Changed source title" /></ac:link></p>',
+                'SOURCE',
+                'new-page',
+            );
+
+            $html = $resolver->resolve(
+                $converted->html,
+                'new-page',
+                'SOURCE',
+                9,
+                [],
+                $case['targets'],
+                ['Changed source title' => $path],
+            );
+            $links = $repository->linksForReconciliation('SOURCE');
+
+            self::assertCount(1, $links);
+            self::assertSame('resolved', $links[0]['status']);
+            self::assertSame($case['expected'], $links[0]['destination_page_id']);
+            self::assertSame($path, $links[0]['resolved_target']);
+            self::assertStringContainsString($path, $html);
+        }
+    }
+
     /** @return array{ConfluenceImportRepository,Database} */
     private function environment(): array
     {

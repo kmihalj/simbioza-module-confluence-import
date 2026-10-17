@@ -13,6 +13,8 @@ use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceExportScanner;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportConfig;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportRepository;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportUploadService;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceInventoryReader;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteInventory;
 use HeartPhrame\Config\Config;
 use HeartPhrame\Helper\Helper;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -59,13 +61,69 @@ final class ConfluenceImportUploadServiceTest extends TestCase
         $this->config = $config;
         $this->repository = new ConfluenceImportRepository($this->database);
         $archive = new ConfluenceArchive($config);
-        $scanner = new ConfluenceExportScanner($archive, new ConfluenceExportReader($archive));
+        $reader = new ConfluenceExportReader($archive);
+        $scanner = new ConfluenceExportScanner(
+            $archive,
+            $reader,
+            new ConfluenceSiteInventory($archive, new ConfluenceInventoryReader($archive, $reader, $config), $config)
+        );
         $this->uploads = new ConfluenceImportUploadService($this->repository, $config, $scanner);
     }
 
     protected function tearDown(): void
     {
         $this->removeDirectory($this->directory);
+    }
+
+    /**
+     * EN: A site preview persists only a reviewed source selection and cancellation removes its index.
+     *
+     * HR: Pregled sitea sprema samo pregledani odabir izvora, a odustajanje uklanja njegov indeks.
+     */
+    public function testSiteSelectionAndCancellationDoNotImportTheFirstSpace(): void
+    {
+        $source = $this->directory . '/site.zip';
+        $zip = new ZipArchive();
+        $zip->open($source, ZipArchive::CREATE);
+        $zip->addFromString('exportDescriptor.properties', "exportType=site\nbackupAttachments=false\n");
+        $zip->addFromString('entities.xml', '<hibernate-generic><object class="Space"><id name="id">1</id><property name="key">ONE</property></object><object class="Space"><id name="id">2</id><property name="key">TWO</property></object></hibernate-generic>');
+        $zip->close();
+        $size = filesize($source);
+        $job = $this->uploads->start('looks-like-a-space.zip', $size, 42);
+        copy($source, $job['archive_path']);
+        $this->repository->updateJob((int)$job['id'], ['next_offset' => $size]);
+        $job = $this->uploads->finish($job['uuid'], 42);
+        self::assertSame('inventory', $job['stage']);
+        self::assertSame('site', $job['summary']['archive_type']);
+        self::assertNull($job['workspace_id']);
+        self::assertFileExists($job['archive_path'] . '.inventory.json');
+        file_put_contents($job['archive_path'] . '.principals.json', '{}');
+        $this->repository->updateJob((int)$job['id'], ['options_json' => json_encode(['site_access' => [
+            'users' => ['internal-user:1' => '7'], 'preview' => ['token' => 'old-review'], 'last_report_uuid' => 'durable-report',
+        ]], JSON_THROW_ON_ERROR)]);
+        $selected = $this->uploads->saveInventorySelection($job['uuid'], 42, $job['summary']['source_sha256'], ['2', '2']);
+        self::assertSame(['2'], $selected);
+        $saved = $this->repository->jobByUuid($job['uuid'], 42);
+        self::assertSame(['2'], $saved['options']['inventory_selection']['space_ids']);
+        self::assertSame('ready', $saved['status']);
+        self::assertSame(['internal-user:1' => '7'], $saved['options']['site_access']['users']);
+        self::assertSame('durable-report', $saved['options']['site_access']['last_report_uuid']);
+        self::assertArrayNotHasKey('preview', $saved['options']['site_access']);
+        foreach (
+            [[43, $job['summary']['source_sha256'], ['1']], [42, 'stale', ['1']],
+            [42, $job['summary']['source_sha256'], ['99']]] as [$actor, $hash, $ids]
+        ) {
+            try {
+                $this->uploads->saveInventorySelection($job['uuid'], $actor, $hash, $ids);
+                self::fail('Invalid selection accepted.');
+            } catch (ConfluenceImportException) {
+                self::assertSame(['2'], $this->repository->jobByUuid($job['uuid'], 42)['options']['inventory_selection']['space_ids']);
+            }
+        }
+        $this->uploads->cancel($job['uuid'], 42);
+        self::assertFileDoesNotExist($job['archive_path']);
+        self::assertFileDoesNotExist($job['archive_path'] . '.inventory.json');
+        self::assertFileDoesNotExist($job['archive_path'] . '.principals.json');
     }
 
     /**
@@ -101,6 +159,70 @@ final class ConfluenceImportUploadServiceTest extends TestCase
 
         $this->expectException(ConfluenceImportException::class);
         $this->repository->jobByUuid((string)$job['uuid'], 42);
+    }
+
+    /**
+     * EN: Expired previews remove known indexes, while a calendar execution remains recoverable even on a ready parent.
+     *
+     * HR: Istekli pregledi uklanjaju poznate indekse, a izvršavanje kalendara ostaje nastavivo i na spremnom roditelju.
+     */
+    public function testExpiredSiteIndexesAndRunningCalendarProtection(): void
+    {
+        $job = $this->uploads->start('expired-site.zip', 6, 42);
+        $path = $job['archive_path'];
+        mkdir($path . '.calendars');
+        file_put_contents($path . '.calendars/catalog.json', '{}');
+        file_put_contents($path . '.calendars.lock', '');
+        $this->repository->updateJob((int)$job['id'], ['status' => 'ready', 'expires_at' => '2000-01-01 00:00:00',
+            'options_json' => json_encode(['site_calendars' => ['phase' => 'running']])]);
+        self::assertSame(0, $this->uploads->cleanupExpired());
+        self::assertFileExists($path);
+        $this->repository->updateJob((int)$job['id'], ['options_json' => json_encode(['inventory_selection' => []])]);
+        self::assertSame(1, $this->uploads->cleanupExpired());
+        self::assertDirectoryDoesNotExist($path . '.calendars');
+        self::assertFileDoesNotExist($path . '.calendars.lock');
+    }
+
+    /**
+     * EN: Explicit source cleanup requires completion/ownership and keeps durable report records.
+     *
+     * HR: Izričito čišćenje izvora traži dovršetak/vlasnika i čuva trajne zapise izvještaja.
+     */
+    public function testCompletedSiteSourceCleanupPreservesJobAndRejectsUnfinishedWork(): void
+    {
+        $job = $this->uploads->start('completed-site.zip', 6, 42);
+        try {
+            $this->uploads->releaseSiteSource($job['uuid'], 42);
+            self::fail('Unfinished source was removed.');
+        } catch (ConfluenceImportException) {
+            self::assertFileExists($job['archive_path']);
+        }
+        $this->repository->updateJob((int)$job['id'], ['operation' => 'site_import', 'status' => 'completed',
+            'summary_json' => json_encode(['inventory_only' => true, 'source_sha256' => 'source'])]);
+        try {
+            $this->uploads->releaseSiteSource($job['uuid'], 43);
+            self::fail('Other owner cleaned the source.');
+        } catch (ConfluenceImportException) {
+            self::assertFileExists($job['archive_path']);
+        }
+        $calendarLock = fopen($job['archive_path'] . '.calendars.lock', 'c+b');
+        self::assertIsResource($calendarLock);
+        self::assertTrue(flock($calendarLock, LOCK_EX | LOCK_NB));
+        try {
+            $this->uploads->releaseSiteSource($job['uuid'], 42);
+            self::fail('Source was removed while calendar indexing held its lock.');
+        } catch (ConfluenceImportException) {
+            self::assertFileExists($job['archive_path']);
+        } finally {
+            flock($calendarLock, LOCK_UN);
+            fclose($calendarLock);
+        }
+        self::assertTrue($this->uploads->releaseSiteSource($job['uuid'], 42)['released']);
+        self::assertFileDoesNotExist($job['archive_path']);
+        $after = $this->repository->jobByUuid($job['uuid'], 42);
+        self::assertTrue($after['summary']['source_released']);
+        self::assertSame('completed', $after['status']);
+        self::assertTrue($this->uploads->releaseSiteSource($job['uuid'], 42)['released']);
     }
 
     /**
@@ -216,6 +338,27 @@ final class ConfluenceImportUploadServiceTest extends TestCase
 
         self::assertSame(1, $this->uploads->cleanupExpired());
         self::assertFileDoesNotExist($path);
+        $this->expectException(ConfluenceImportException::class);
+        $this->repository->jobByUuid((string)$job['uuid'], 42);
+    }
+
+    /**
+     * EN: Expired failed inventory selections remove orphan indexes even when the ZIP is absent.
+     *
+     * HR: Istekli neuspjeli odabiri inventara uklanjaju indekse i kada ZIP više ne postoji.
+     */
+    public function testExpiredInventorySelectionCleansOrphanIndex(): void
+    {
+        $job = $this->uploads->start('site.zip', 6, 42);
+        $path = (string)$job['archive_path'];
+        file_put_contents($path . '.inventory.json', '{}');
+        unlink($path);
+        $this->repository->updateJob((int)$job['id'], [
+            'status' => 'failed', 'expires_at' => '2000-01-01 00:00:00',
+            'options_json' => json_encode(['inventory_selection' => ['space_ids' => ['1']]], JSON_THROW_ON_ERROR),
+        ]);
+        self::assertSame(1, $this->uploads->cleanupExpired());
+        self::assertFileDoesNotExist($path . '.inventory.json');
         $this->expectException(ConfluenceImportException::class);
         $this->repository->jobByUuid((string)$job['uuid'], 42);
     }

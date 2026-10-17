@@ -10,6 +10,34 @@
     min-width: 0;
 }
 
+/* EN: Keep the bounded numbered window inside its card, including narrow screens and large page numbers.
+
+   HR: Ograničeni prozor brojeva zadržava se unutar kartice, i na uskim zaslonima s velikim brojevima stranica. */
+.confluence-import-shell [data-site-identity-pagination],
+.confluence-import-shell [data-site-identity-pagination] nav,
+.confluence-import-shell [data-site-table-pagination],
+.confluence-import-shell [data-site-table-pagination] nav {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.confluence-import-shell [data-site-identity-pagination] .pagination,
+.confluence-import-shell [data-site-table-pagination] .pagination {
+    flex-wrap: wrap;
+    max-width: 100%;
+    row-gap: .25rem;
+}
+
+.confluence-import-shell [data-site-identity-pagination] .page-link,
+.confluence-import-shell [data-site-table-pagination] .page-link {
+    min-width: 2rem;
+    text-align: center;
+}
+
+.confluence-import-shell [data-identity-picker-choice][aria-pressed="true"]::after {
+    content: " ✓";
+}
+
 /* HR: Skriveni nativni birač zadržava jasan fokus na vidljivoj oznaci.
    EN: The hidden native picker keeps a clear focus indicator on its visible label. */
 .confluence-import-file-picker input:focus-visible + label {
@@ -149,6 +177,7 @@
     border-radius: var(--bs-border-radius);
     color: var(--confluence-import-surface-text);
     inset: auto;
+    margin: 0;
     max-height: 20rem;
     overflow: auto;
     position: fixed;
@@ -164,6 +193,13 @@
     background: var(--confluence-import-surface-bg);
     border-color: var(--hph-border, var(--bs-border-color, #dee2e6));
     color: var(--confluence-import-surface-text);
+    text-align: left;
+    width: 100%;
+}
+
+.confluence-import-shell .confluence-import-user-picker-panel .list-group-item[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--bs-primary, #0d6efd) 15%, var(--confluence-import-surface-bg));
+    border-color: var(--bs-primary, #0d6efd);
 }
 
 .confluence-import-shell .confluence-import-user-picker-panel .list-group-item:hover,

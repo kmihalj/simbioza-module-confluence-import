@@ -6,7 +6,14 @@ New scripts remain pending; the grouped report can approve/select one or all
 matching pages. H5P has no exception. See the Editor's `docs/external-scripts_en.md`
 for security, usage reports and backup behavior.
 
-> Release 0.3.0 preparation: the tagged installation commands below apply after coordinated publication of the application and modules. Development verification uses local packages; older releases cannot replace this configuration and schema.
+> Unpublished 0.3.1 candidate: site/multi-space inventory, identity configuration, [selected-space content](docs/site-content_en.md) and [calendars](docs/site-calendars_en.md) use one reviewed site workflow. The final confirmation runs identities, calendars, spaces and reference linking in dependency order. Existing user/group, calendar and per-space reports remain separate and reflect later link resolutions. Implementation, local checks and remaining HFC acceptance gates are recorded in the [plan](docs/site-import-plan_en.md). The tagged commands below apply only after coordinated publication.
+
+Site identity review separates account/directory inactivity and historical authors;
+automatic creation skips known inactive sources unless explicitly enabled. Selected
+inactive personal content can use separate administrator-managed archival Workspaces,
+without identity/ACL fallback to the administrator. Multi-calendar macros retain one
+native block with independently reported missing references. These rules use source
+metadata and explicit choices, not identifiers from a particular installation.
 
 Croatian version: [README_hr.md](README_hr.md)
 
@@ -43,7 +50,10 @@ Optional integrations:
   calendar or link an already visible calendar from the durable import report.
 - Workspace Search rebuilds its derived index automatically after import.
 
-Internal packages use compatible `^0.3.0` releases; this module does not commit a `composer.lock`.
+Simbioza User requires `^0.3.1`; other runtime dependencies retain their declared
+`^0.3.0` constraints. Calendar is optional, but an installed Calendar must be at
+least `0.3.1`; development tests include it explicitly. This module does not commit
+a `composer.lock`. Auth and Framework do not need a new release.
 
 ## What the importer does
 
@@ -80,7 +90,7 @@ Internal packages use compatible `^0.3.0` releases; this module does not commit 
 - applies unresolved ACL identities fail-closed;
 - maps a personal Confluence space to the confirmed owner's Personal Workspace;
 - records unsupported macros and other decisions in a durable per-import report linked from **Recent Confluence imports**;
-- records each Confluence Team Calendar macro in that report because the XML
+- records each Confluence Team Calendar macro in that report because single-space XML
   contains its identity but not its events; no calendar is matched or created
   automatically;
 - allows an unfinished import to be cancelled, immediately deleting its uploaded archive and preparation data;
@@ -150,7 +160,7 @@ the report selects it as a suggestion that the administrator must still confirm.
 ## Quick start
 
 ```bash
-composer require aaieduhr/simbioza-module-confluence-import:^0.3.0
+composer require aaieduhr/simbioza-module-confluence-import:^0.3.1
 vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```
@@ -166,6 +176,10 @@ vendor/bin/hph simbioza-confluence-import:inspect /srv/import/team-space.xml.zip
 ## Documentation
 
 - [Documentation index](docs/index_en.md)
+- [Site and multi-space inventory](docs/site-inventory_en.md)
+- [Site import implementation plan](docs/site-import-plan_en.md)
+- [Site calendars, C2 mappings and page linking](docs/site-calendars_en.md)
+- [Combined site reports, cleanup and final checks](docs/site-reports_en.md)
 - [Installation and configuration](docs/installation_en.md)
 - [Administrator guide](docs/administrator-guide_en.md)
 - [Identity mapping, ACL and security](docs/mapping-security_en.md)

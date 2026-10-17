@@ -37,7 +37,11 @@ podaci pripreme. Ova radnja dostupna je samo prije početka sadržajnog importa.
 
 ### Import nije moguće pokrenuti
 
-Početna provjera najprije mora uspješno završiti. Osobni space dodatno zahtijeva potvrđeno mapiranje vlasnika.
+Za jedno područje mora uspjeti početna provjera. Za site/više područja spremite
+odabir, pripremite/potvrdite potrebna C2 mapiranja i spremite svježi
+[C3 pregled sadržaja](site-content_hr.md). Izmjena povezanih odabira isključuje potvrdu
+do novog pregleda. Osobno područje traži potvrđenog vlasnika i ne može zamijeniti
+nepovezano osobno područje. Kalendari koriste odvojeni [C4 postupak](site-calendars_hr.md).
 
 ### Korisnik ne vidi ograničenu stranicu
 

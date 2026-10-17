@@ -54,7 +54,7 @@ final readonly class ConfluenceArchive
      *
      * HR: Vraća provjerene metapodatke bez izdvajanja privitaka.
      *
-     * @return array{path:string,size:int,entries:int,uncompressed_size:int,descriptor:array<string,string>}
+     * @return array{path:string,size:int,entries:int,uncompressed_size:int,descriptor:array<string,string>,archive_type:string,attachment_files:int,plugin_data:bool}
      */
     public function inspect(string $archivePath): array
     {
@@ -75,6 +75,25 @@ final readonly class ConfluenceArchive
                 throw new ConfluenceImportException(__('Broj datoteka u ZIP arhivi nije dopušten.'));
             }
 
+            // EN: Read only the bounded descriptor before choosing the format-specific limits.
+            //
+            // HR: Prije odabira limita formata čitamo samo ograničeni descriptor.
+            $descriptorStat = $zip->statName(self::DESCRIPTOR_ENTRY);
+            if (!is_array($descriptorStat) || (int)$descriptorStat['size'] > 65536) {
+                throw new ConfluenceImportException(__('Confluence descriptor nedostaje ili je prevelik.'));
+            }
+            $descriptor = $this->parseDescriptor($this->entryContents($zip, self::DESCRIPTOR_ENTRY));
+            $exportType = strtolower($descriptor['exportType'] ?? '');
+            if (!in_array($exportType, ['space', 'site'], true)) {
+                throw new ConfluenceImportException(__('Nepodržana vrsta Confluence izvoza.'));
+            }
+            $spaceKeys = array_values(array_unique(array_filter(array_map(trim(...), explode(',', $descriptor['spaceKeys'] ?? '')))));
+            $archiveType = $exportType === 'site' ? 'site' : (count($spaceKeys) > 1 ? 'multi_space' : 'space');
+            $large = $archiveType !== 'space';
+            $seen = [];
+            $attachmentFiles = 0;
+            $pluginData = false;
+
             for ($index = 0; $index < $zip->numFiles; ++$index) {
                 $stat = $zip->statIndex($index, ZipArchive::FL_UNCHANGED);
                 if (!is_array($stat)) {
@@ -83,14 +102,20 @@ final readonly class ConfluenceArchive
 
                 $name = (string)($stat['name'] ?? '');
                 $this->assertSafeEntry($zip, $index, $name);
+                if (isset($seen[$name])) {
+                    throw new ConfluenceImportException(__('ZIP arhiva sadrži ponovljenu putanju.'));
+                }
+                $seen[$name] = true;
+                $attachmentFiles += str_starts_with($name, 'attachments/') && !str_ends_with($name, '/') ? 1 : 0;
+                $pluginData = $pluginData || str_starts_with($name, 'plugin-data/');
                 $entrySize = (int)($stat['size'] ?? 0);
                 $compressedSize = (int)($stat['comp_size'] ?? 0);
-                if ($entrySize < 0 || $entrySize > $this->config->maxEntrySize()) {
+                if ($entrySize < 0 || $entrySize > ($large ? $this->config->maxSiteEntrySize() : $this->config->maxEntrySize())) {
                     throw new ConfluenceImportException(__('Pojedina datoteka u ZIP arhivi je prevelika.'));
                 }
 
                 $uncompressed += $entrySize;
-                if ($uncompressed > $this->config->maxUncompressedSize()) {
+                if ($uncompressed > ($large ? $this->config->maxSiteUncompressedSize() : $this->config->maxUncompressedSize())) {
                     throw new ConfluenceImportException(__('Raspakirani Confluence sadržaj prelazi dopuštenu veličinu.'));
                 }
 
@@ -111,19 +136,62 @@ final readonly class ConfluenceArchive
                 throw new ConfluenceImportException(__('ZIP nije potpuni Confluence XML space export.'));
             }
 
-            $descriptor = $this->parseDescriptor($this->entryContents($zip, self::DESCRIPTOR_ENTRY));
-            if (strtolower($descriptor['exportType'] ?? '') !== 'space') {
-                throw new ConfluenceImportException(__('Podržan je samo Confluence izvoz područja.'));
-            }
-
             return [
                 'path' => $archivePath,
                 'size' => $size,
                 'entries' => $zip->numFiles,
                 'uncompressed_size' => $uncompressed,
                 'descriptor' => $descriptor,
+                'archive_type' => $archiveType,
+                'attachment_files' => $attachmentFiles,
+                'plugin_data' => $pluginData,
             ];
         } finally {
+            $zip->close();
+        }
+    }
+
+    /**
+     * EN: Streams only validated entities.xml in bounded chunks, without a temporary XML copy.
+     * The ZIP and stream close even when the consumer stops early.
+     *
+     * HR: Čita samo provjereni entities.xml u ograničenim dijelovima, bez privremene XML kopije.
+     * ZIP i stream zatvaraju se i kada čitač ranije prekine obradu.
+     *
+     * @return \Generator<int,string>
+     */
+    public function entityChunks(string $archivePath): \Generator
+    {
+        $this->inspect($archivePath);
+        $zip = $this->open($archivePath);
+        $stream = $zip->getStream(self::ENTITIES_ENTRY);
+        try {
+            if (!is_resource($stream)) {
+                throw new ConfluenceImportException(__('Confluence XML stream nije dostupan.'));
+            }
+            $stat = $zip->statName(self::ENTITIES_ENTRY);
+            $expected = is_array($stat) ? (int)$stat['size'] : -1;
+            $bytes = 0;
+            while (!feof($stream)) {
+                $chunk = fread($stream, 1048576);
+                if (!is_string($chunk) || ($chunk === '' && !feof($stream))) {
+                    throw new ConfluenceImportException(__('Confluence XML stream je prekinut.'));
+                }
+                $bytes += strlen($chunk);
+                if ($bytes > $expected) {
+                    throw new ConfluenceImportException(__('Confluence XML veličina nije valjana.'));
+                }
+                if ($chunk !== '') {
+                    yield $chunk;
+                }
+            }
+            if ($bytes !== $expected) {
+                throw new ConfluenceImportException(__('Confluence XML stream nije potpun.'));
+            }
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
             $zip->close();
         }
     }

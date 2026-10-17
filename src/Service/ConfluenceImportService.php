@@ -285,6 +285,7 @@ final readonly class ConfluenceImportService
         private UrlGenerator $urls,
         private ContainerInterface $container,
         private LoggerInterface $logger,
+        private ?ConfluenceSiteContentIndex $siteContentIndex = null,
     ) {
     }
 
@@ -300,6 +301,12 @@ final readonly class ConfluenceImportService
         $this->ensureImportMemory();
         $job = $this->repository->jobByUuid($jobUuid, $actorUserId);
         $scan = is_array($job['summary'] ?? null) ? $job['summary'] : [];
+        if (($scan['inventory_only'] ?? false) === true) {
+            return ['job' => $job, 'scan' => $scan,
+                'inventory_selection' => $job['options']['inventory_selection']['space_ids'] ?? [],
+                'target_users' => [], 'target_groups' => [], 'identity_suggestions' => [],
+                'group_suggestions' => [], 'existing_import' => null];
+        }
         $targetUsersById = [];
         $actor = $this->users->findByIdIncludingInactive($actorUserId);
         if (is_array($actor)) {
@@ -442,6 +449,7 @@ final readonly class ConfluenceImportService
         $actorUserId = $this->positiveInt($actor['id'] ?? null, __('Prijavljeni administrator nije pronađen.'));
         $preparation = $this->preparation($jobUuid, $actorUserId);
         $scan = is_array($preparation['scan'] ?? null) ? $preparation['scan'] : [];
+        $this->assertSingleSpaceInventory($scan);
         $space = is_array($scan['spaces'][0] ?? null) ? $scan['spaces'][0] : [];
         $groupMap = is_array($preparation['group_suggestions'] ?? null)
             ? $preparation['group_suggestions']
@@ -498,6 +506,33 @@ final readonly class ConfluenceImportService
      */
     public function queue(string $jobUuid, array $options, array $actor): array
     {
+        $job = $this->repository->jobByUuid($jobUuid, (int)($actor['id'] ?? 0));
+        $child = $job['options']['_site_child'] ?? null;
+        if (is_array($child)) {
+            return $this->repository->withSiteContext(
+                (string)$child['source_url'],
+                $child['group_map'],
+                fn(): array => $this->queueSpace($jobUuid, $options, $actor),
+                $child['space_aliases'] ?? []
+            );
+        }
+        return $this->repository->withReferenceContext(
+            $this->sourceBaseUrl($options['source_base_url'] ?? ''),
+            fn(): array => $this->queueSpace($jobUuid, $options, $actor),
+        );
+    }
+
+    /**
+     * EN: Executes the existing space importer after binding any trusted site-child context.
+     *
+     * HR: Izvodi postojeći importer područja nakon povezivanja pouzdanog konteksta podposla sitea.
+     *
+     * @param array<string,mixed> $options
+     * @param array<string,mixed> $actor
+     * @return array<string,mixed>
+     */
+    private function queueSpace(string $jobUuid, array $options, array $actor): array
+    {
         $this->ensureImportMemory();
         $this->extendExecutionTime();
         $actorUserId = $this->positiveInt($actor['id'] ?? null, __('Prijavljeni administrator nije pronađen.'));
@@ -512,34 +547,51 @@ final readonly class ConfluenceImportService
 
         $archivePath = $this->text($job['archive_path'] ?? '');
         $scan = is_array($job['summary'] ?? null) ? $job['summary'] : [];
+        $this->assertSingleSpaceInventory($scan);
         $space = is_array($scan['spaces'][0] ?? null) ? $scan['spaces'][0] : null;
         if (!is_array($space) || !is_file($archivePath)) {
             throw new ConfluenceImportException(__('Preflight podaci ili izvorna arhiva više nisu dostupni.'));
         }
 
         $normalized = $this->normalizeOptions($options, $space);
+        $child = $job['options']['_site_child'] ?? null;
+        if (is_array($child)) {
+            $normalized['_site_child'] = $child;
+            $normalized['group_map'] = $child['group_map'];
+            $normalized['identity_create'] = $normalized['group_create'] = [];
+        }
         $jobId = (int)$job['id'];
         $workspace = null;
         try {
             $normalized = $this->prepareReimport($space, $normalized, $actorUserId, $jobId);
             $this->repository->startImport($jobId, $normalized);
             $this->repository->setStage($jobId, 'identity_mapping');
-            $this->saveIdentityMappings($scan, $normalized, $jobId);
-            $normalized['group_map'] = $this->saveGroupMappings($scan, $normalized, $jobId);
+            if (!is_array($child)) {
+                $this->saveIdentityMappings($scan, $normalized, $jobId);
+                $normalized['group_map'] = $this->saveGroupMappings($scan, $normalized, $jobId);
+            }
             $this->repository->setStage($jobId, 'workspace');
-            $workspaceManagerUserId = $this->workspaceManagerUserId($space, $actorUserId);
+            $workspaceManagerUserId = $this->workspaceManagerUserId($space, $actorUserId, $normalized);
             $workspace = $this->workspace(
                 $space,
                 $normalized,
                 $actorUserId,
                 $workspaceManagerUserId,
             );
+            // EN: The current space is trusted from this job's scan, even before its origin catalog is refreshed.
+            // Carry this transient source key into macro rendering; never add Confluence fields to Workspace storage.
+            //
+            // HR: Trenutačno područje potvrđeno je pregledom ovog posla i prije osvježavanja kataloga izvora.
+            // Privremeni izvorni ključ prenosi se makroima; Confluence polja ne dodaju se spremištu područja.
+            $workspace['source_space_key'] = (string)$space['source_key'];
             $workspaceId = $this->positiveInt($workspace['id'] ?? null, __('Ciljno područje nije moguće kreirati.'));
             $this->repository->mapSpace($this->mappingSpace($space, $normalized), $workspace, $jobId);
-            $this->applyWorkspaceAcl($workspaceId, $workspaceManagerUserId, $scan, $normalized);
+            if (!($normalized['_append_existing'] ?? false)) {
+                $this->applyWorkspaceAcl($workspaceId, $workspaceManagerUserId, $scan, $normalized);
+            }
 
             $this->repository->setStage($jobId, 'preparing_content');
-            $dataset = $this->preparedAttachmentDataset($this->stageDataset($archivePath, $staging));
+            $dataset = $this->stageDataset($archivePath, $staging, is_array($child) ? (string)$child['space_id'] : null);
             // EN: Preflight user records are small and are retained in the
             //     phased state so profile macros can show real names.
             //
@@ -547,15 +599,43 @@ final readonly class ConfluenceImportService
             //     stanje kako bi makroi profila prikazali stvarna imena.
             $dataset['users'] = $this->rows($scan['users'] ?? []);
             $dataset['calendars'] = $this->rows($scan['calendars'] ?? []);
+            if (is_array($child)) {
+                $dataset['warnings'] = array_values(array_unique([...$this->strings($dataset['warnings'] ?? []), ...$this->strings($scan['warnings'] ?? [])]));
+            }
             $pages = $this->selectedPageGroups($dataset['pages'], $normalized);
+            $allPages = $pages;
+            $append = ['retained' => [], 'used' => []];
+            if ($normalized['reimport_strategy'] === 'append') {
+                $snapshot = $this->repository->personalAppendSnapshot((string)$space['source_key'], $workspaceId);
+                $append = ConfluencePersonalAppendPlan::build($pages, $snapshot['nodes'], $snapshot['mappings']);
+                $pages = $append['pages'];
+                $normalized['_append_parent_nodes'] = $append['parents'];
+                $normalized['_append_preserved'] = count($append['retained']);
+                $pageIds = [];
+                foreach ($pages as $logical => $versions) {
+                    foreach ($this->pageSourceIds((string)$logical, $versions) as $sourceId) {
+                        $pageIds[$sourceId] = true;
+                    }
+                }
+                $dataset['attachments'] = array_values(array_filter(
+                    $dataset['attachments'],
+                    static fn(array $attachment): bool => isset($pageIds[(string)($attachment['page_id'] ?? '')]),
+                ));
+                if ($normalized['_append_existing']) {
+                    $dataset['warnings'][] = __('Postojeće osobno područje je sačuvano. Dodane su samo nove stranice; njegove postavke i ovlasti nisu zamijenjene.');
+                }
+            }
+            $dataset = $this->preparedAttachmentDataset($dataset);
             $targets = $this->plannedTargets(
-                $pages,
+                $allPages,
                 $workspace,
                 $dataset['pages'],
                 $this->scalarMap($normalized['_replacement_page_slugs'] ?? []),
+                $append['used'],
+                $append['retained'],
             );
             $renderContext = $this->pageImportContext(
-                $pages,
+                $allPages,
                 $dataset,
                 $targets,
                 $workspace,
@@ -618,6 +698,32 @@ final readonly class ConfluenceImportService
      * @return array<string,mixed>
      */
     public function process(string $jobUuid, array $actor): array
+    {
+        $job = $this->repository->jobByUuid($jobUuid, (int)($actor['id'] ?? 0));
+        $child = $job['options']['_site_child'] ?? null;
+        if (is_array($child)) {
+            return $this->repository->withSiteContext(
+                (string)$child['source_url'],
+                $child['group_map'],
+                fn(): array => $this->processSpace($jobUuid, $actor),
+                $child['space_aliases'] ?? []
+            );
+        }
+        return $this->repository->withReferenceContext(
+            $this->text($job['options']['source_base_url'] ?? ''),
+            fn(): array => $this->processSpace($jobUuid, $actor),
+        );
+    }
+
+    /**
+     * EN: Processes the unchanged bounded space stages within their source namespace.
+     *
+     * HR: Obrađuje nepromijenjene ograničene faze područja unutar njihova izvornog prostora.
+     *
+     * @param array<string,mixed> $actor
+     * @return array<string,mixed>
+     */
+    private function processSpace(string $jobUuid, array $actor): array
     {
         $this->ensureImportMemory();
         $this->extendExecutionTime();
@@ -747,6 +853,44 @@ final readonly class ConfluenceImportService
     }
 
     /**
+     * EN: Explicitly retries only an owned failed site child, replacing its own partial target.
+     * It never deletes another job's Workspace; completed siblings and the shared ZIP survive.
+     *
+     * HR: Izričito ponavlja samo vlastiti neuspjeli podposao sitea zamjenjujući njegov parcijalni cilj.
+     * Nikada ne briše područje drugog posla; dovršena susjedna područja i zajednički ZIP ostaju.
+     *
+     * @param array<string,mixed> $actor
+     * @return array<string,mixed>
+     */
+    public function retrySiteChild(string $uuid, array $actor): array
+    {
+        $job = $this->repository->jobByUuid($uuid, (int)($actor['id'] ?? 0));
+        $child = $job['options']['_site_child'] ?? null;
+        if ($job['status'] !== 'failed' || !is_array($child) || $job['operation'] !== 'site_space') {
+            throw new ConfluenceImportException(__('Confluence import nije spreman za pokretanje.'));
+        }
+        if (($job['options']['reimport_strategy'] ?? '') === 'append') {
+            throw new ConfluenceImportException(__('Uvoz dodavanjem ne smije zamijeniti postojeće područje. Pregledajte novouvezene stranice prije novog uvoza.'));
+        }
+        return $this->repository->withSiteContext((string)$child['source_url'], $child['group_map'], function () use ($uuid, $job, $actor): array {
+            $space = $job['summary']['spaces'][0] ?? [];
+            $mapping = $this->repository->spaceBySourceId((string)($job['options']['mapping_space_id'] ?? $space['source_id'] ?? ''));
+            if (is_array($mapping) && (int)$mapping['job_id'] !== (int)$job['id']) {
+                throw new ConfluenceImportException(__('Ciljno područje promijenio je drugi import. Ponovno pregledajte uvoz.'));
+            }
+            $options = $job['options'];
+            $options['reimport_strategy'] = is_array($mapping) ? 'replace' : 'new';
+            if (is_array($mapping)) {
+                $options['_site_child']['retry_source_id'] = $mapping['source_space_id'];
+                $options['_site_child']['retry_source_key'] = $mapping['source_space_key'];
+            }
+            $this->removeDirectory($this->stagingDirectory($uuid));
+            $this->repository->updateJob((int)$job['id'], ['status' => 'ready', 'error_message' => null, 'options_json' => json_encode($options, JSON_THROW_ON_ERROR)]);
+            return $this->queue($uuid, $options, $actor);
+        });
+    }
+
+    /**
      * EN: Runs a confirmed import. The archive is deleted only after completion and retained on failure for diagnosis.
      *
      * HR: Izvodi potvrđeni import. Arhivu briše tek nakon završetka, a na pogrešci je čuva za dijagnostiku.
@@ -766,6 +910,7 @@ final readonly class ConfluenceImportService
 
         $archivePath = $this->text($job['archive_path'] ?? '');
         $scan = is_array($job['summary'] ?? null) ? $job['summary'] : [];
+        $this->assertSingleSpaceInventory($scan);
         $space = is_array($scan['spaces'][0] ?? null) ? $scan['spaces'][0] : null;
         if (!is_array($space) || !is_file($archivePath)) {
             throw new ConfluenceImportException(__('Preflight podaci ili izvorna arhiva više nisu dostupni.'));
@@ -785,7 +930,7 @@ final readonly class ConfluenceImportService
             $this->saveIdentityMappings($scan, $normalized, $jobId);
             $normalized['group_map'] = $this->saveGroupMappings($scan, $normalized, $jobId);
             $this->repository->setStage($jobId, 'workspace');
-            $workspaceManagerUserId = $this->workspaceManagerUserId($space, $actorUserId);
+            $workspaceManagerUserId = $this->workspaceManagerUserId($space, $actorUserId, $normalized);
             $workspace = $this->workspace(
                 $space,
                 $normalized,
@@ -895,6 +1040,7 @@ final readonly class ConfluenceImportService
             );
             $summary = [
                 'workspace_id' => $workspaceId,
+                'source_custody' => $normalized['_site_child']['custody_source'] ?? null,
                 'workspace_slug' => $this->text($workspace['slug'] ?? ''),
                 'pages_imported' => $pageResult['imported'],
                 'history_versions_imported' => $pageResult['history'],
@@ -1080,8 +1226,11 @@ final readonly class ConfluenceImportService
         $comments = is_array($state['comments_result'] ?? null) ? $state['comments_result'] : [];
         $summary = [
             'workspace_id' => $workspaceId,
+            'source_custody' => $options['_site_child']['custody_source'] ?? null,
             'workspace_slug' => $this->text($workspace['slug'] ?? ''),
             'pages_imported' => (int)($pageResult['imported'] ?? 0),
+            'pages_preserved' => (int)($options['_append_preserved'] ?? 0),
+            'import_mode' => $options['reimport_strategy'] ?? 'new',
             'history_versions_imported' => (int)($pageResult['history'] ?? 0),
             'drafts_imported' => (int)($pageResult['drafts'] ?? 0),
             'deleted_pages_imported' => (int)($pageResult['deleted'] ?? 0),
@@ -1471,7 +1620,23 @@ final readonly class ConfluenceImportService
         int $actorUserId,
         int $workspaceManagerUserId,
     ): array {
-        if (($space['type'] ?? '') === 'personal') {
+        if (($space['type'] ?? '') === 'personal' && !is_array($options['_site_child']['custody_source'] ?? null)) {
+            $existing = $this->personalWorkspaces->forUser($workspaceManagerUserId);
+            if (($options['_append_existing'] ?? false) === true) {
+                if (
+                    !is_array($existing) || ($existing['is_deleted'] ?? false)
+                    || (int)$existing['workspace']['id'] !== (int)$options['_append_workspace_id']
+                ) {
+                    throw new ConfluenceImportException(__('Ciljno područje promijenio je drugi import. Ponovno pregledajte uvoz.'));
+                }
+                // EN: Do not call ensureForUser here: it refreshes the owner's ACL on an existing workspace.
+                //
+                // HR: Ovdje se ne poziva ensureForUser jer osvježava vlasnikov ACL na postojećem području.
+                return $existing['workspace'];
+            }
+            if (is_array($existing) && is_array($options['_site_child'] ?? null)) {
+                throw new ConfluenceImportException(__('Cilj korisnika već ima osobno područje. Odaberite dodavanje samo novih stranica.'));
+            }
             $workspace = $this->personalWorkspaces->ensureForUser(
                 $workspaceManagerUserId,
                 $actorUserId,
@@ -1481,7 +1646,7 @@ final readonly class ConfluenceImportService
                 throw new ConfluenceImportException(__('Osobno područje ciljnog korisnika nije moguće pripremiti.'));
             }
 
-            return $workspace;
+            return $workspace['workspace'];
         }
 
         $language = $this->text($options['language'] ?? $this->config->defaultLanguage());
@@ -1491,6 +1656,13 @@ final readonly class ConfluenceImportService
             $this->text($space['name'] ?? ''),
             $this->text($space['source_key'] ?? ''),
         );
+        if (is_array($options['_site_child']['custody_source'] ?? null)) {
+            $source = $options['_site_child']['custody_source'];
+            $description .= ' ' . sprintf(
+                __('Arhivski osobni sadržaj pod upravom administratora. Izvorni vlasnik: %s.'),
+                $this->text($source['display_name'] ?? '') ?: $this->text($source['username'] ?? '')
+            );
+        }
 
         return $this->workspaces->saveWorkspace([
             // EN: The imported language is the new Workspace's primary language.
@@ -1517,10 +1689,11 @@ final readonly class ConfluenceImportService
      * HR: Određuje korisnika koji kroz obični ACL upravlja ciljanim područjem.
      *
      * @param array<string,mixed> $space
+     * @param array<string,mixed> $options
      */
-    private function workspaceManagerUserId(array $space, int $actorUserId): int
+    private function workspaceManagerUserId(array $space, int $actorUserId, array $options = []): int
     {
-        if (($space['type'] ?? '') !== 'personal') {
+        if (($space['type'] ?? '') !== 'personal' || is_array($options['_site_child']['custody_source'] ?? null)) {
             return $actorUserId;
         }
 
@@ -1857,7 +2030,7 @@ final readonly class ConfluenceImportService
      *
      * @return array{pages:list<array<string,mixed>>,attachments:list<array<string,mixed>>,properties:array<string,array<string,string>>,comments:list<array<string,mixed>>,permission_sets:list<array<string,mixed>>,permissions:array<string,array<string,mixed>>,page_labels:array<string,list<string>>,body_directory:string,warnings:list<string>}
      */
-    private function stageDataset(string $archivePath, string $staging): array
+    private function stageDataset(string $archivePath, string $staging, ?string $siteSpaceId = null): array
     {
         $bodyDirectory = $staging . DIRECTORY_SEPARATOR . 'bodies';
         $this->ensureDirectory($bodyDirectory);
@@ -1871,7 +2044,12 @@ final readonly class ConfluenceImportService
         $labellings = [];
         $warnings = [];
 
-        foreach ($this->reader->objects($archivePath) as $object) {
+        $objects = $siteSpaceId !== null && $this->siteContentIndex instanceof \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteContentIndex
+            ? $this->siteContentIndex->objects($archivePath, $siteSpaceId) : $this->reader->objects($archivePath);
+        if ($siteSpaceId !== null && !$this->siteContentIndex instanceof \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteContentIndex) {
+            throw new ConfluenceImportException(__('Zajednički indeks sadržaja nije spreman.'));
+        }
+        foreach ($objects as $object) {
             if ($object->className === 'BodyContent') {
                 $contentId = $object->reference('content');
                 if ($contentId !== '') {
@@ -2011,6 +2189,8 @@ final readonly class ConfluenceImportService
      * @param array<string,mixed> $workspace
      * @param list<array<string,mixed>> $allPages
      * @param array<string,string> $preferredSlugs
+     * @param array<string,true> $occupiedSlugs
+     * @param array<string,array<string,mixed>> $retained
      * @return array<string,array<string,mixed>>
      */
     private function plannedTargets(
@@ -2018,14 +2198,24 @@ final readonly class ConfluenceImportService
         array $workspace,
         array $allPages,
         array $preferredSlugs = [],
+        array $occupiedSlugs = [],
+        array $retained = [],
     ): array {
-        $used = [];
+        $used = $occupiedSlugs;
         $result = [];
         $workspaceSlug = $this->text($workspace['slug'] ?? '');
         $normalizedParents = $this->pageHierarchy->normalizedParents($pages, $allPages);
         foreach ($pages as $logicalId => $versions) {
             $current = $this->currentPage($versions);
             $title = $this->text($current['title'] ?? '');
+            if (isset($retained[$logicalId])) {
+                $node = $retained[$logicalId];
+                $result[$logicalId] = ['slug' => (string)$node['slug'], 'title' => (string)$node['title'],
+                    'parent_id' => $normalizedParents[(string)$logicalId] ?? '',
+                    'sort_order' => (int)$node['sort_order'], 'status' => 'current',
+                    'path' => $this->nodePath($workspaceSlug, (string)$node['slug'])];
+                continue;
+            }
             $slug = $this->pageSlugger->shorten($this->text($preferredSlugs[(string)$logicalId] ?? ''));
             if ($slug === '' || isset($used[$slug])) {
                 $slug = $this->pageSlugger->unique(
@@ -2296,6 +2486,13 @@ final readonly class ConfluenceImportService
             $localByTitle[$this->text($target['title'] ?? '')] = $this->text($target['path'] ?? '#');
             $versions = $pages[(string)$logicalId] ?? [];
             $current = $this->currentPage($versions);
+            // EN: A retained page keeps its local title, but new source-title links must still reach it.
+            //
+            // HR: Sačuvana stranica zadržava lokalni naslov, ali nove veze prema izvornom naslovu moraju voditi na nju.
+            $sourceTitle = $this->text($current['title'] ?? '');
+            if ($sourceTitle !== '') {
+                $localByTitle[$sourceTitle] = $this->text($target['path'] ?? '#');
+            }
             $sourceLabels = [];
             foreach ($this->pageSourceIds((string)$logicalId, $versions) as $labelPageId) {
                 foreach ((array)($dataset['page_labels'][$labelPageId] ?? []) as $sourceLabel) {
@@ -2405,7 +2602,8 @@ final readonly class ConfluenceImportService
                     continue;
                 }
 
-                $parentNodeId = $parentSource !== '' ? ($nodesBySource[$parentSource] ?? null) : null;
+                $parentNodeId = $parentSource !== ''
+                    ? ($nodesBySource[$parentSource] ?? $options['_append_parent_nodes'][$parentSource] ?? null) : null;
                 if ($parentSource !== '' && $parentNodeId === null) {
                     $warnings[] = sprintf(__('Roditelj %s nije uvezen; stranica je postavljena u korijen.'), $parentSource);
                 }
@@ -2511,7 +2709,7 @@ final readonly class ConfluenceImportService
                     'document_key' => $document->id,
                     'parent_id' => $parentNodeId,
                     'sort_order' => (int)($target['sort_order'] ?? 100),
-                    'is_homepage' => $this->text($logicalId) === $homePageId,
+                    'is_homepage' => !($options['_append_existing'] ?? false) && $this->text($logicalId) === $homePageId,
                     'contents_visibility' => $firstSourceId === $currentSourceId
                         && $converted['has_table_of_contents']
                         ? 'shown'
@@ -2558,6 +2756,9 @@ final readonly class ConfluenceImportService
                     $versionNumber = $this->publishVersion($document->id, $language, $nodeId, $actorUserId);
                     $this->attributeImportedVersion($document->id, $language, $versionNumber, $first, $actorUserId, true);
                     $this->mapImportedVersion($first, $mappingSpaceKey, $workspaceId, $node, $jobId);
+                    if ($this->text($first['original_version_id'] ?? '') !== '') {
+                        ++$history;
+                    }
                 } else {
                     $versionNumber = $this->editor->currentVersionNumber($document->id, $language);
                     $this->editor->markVersionDraft($document->id, $language, $versionNumber);
@@ -2959,7 +3160,7 @@ final readonly class ConfluenceImportService
                     '',
                     $destinationTitle,
                     'confluence',
-                    $destinationSpace !== '' ? $destinationSpace : $spaceKey,
+                    $this->repository->referenceSpaceKey($destinationSpace !== '' ? $destinationSpace : $spaceKey),
                     $destinationId,
                     $destinationTitle,
                 ),
@@ -3154,11 +3355,13 @@ final readonly class ConfluenceImportService
             'document_key' => $node['document_key'] ?? null,
             'slug' => $node['slug'] ?? null,
             'note' => sprintf(
-                'Confluence content ID: %s; original ID: %s; version: %d; status: %s',
+                'Confluence content ID: %s; original ID: %s; version: %d; status: %s; creator key: %s; modifier key: %s',
                 $this->text($page['source_id'] ?? ''),
                 $this->text($page['logical_source_id'] ?? ''),
                 (int)($page['version'] ?? 1),
                 $this->text($page['status'] ?? 'current'),
+                $this->text($page['creator_source_key'] ?? ''),
+                $this->text($page['modifier_source_key'] ?? ''),
             ),
         ], $jobId, $status);
     }
@@ -3576,7 +3779,7 @@ final readonly class ConfluenceImportService
             $target = $targets[(string)$sourceId] ?? [];
             $resolved += $this->documentIncludes->resolveExternal(
                 'confluence',
-                $spaceKey,
+                $this->repository->referenceSpaceKey($spaceKey),
                 (string)$sourceId,
                 $this->text(is_array($target) ? ($target['title'] ?? '') : ''),
                 $documentKey,
@@ -3632,13 +3835,34 @@ final readonly class ConfluenceImportService
         int $actorUserId,
         int $jobId,
     ): array {
-        $sourceId = $this->text($space['source_id'] ?? '');
-        $sourceKey = $this->text($space['source_key'] ?? '');
+        $sourceId = $this->text($options['_site_child']['retry_source_id'] ?? $space['source_id'] ?? '');
+        $sourceKey = $this->text($options['_site_child']['retry_source_key'] ?? $space['source_key'] ?? '');
         $strategy = $this->text($options['reimport_strategy'] ?? 'new');
         $existingMapping = $this->repository->spaceBySourceId($sourceId);
 
         $options['mapping_space_id'] = $sourceId;
         $options['mapping_space_key'] = $sourceKey;
+        if ($strategy === 'append') {
+            if (
+                ($space['type'] ?? '') !== 'personal' || !is_array($options['_site_child'] ?? null)
+                || !array_key_exists('append_workspace_id', $options['_site_child'])
+            ) {
+                throw new ConfluenceImportException(__('Dodavanje bez zamjene zahtijeva potvrđeni uvoz osobnog područja sitea.'));
+            }
+            $expected = (int)($options['_site_child']['append_workspace_id'] ?? 0);
+            $owner = $this->workspaceManagerUserId($space, $actorUserId);
+            $personal = $this->personalWorkspaces->forUser($owner);
+            $actual = is_array($personal) ? (int)$personal['workspace']['id'] : 0;
+            if (
+                $expected !== $actual || ($personal['is_deleted'] ?? false)
+                || (is_array($existingMapping) && (int)$existingMapping['target_workspace_id'] !== $actual)
+            ) {
+                throw new ConfluenceImportException(__('Ciljno područje promijenio je drugi import. Ponovno pregledajte uvoz.'));
+            }
+            $options['_append_existing'] = $actual > 0;
+            $options['_append_workspace_id'] = $actual;
+            return $options;
+        }
         if (!is_array($existingMapping)) {
             if ($strategy === 'copy') {
                 $options['mapping_space_id'] = $sourceId . '#copy-' . $jobId;
@@ -3725,6 +3949,20 @@ final readonly class ConfluenceImportService
     }
 
     /**
+     * EN: C1 previews must never enter a path that writes only the first source space.
+     *
+     * HR: Pregled C1 nikada ne smije ući u put koji zapisuje samo prvo izvorno područje.
+     *
+     * @param array<string,mixed> $scan
+     */
+    private function assertSingleSpaceInventory(array $scan): void
+    {
+        if (($scan['inventory_only'] ?? false) === true || count($this->rows($scan['spaces'] ?? [])) !== 1) {
+            throw new ConfluenceImportException(__('Za uvoz sitea koristite pregled i zasebnu potvrdu odabranih područja.'));
+        }
+    }
+
+    /**
      * EN: Normalizes and validates all administrator import options.
      *
      * HR: Normalizira i potvrđuje sve administratorske opcije importa.
@@ -3738,7 +3976,7 @@ final readonly class ConfluenceImportService
         $name = $this->text($options['workspace_name'] ?? $space['name'] ?? '');
         $slug = $this->text($options['workspace_slug'] ?? $space['source_key'] ?? '');
         $reimportStrategy = $this->text($options['reimport_strategy'] ?? 'new');
-        if (!in_array($reimportStrategy, ['new', 'replace', 'copy'], true)) {
+        if (!in_array($reimportStrategy, ['new', 'replace', 'copy', 'append'], true)) {
             $reimportStrategy = 'new';
         }
         if ($name === '' || $slug === '') {

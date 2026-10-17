@@ -9,6 +9,145 @@ use PHPUnit\Framework\TestCase;
 final class ConfluenceImportViewTest extends TestCase
 {
     /**
+     * EN: Mapping proposals stay on escaped theme-owned cards and cannot submit an import.
+     *
+     * HR: Prijedlozi mapiranja ostaju na kodiranim karticama teme i ne mogu poslati uvoz.
+     */
+    public function testMappingReviewIsReadOnlyAndSeparatesProposedFromSavedTypes(): void
+    {
+        $view = file_get_contents(__DIR__ . '/../views/settings/site-mapping-review.php');
+        $controller = file_get_contents(__DIR__ . '/../src/Controller/ConfluenceImportController.php');
+        self::assertStringContainsString('data-site-mapping-review', $view);
+        self::assertStringContainsString('Spremljena vrsta', $view);
+        self::assertStringContainsString('Predložena vrsta i razlog', $view);
+        self::assertStringContainsString("\$this->escape(\$calendar['name'])", $view);
+        self::assertStringNotContainsString('<form', $view);
+        self::assertStringNotContainsString('fetch(', $view);
+        self::assertStringContainsString("withHeader('Cache-Control', 'no-store, private')", $controller);
+    }
+
+    /**
+     * EN: Site tables share bounded accessible navigation without removing off-page draft controls.
+     *
+     * HR: Tablice sitea dijele ograničenu pristupačnu navigaciju bez uklanjanja polja ostalih stranica nacrta.
+     */
+    public function testSiteTablesHaveIndependentDraftPreservingPagination(): void
+    {
+        foreach (['inventory', 'content', 'calendars'] as $name) {
+            $view = file_get_contents(__DIR__ . '/../views/settings/site-' . $name . '.php');
+            self::assertSame(2, substr_count($view, "require __DIR__ . '/site-table-pagination.php'"));
+            self::assertStringNotContainsString('max-height:32rem', $view);
+            self::assertStringContainsString('data-pager-empty', $view);
+        }
+        $view = file_get_contents(__DIR__ . '/../views/settings/site-table-pagination.php');
+        $script = file_get_contents(__DIR__ . '/../views/settings/site-table-pagination-script.php');
+        self::assertStringContainsString('value="25"', $view);
+        self::assertStringContainsString('value="50"', $view);
+        self::assertStringContainsString('value="100"', $view);
+        self::assertStringContainsString("page - 2", $script);
+        self::assertStringContainsString("add(null, '…'", $script);
+        self::assertStringContainsString("link.setAttribute('aria-current', 'page')", $script);
+        self::assertStringNotContainsString('row.remove(', $script);
+        self::assertStringNotContainsString('innerHTML', $script);
+        self::assertStringContainsString('rows.filter(matches)', $script);
+    }
+
+    /**
+     * EN: Review controls expose unresolved owners and explicit additive personal grouping, not silent changes.
+     *
+     * HR: Kontrole pregleda izlažu neriješene vlasnike i izričito grupiranje dodavanjem, ne prešutne izmjene.
+     */
+    public function testDuplicateAndOwnerReviewControlsStayExplicit(): void
+    {
+        $calendars = file_get_contents(__DIR__ . '/../views/settings/site-calendars.php');
+        $content = file_get_contents(__DIR__ . '/../views/settings/site-content.php');
+        $identities = file_get_contents(__DIR__ . '/../views/settings/site-access.php');
+        $script = file_get_contents(__DIR__ . '/../views/settings/index.php');
+        self::assertStringContainsString('value="needs-review"', $calendars);
+        self::assertStringContainsString("type === 'personal' && !row.querySelector('[data-calendar-owner]')?.value", $script);
+        self::assertStringContainsString('data-personal-space-append', $content);
+        self::assertStringContainsString("row.querySelector('[data-space-strategy]').value = 'append'", $script);
+        self::assertStringContainsString('Isti korisnik kao izvorni račun', $identities);
+        self::assertStringContainsString('Zajednički email sam po sebi ne potvrđuje', $identities);
+    }
+
+    /**
+     * EN: Every calendar owner uses the existing asynchronous picker, never a duplicated full directory.
+     * Personal type remains available; a missing owner is checked by the final server review.
+     *
+     * HR: Svaki vlasnik kalendara koristi postojeći asinkroni birač, ne umnoženi cijeli imenik.
+     * Osobna vrsta ostaje dostupna; nedostajućeg vlasnika provjerava završni poslužiteljski pregled.
+     */
+    public function testCalendarOwnersUsePagedSearchRatherThanEmbeddedOptions(): void
+    {
+        $view = file_get_contents(__DIR__ . '/../views/settings/site-calendars.php');
+        self::assertStringContainsString("'scope' => 'calendar-owners'", $view);
+        self::assertStringContainsString('data-identity-picker-search', $view);
+        self::assertStringContainsString('data-identity-picker-more', $view);
+        self::assertStringContainsString('data-identity-map data-calendar-owner', $view);
+        self::assertStringNotContainsString('foreach ($siteCalendarState[\'owner_choices\']', $view);
+        self::assertStringNotContainsString("? '' : ' disabled'", $view);
+    }
+
+    /**
+     * EN: Calendar preparation has live accessible progress and resumes observation without starting an import.
+     *
+     * HR: Priprema kalendara ima dostupan živi napredak i nastavlja praćenje bez pokretanja uvoza.
+     */
+    public function testCalendarPreparationHasLiveProgressAndAutomaticPreview(): void
+    {
+        $view = file_get_contents(__DIR__ . '/../views/settings/site-calendars.php');
+        $script = file_get_contents(__DIR__ . '/../views/settings/index.php');
+        self::assertStringContainsString('id="site-calendar-preparation-bar"', $view);
+        self::assertStringContainsString('role="progressbar"', $view);
+        self::assertStringContainsString('aria-live="polite"', $view);
+        self::assertStringContainsString("url.searchParams.set('uuid', calendarPreparation.dataset.uuid)", $script);
+        self::assertStringNotContainsString("post(config.siteCalendars, {action: 'status'", $script);
+        self::assertStringContainsString("calendarPreparationBar.removeAttribute('aria-valuenow')", $script);
+        self::assertStringContainsString("state.phase === 'partition'", $script);
+        self::assertStringContainsString("window.location.hash = 'site-calendars'", $script);
+        self::assertStringContainsString("calendarPreparation.scrollIntoView({block: 'center'", $script);
+        self::assertStringNotContainsString('Pričekajte pa osvježite stranicu.', $script . $view);
+    }
+
+    /**
+     * EN: All site report metadata belongs to one themed card rather than floating over the hero.
+     *
+     * HR: Svi metapodaci izvještaja sitea pripadaju kartici teme umjesto lebdenja preko zaglavlja.
+     */
+    public function testSiteReportsKeepMetadataOnThemedContentCards(): void
+    {
+        foreach (['content' => 'overview', 'calendar' => 'calendars', 'access' => 'identities'] as $file => $kind) {
+            $view = file_get_contents(__DIR__ . '/../views/settings/site-' . $file . '-report.php');
+            self::assertIsString($view);
+            $card = '<section class="card" data-confluence-site-report="' . $kind . '"><div class="card-body">';
+            self::assertStringContainsString($card, $view);
+            self::assertLessThan(strpos($view, '<h1'), strpos($view, $card));
+            self::assertStringEndsWith('</div></section>', trim($view));
+        }
+    }
+
+    /**
+     * EN: The site workflow exposes a visible, labelled progress bar and a separate numeric percentage.
+     * Indeterminate preparation never pretends to have measured zero percent.
+     *
+     * HR: Postupak uvoza sitea prikazuje vidljivu označenu traku i zaseban brojčani postotak.
+     * Priprema bez poznatog ukupnog broja ne prikazuje lažno izmjerenih nula posto.
+     */
+    public function testSiteWorkflowHasAccessibleVisibleProgress(): void
+    {
+        $view = file_get_contents(__DIR__ . '/../views/settings/site-workflow.php');
+        $script = file_get_contents(__DIR__ . '/../views/settings/index.php');
+        self::assertStringContainsString('id="site-workflow-progress-bar"', $view);
+        self::assertStringContainsString('role="progressbar"', $view);
+        self::assertStringContainsString('id="site-workflow-percent"', $view);
+        self::assertStringContainsString('aria-valuenow', $view);
+        self::assertStringContainsString('renderSiteWorkflowProgress(result)', $script);
+        self::assertStringContainsString("workflowBar.removeAttribute('aria-valuenow')", $script);
+        self::assertStringNotContainsString('result.current?.progress || 0', $script);
+    }
+
+    /**
      * EN: The report separates historical versions from current failures and safely displays filenames.
      *
      * HR: Izvještaj razdvaja stare verzije od aktualnih grešaka i sigurno prikazuje nazive.

@@ -129,6 +129,50 @@ final class ConfluenceImportWorkspaceBackupProviderTest extends TestCase
     }
 
     /**
+     * EN: One merged Personal Workspace retains every source-space mapping and separate completed report.
+     *
+     * HR: Jedno spojeno osobno područje čuva sva izvorna mapiranja i zasebne dovršene izvještaje.
+     */
+    public function testMergedPersonalSourcesAreAllIncludedInWorkspaceBackup(): void
+    {
+        $this->seedImportedWorkspace();
+        $job = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)->first();
+        unset($job['id']);
+        $job['uuid'] = '00000000-0000-4000-8000-000000000003';
+        $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)->insert($job);
+        $repository = new \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportRepository($this->database);
+        foreach ([1 => '~old', 2 => '~current'] as $id => $key) {
+            $repository->mapSpace(
+                ['source_id' => (string)$id, 'source_key' => $key, 'type' => 'personal', 'name' => $key],
+                ['id' => 1, 'slug' => 'test-space'],
+                $id,
+            );
+        }
+        $filesystem = new BackupFilesystem();
+        $provider = new ConfluenceImportWorkspaceBackupProvider($this->database, $this->importConfig, $filesystem);
+        $scope = new BackupScope(BackupScope::WORKSPACE, 'test-space');
+        $writer = new BackupArchiveWriter(
+            $this->backupConfig,
+            $filesystem,
+            $scope,
+            ['application' => 'tests'],
+            'Merged personal sources',
+            'test-passphrase',
+        );
+        $writer->beginProvider($provider->metadata());
+        $provider->export(new BackupExportContext($scope, [], passphrase: 'test-passphrase'), $writer);
+        $reader = new BackupArchiveReader($writer->finish(), $this->backupConfig, $filesystem, 'test-passphrase');
+        $spaces = iterator_to_array($reader->records($provider->metadata()->id, 'spaces'), false);
+        self::assertSame(['~old', '~current'], array_column($spaces, 'source_space_key'));
+        self::assertCount(2, iterator_to_array($reader->records($provider->metadata()->id, 'jobs'), false));
+        self::assertCount(1, iterator_to_array($reader->records($provider->metadata()->id, 'attachments'), false));
+        foreach ($spaces as $space) {
+            self::assertArrayNotHasKey('target_workspace_id', $space);
+        }
+        $reader->close();
+    }
+
+    /**
      * EN: Proves that a copy restore creates a new attachment and rewrites its document URL.
      *
      * HR: Dokazuje da obnova kao kopija stvara novi privitak i prepisuje URL u dokumentu.

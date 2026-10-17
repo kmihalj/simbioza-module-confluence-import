@@ -29,8 +29,19 @@ use AaiEduHr\SimbiozaModuleConfluenceImport\Listener\PurgeConfluenceWorkspaceImp
 use AaiEduHr\SimbiozaModuleConfluenceImport\ModuleSimbiozaConfluenceImport;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceArchive;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceCalendarResolutionService;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceTeamCalendarReader;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceTeamCalendarConverter;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteCalendarIndex;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteCalendarService;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceExportReader;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceExportScanner;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceInventoryReader;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteInventory;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSitePrincipals;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteAuth;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteAccessService;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteContentIndex;
+use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteContentService;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceHtmlConverter;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportConfig;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceImportMenuIntegration;
@@ -70,6 +81,8 @@ $services = [
         new ConfluenceImportConfig($container->get(ConfigInterface::class), dirname(__DIR__)),
     ConfluenceImportRepository::class => static fn(ContainerInterface $container): ConfluenceImportRepository =>
         new ConfluenceImportRepository($container->get(Database::class)),
+    \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteReportService::class => static fn(ContainerInterface $container): \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteReportService =>
+        new \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteReportService($container->get(ConfluenceImportRepository::class)),
     ConfluenceWorkspaceReferenceProvider::class =>
         static fn(ContainerInterface $container): ConfluenceWorkspaceReferenceProvider =>
             new ConfluenceWorkspaceReferenceProvider($container->get(ConfluenceImportRepository::class)),
@@ -77,10 +90,74 @@ $services = [
         new ConfluenceArchive($container->get(ConfluenceImportConfig::class)),
     ConfluenceExportReader::class => static fn(ContainerInterface $container): ConfluenceExportReader =>
         new ConfluenceExportReader($container->get(ConfluenceArchive::class)),
+    ConfluenceTeamCalendarReader::class => static fn(ContainerInterface $container): ConfluenceTeamCalendarReader =>
+        new ConfluenceTeamCalendarReader($container->get(ConfluenceArchive::class)),
+    ConfluenceTeamCalendarConverter::class => static fn(): ConfluenceTeamCalendarConverter => new ConfluenceTeamCalendarConverter(),
+    ConfluenceSiteCalendarIndex::class => static fn(ContainerInterface $container): ConfluenceSiteCalendarIndex =>
+        new ConfluenceSiteCalendarIndex($container->get(ConfluenceTeamCalendarReader::class), $container->get(ConfluenceImportConfig::class)),
+    ConfluenceSiteCalendarService::class => static fn(ContainerInterface $container): ConfluenceSiteCalendarService =>
+        new ConfluenceSiteCalendarService(
+            $container->get(ConfluenceImportRepository::class),
+            $container->get(ConfluenceSiteCalendarIndex::class),
+            $container->get(ConfluenceTeamCalendarConverter::class),
+            $container->get(ConfluenceSitePrincipals::class),
+            $container->get(ConfluenceSiteAuth::class),
+            $container->get(ConfluenceCalendarResolutionService::class),
+            $container
+        ),
+    ConfluenceInventoryReader::class => static fn(ContainerInterface $container): ConfluenceInventoryReader =>
+        new ConfluenceInventoryReader(
+            $container->get(ConfluenceArchive::class),
+            $container->get(ConfluenceExportReader::class),
+            $container->get(ConfluenceImportConfig::class),
+        ),
+    ConfluenceSiteInventory::class => static fn(ContainerInterface $container): ConfluenceSiteInventory =>
+        new ConfluenceSiteInventory(
+            $container->get(ConfluenceArchive::class),
+            $container->get(ConfluenceInventoryReader::class),
+            $container->get(ConfluenceImportConfig::class),
+        ),
     ConfluenceExportScanner::class => static fn(ContainerInterface $container): ConfluenceExportScanner =>
         new ConfluenceExportScanner(
             $container->get(ConfluenceArchive::class),
             $container->get(ConfluenceExportReader::class),
+            $container->get(ConfluenceSiteInventory::class),
+        ),
+    ConfluenceSitePrincipals::class => static fn(ContainerInterface $container): ConfluenceSitePrincipals =>
+        new ConfluenceSitePrincipals($container->get(ConfluenceArchive::class), $container->get(ConfluenceExportReader::class), $container->get(ConfluenceImportConfig::class)),
+    ConfluenceSiteAuth::class => static fn(ContainerInterface $container): ConfluenceSiteAuth =>
+        new ConfluenceSiteAuth(
+            $container->get(Database::class),
+            $container->get(AuthUserService::class),
+            $container->get(AuthGroupService::class),
+            $container->get(AuthUserAttributeService::class),
+            $container->has(\Psr\EventDispatcher\EventDispatcherInterface::class) ? $container->get(\Psr\EventDispatcher\EventDispatcherInterface::class) : null
+        ),
+    ConfluenceSiteAccessService::class => static fn(ContainerInterface $container): ConfluenceSiteAccessService =>
+        new ConfluenceSiteAccessService($container->get(ConfluenceImportRepository::class), $container->get(ConfluenceSitePrincipals::class), $container->get(ConfluenceSiteAuth::class)),
+    \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteWorkflow::class => static fn(ContainerInterface $container): \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteWorkflow =>
+        new \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteWorkflow(
+            $container->get(ConfluenceImportRepository::class),
+            $container->get(ConfluenceImportUploadService::class),
+            $container->get(ConfluenceSiteAccessService::class),
+            $container->get(ConfluenceSitePrincipals::class),
+            $container->get(ConfluenceSiteAuth::class),
+            $container->get(ConfluenceSiteContentService::class),
+            $container->get(ConfluenceSiteCalendarService::class),
+            $container->get(ConfluenceImportConfig::class)
+        ),
+    ConfluenceSiteContentIndex::class => static fn(ContainerInterface $container): ConfluenceSiteContentIndex =>
+        new ConfluenceSiteContentIndex($container->get(ConfluenceArchive::class), $container->get(ConfluenceExportReader::class), $container->get(ConfluenceImportConfig::class)),
+    ConfluenceSiteContentService::class => static fn(ContainerInterface $container): ConfluenceSiteContentService =>
+        new ConfluenceSiteContentService(
+            $container->get(ConfluenceImportRepository::class),
+            $container->get(ConfluenceSiteContentIndex::class),
+            $container->get(ConfluenceExportScanner::class),
+            $container->get(ConfluenceSitePrincipals::class),
+            $container->get(ConfluenceImportService::class),
+            $container->get(ConfluenceImportConfig::class),
+            $container->get(WorkspaceRepository::class),
+            $container->get(PersonalWorkspaceService::class)
         ),
     ConfluenceImportUploadService::class => static fn(ContainerInterface $container): ConfluenceImportUploadService =>
         new ConfluenceImportUploadService(
@@ -133,6 +210,7 @@ $services = [
             $container->get(UrlGenerator::class),
             $container,
             $container->get(LoggerInterface::class),
+            $container->get(ConfluenceSiteContentIndex::class),
         ),
     ConfluenceCalendarResolutionService::class =>
         static fn(ContainerInterface $container): ConfluenceCalendarResolutionService =>
@@ -170,6 +248,11 @@ $services = [
             $container->get(TranslatorInterface::class),
             $container->get(ConfigInterface::class),
             $container->get(MenuRenderer::class),
+            $container->get(ConfluenceSiteAccessService::class),
+            $container->get(ConfluenceSiteContentService::class),
+            $container->get(ConfluenceSiteCalendarService::class),
+            $container->get(\AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteReportService::class),
+            $container->get(\AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteWorkflow::class),
         ),
     HpSimbiozaConfluenceImportCommand::class =>
         static fn(ContainerInterface $container): HpSimbiozaConfluenceImportCommand =>
@@ -189,7 +272,7 @@ if (class_exists(\AaiEduHr\HeartPhrameModuleBackup\Service\DatabaseTableBackupPr
                     ModuleSimbiozaConfluenceImport::PACKAGE_NAME,
                     1,
                     ['hr' => 'Confluence mapiranja područja', 'en' => 'Confluence Workspace mappings'],
-                    ['auth', 'workspace'],
+                    ['auth', 'workspace', ...($container->has(\AaiEduHr\HeartPhrameModuleCalendar\Service\CalendarManagerInterface::class) ? ['calendar'] : [])],
                     [
                         \AaiEduHr\HeartPhrameModuleBackup\Value\BackupScope::SITE,
                         \AaiEduHr\HeartPhrameModuleBackup\Value\BackupScope::COMPONENT,
@@ -209,6 +292,17 @@ if (class_exists(\AaiEduHr\HeartPhrameModuleBackup\Service\DatabaseTableBackupPr
                         'foreign_keys' => [
                             ['column' => 'workspace_id', 'namespace' => 'workspace.workspace', 'nullable' => true],
                             ['column' => 'actor_user_id', 'namespace' => 'auth.user', 'nullable' => true],
+                        ],
+                    ],
+                    [
+                        'dataset' => 'calendars',
+                        'table' => ModuleSimbiozaConfluenceImport::TABLE_CALENDARS,
+                        'primary_key' => 'id',
+                        'conflict_keys' => ['source_instance', 'source_calendar_id'],
+                        'preserve_primary_key' => false,
+                        'foreign_keys' => [
+                            ['column' => 'target_calendar_id', 'namespace' => 'calendar.calendar'],
+                            ['column' => 'job_id', 'namespace' => 'simbioza-confluence-import.job'],
                         ],
                     ],
                     [

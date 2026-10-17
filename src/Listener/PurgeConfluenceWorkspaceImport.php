@@ -84,6 +84,7 @@ final readonly class PurgeConfluenceWorkspaceImport
         $sourceSpaceKeys = array_values(array_filter(array_unique($sourceSpaceKeys)));
 
         $managedFiles = [];
+        $retainedJobIds = [];
         $attachmentQuery = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS)
             ->select(['storage_path'])
             ->where('target_workspace_id', '=', $event->workspaceId)
@@ -97,11 +98,18 @@ final readonly class PurgeConfluenceWorkspaceImport
         if ($jobIds !== []) {
             foreach (
                 $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
-                ->select(['archive_path', 'uuid'])
+                ->select(['id', 'operation', 'archive_path', 'uuid'])
                 ->whereIn('id', $jobIds)
                 ->get() as $row
             ) {
-                if (is_array($row) && is_scalar($row['archive_path'] ?? null)) {
+                // EN: Site children share their parent's ZIP and retain their UUID for retries and reports.
+                //
+                // HR: Djeca sitea dijele roditeljski ZIP i zadržavaju UUID za ponavljanje i izvještaje.
+                $shared = is_array($row) && ($row['operation'] ?? '') === 'site_space';
+                if ($shared && is_numeric($row['id'] ?? null)) {
+                    $retainedJobIds[] = (int)$row['id'];
+                }
+                if (!$shared && is_array($row) && is_scalar($row['archive_path'] ?? null)) {
                     $managedFiles[] = (string)$row['archive_path'];
                 }
                 if (is_array($row) && is_scalar($row['uuid'] ?? null) && trim((string)$row['uuid']) !== '') {
@@ -122,7 +130,7 @@ final readonly class PurgeConfluenceWorkspaceImport
             }
         }
 
-        $this->database->transaction(function (Database $database) use ($event, $jobIds, $sourceSpaceKeys): void {
+        $this->database->transaction(function (Database $database) use ($event, $jobIds, $retainedJobIds, $sourceSpaceKeys): void {
             $database->table(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS)
                 ->where('target_workspace_id', '=', $event->workspaceId)
                 ->delete();
@@ -154,9 +162,17 @@ final readonly class PurgeConfluenceWorkspaceImport
             $database->table(ModuleSimbiozaConfluenceImport::TABLE_SPACES)
                 ->whereIn('job_id', $jobIds)
                 ->delete();
-            $database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
-                ->whereIn('id', $jobIds)
-                ->delete();
+            if ($retainedJobIds !== []) {
+                $database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
+                    ->whereIn('id', $retainedJobIds)
+                    ->update(['workspace_id' => null]);
+            }
+            $deletedJobIds = array_values(array_diff($jobIds, $retainedJobIds));
+            if ($deletedJobIds !== []) {
+                $database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
+                    ->whereIn('id', $deletedJobIds)
+                    ->delete();
+            }
             if ($sourceSpaceKeys !== []) {
                 $database->table(ModuleSimbiozaConfluenceImport::TABLE_LINKS)
                     ->whereIn('destination_space_key', $sourceSpaceKeys)

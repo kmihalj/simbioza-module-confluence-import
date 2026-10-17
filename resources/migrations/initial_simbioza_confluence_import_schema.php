@@ -17,6 +17,18 @@ return new class implements ReversibleMigrationInterface {
     {
         $schema = $db->schema();
 
+        if (!$schema->hasTable(ModuleSimbiozaConfluenceImport::TABLE_CALENDARS)) {
+            $schema->create(ModuleSimbiozaConfluenceImport::TABLE_CALENDARS, static function (Blueprint $table): void {
+                $table->id();
+                $table->string('source_instance', 64)->index();
+                $table->string('source_calendar_id', 190);
+                $table->bigInteger('target_calendar_id')->unsigned()->index();
+                $table->bigInteger('job_id')->unsigned()->index();
+                $table->timestamps();
+                $table->unique(['source_instance', 'source_calendar_id'], 'simbioza_confluence_calendar_source_uq');
+            });
+        }
+
         if (!$schema->hasTable(ModuleSimbiozaConfluenceImport::TABLE_JOBS)) {
             $schema->create(ModuleSimbiozaConfluenceImport::TABLE_JOBS, static function (Blueprint $table): void {
                 $table->id();
@@ -168,6 +180,7 @@ return new class implements ReversibleMigrationInterface {
     public function down(Database $db): void
     {
         $schema = $db->schema();
+        $schema->dropIfExists(ModuleSimbiozaConfluenceImport::TABLE_CALENDARS);
         $schema->dropIfExists(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS);
         $schema->dropIfExists(ModuleSimbiozaConfluenceImport::TABLE_LINKS);
         $schema->dropIfExists(ModuleSimbiozaConfluenceImport::TABLE_GROUPS);

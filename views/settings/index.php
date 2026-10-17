@@ -39,6 +39,7 @@ declare(strict_types=1);
 
 $scan = is_array($preparation['scan'] ?? null) ? $preparation['scan'] : [];
 $job = is_array($preparation['job'] ?? null) ? $preparation['job'] : [];
+$inventoryOnly = ($scan['inventory_only'] ?? false) === true;
 $space = is_array($scan['spaces'][0] ?? null) ? $scan['spaces'][0] : [];
 $sourceUsers = is_array($scan['users'] ?? null) ? $scan['users'] : [];
 $sourceGroups = is_array($scan['groups'] ?? null) ? $scan['groups'] : [];
@@ -117,7 +118,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                 <header class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
                 <div>
                     <h1 class="h3 mb-1"><?= $this->escape($title) ?></h1>
-                    <p class="text-body-secondary mb-0"><?= $this->escape(__('Uvezite Confluence XML backup jednog područja uz kontrolirano mapiranje korisnika, grupa i ovlasti.')) ?></p>
+                    <p class="text-body-secondary mb-0"><?= $this->escape(__('Uvezite jedno Confluence područje ili odabrana područja iz izvoza cijelog sitea.')) ?></p>
                 </div>
                 </header>
 
@@ -139,7 +140,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                             <label class="btn btn-outline-primary" id="confluence-import-file-choice" for="confluence-import-file"><?= $this->escape(__('Odaberi datoteku')) ?></label>
                             <span class="form-control text-body-secondary" id="confluence-import-file-name"><?= $this->escape(__('Nije odabrana nijedna datoteka.')) ?></span>
                         </div>
-                        <div class="form-text" id="confluence-import-file-help"><?= $this->escape(__('Podržan je backup jednog Confluence područja. Velika datoteka šalje se u manjim dijelovima koji se mogu nastaviti nakon prekida.')) ?></div>
+                        <div class="form-text" id="confluence-import-file-help"><?= $this->escape(__('Vrsta izvoza prepoznaje se iz arhive. Uvoz jednog područja ostaje isti; site i više područja imaju zaseban pregled identiteta i potvrdu odabranog sadržaja. Velika datoteka šalje se u nastavivim dijelovima.')) ?></div>
                     </div>
                     <div class="progress confluence-import-progress mb-2" role="progressbar" aria-label="<?= $this->escape(__('Napredak prijenosa')) ?>">
                         <div class="progress-bar" id="confluence-import-upload-progress" style="width: 0"></div>
@@ -189,7 +190,37 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                 </details>
             <?php endif; ?>
 
-            <?php if ($preparation !== null) : ?>
+            <?php if ($inventoryOnly) : ?>
+                <?php if (($job['status'] ?? '') === 'ready') {
+                    $siteSetupOpen = in_array($siteWorkflowState['phase'] ?? 'draft', ['draft', 'review'], true);
+                    if ($siteSetupOpen) {
+                        require __DIR__ . '/site-inventory.php';
+                    }
+                } ?>
+                <?php if (($siteSetupOpen ?? false) && is_array($siteAccessState ?? null)) {
+                    require __DIR__ . '/site-access.php';
+                } ?>
+                <?php if (($siteSetupOpen ?? false) && is_array($siteContentState ?? null)) {
+                    require __DIR__ . '/site-content.php';
+                } ?>
+                <?php if (is_array($siteCalendarState ?? null) && (($siteSetupOpen ?? false) || ($siteCalendarState['owner_suggestions'] ?? []) !== [])) {
+                    require __DIR__ . '/site-calendars.php';
+                } ?>
+                <?php if (is_array($siteWorkflowState ?? null)) {
+                    require __DIR__ . '/site-workflow.php';
+                } ?>
+                <?php if (is_array($siteOverview ?? null)) : ?>
+                 <section class="confluence-import-panel mt-3"><div class="confluence-import-body">
+                    <?php require __DIR__ . '/site-report-overview.php'; ?>
+                  <a class="btn btn-outline-primary" href="<?= $this->escape($settingsPath . '/report/' . rawurlencode((string)$job['uuid'])) ?>"><?= $this->escape(__('Otvori zajednički izvještaj')) ?></a>
+                    <?php if ($siteOverview['status'] === 'completed' && $siteOverview['source_retained'] && ($siteCalendarState['plan']['phase'] ?? '') !== 'running') : ?>
+                   <button class="btn btn-outline-danger" type="button" id="site-source-cleanup" data-uuid="<?= $this->escape((string)$job['uuid']) ?>"><?= $this->escape(__('Ukloni radnu kopiju arhive i indekse')) ?></button>
+                   <div id="site-source-cleanup-status" role="status"></div>
+                    <?php endif; ?>
+                 </div></section>
+                <?php endif; ?>
+            <?php endif; ?>
+            <?php if ($preparation !== null && !$inventoryOnly) : ?>
                 <details class="confluence-import-panel mt-3" open>
                     <summary><?= $this->escape(__('2. Pregledaj mapiranja i pokreni import')) ?></summary>
                     <div class="confluence-import-body">
@@ -316,7 +347,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                                                         <input type="hidden" data-identity-map="<?= $this->escape($sourceKey) ?>" value="<?= $suggested > 0 ? $suggested : '' ?>">
                                                         <span id="<?= $pickerId ?>-label" class="visually-hidden"><?= $this->escape(__('Ciljni korisnik') . ': ' . $sourceLabel) ?></span>
                                                         <button id="<?= $pickerId ?>-toggle" class="form-select form-select-sm text-start" type="button" data-identity-picker-toggle data-current-administrator-label="<?= $this->escape($administratorLabel) ?>" data-create-user-label="<?= $this->escape(__('Izradi neaktivnog korisnika bez prijave')) ?>" aria-labelledby="<?= $pickerId ?>-label <?= $pickerId ?>-toggle" aria-controls="<?= $pickerId ?>-panel" aria-expanded="false"><?= $this->escape($suggestedLabel !== '' ? $suggestedLabel : $administratorLabel) ?></button>
-                                                        <div id="<?= $pickerId ?>-panel" class="confluence-import-user-picker-panel shadow" data-identity-picker-panel hidden>
+                                                        <div id="<?= $pickerId ?>-panel" class="confluence-import-user-picker-panel shadow" data-identity-picker-panel popover="manual" hidden>
                                                             <button class="list-group-item list-group-item-action" type="button" data-identity-picker-choice="" data-identity-picker-label="<?= $this->escape($administratorLabel) ?>"><?= $this->escape($administratorLabel) ?><span class="d-block small text-body-secondary"><?= $this->escape(__('Samo autorstvo; izvorne ovlasti ostaju nemapirane.')) ?></span></button>
                                                             <button class="list-group-item list-group-item-action" type="button" data-identity-picker-choice="__create_inactive__" data-identity-picker-label="<?= $this->escape(__('Izradi neaktivnog korisnika bez prijave')) ?>"><?= $this->escape(__('Izradi neaktivnog korisnika bez prijave')) ?></button>
                                                             <div class="p-2"><input class="form-control form-control-sm" type="search" autocomplete="off" aria-label="<?= $this->escape(__('Pretraži korisnike')) ?>" placeholder="<?= $this->escape(__('Pretraži korisnike')) ?>" data-identity-picker-search></div>
@@ -466,8 +497,27 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         'historicalAttachmentsFailed' => __('Neke ranije verzije privitaka nisu prenesene. To ne znači da nedostaju aktualne datoteke.'),
         'technicalDetails' => __('Tehnički detalji'),
         'versionLabel' => __('Verzija'),
+        'inventorySelection' => $inventorySelectionPath ?? '',
+        'siteAccess' => $siteAccessPath ?? '',
+        'siteContent' => $siteContentPath ?? '',
+        'siteCalendars' => $siteCalendarPath ?? '',
+        'calendarPreparationPhases' => ['verify' => __('Provjera izvorne arhive…'), 'scan' => __('Čitanje kalendara iz arhive…'),
+            'partition' => __('Raspoređivanje događaja po kalendarima…'), 'finalize' => __('Dovršavanje pregleda kalendara…')],
+        'calendarPreparationRecords' => __('Obrađeni zapisi: {done}'),
+        'calendarPreparationEvents' => __('Raspoređeni događaji: {done} / {total} ({percent} %)'),
+        'calendarPreparationElapsed' => __('Proteklo vrijeme: {seconds} s'),
+        'calendarPreparationConnection' => __('Provjera napretka trenutačno nije dostupna. Pokušavam ponovno…'),
+        'calendarPreparationStopped' => __('Priprema pregleda nije dovršena. Ponovno pokrenite pripremu.'),
+        'siteWorkflow' => $siteWorkflowPath ?? '',
+        'siteWorkflowWorking' => __('Obrada je u tijeku…'),
+        'siteWorkflowStopped' => __('Zaustavljeno'),
+        'siteWorkflowPhases' => ['identities' => __('Korisnici, grupe i članstva sitea'), 'calendar_prepare' => __('Priprema kalendara'),
+            'calendars' => __('Kalendari'), 'content_prepare' => __('Priprema područja'), 'content' => __('Područja'), 'links' => __('Povezivanje sadržaja'), 'completed' => __('Dovršeno')],
+        'siteCleanup' => $siteCleanupPath ?? '',
+        'confirmSiteCleanup' => __('Ukloniti radnu kopiju arhive i indekse? Uvezeni sadržaj i izvještaji ostaju, ali novi uvoz iz te kopije više nije moguć. Izvornu arhivu zadržite izvan aplikacije.'),
     ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
     const query = (selector) => document.querySelector(selector);
+    <?php require __DIR__ . '/site-table-pagination-script.php'; ?>
     // HR: Odvojeni sažetak ne predstavlja povijesne greške kao nestale aktualne datoteke.
     // EN: A separate summary does not present historical failures as missing current files.
     const renderImportResult = (result, summary) => {
@@ -625,6 +675,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
             sequence++;
             controller?.abort();
             if (restoreFocus && !panel.hidden) toggle.focus();
+            if (typeof panel.hidePopover === 'function') panel.hidePopover();
             panel.hidden = true;
             toggle.setAttribute('aria-expanded', 'false');
             results.removeAttribute('aria-busy');
@@ -648,7 +699,35 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                 : Math.max(padding, rect.top - gap - height);
             panel.style.top = `${top}px`;
         };
-        const choose = (id, label) => { value.value = String(id || ''); toggle.textContent = String(label || ''); close(true); };
+        // EN: Keep the chosen account visible and expose exactly one pressed choice, including after search/reopening.
+        // Hidden fields must emit change so dependent previews are invalidated for mouse and keyboard selection alike.
+        //
+        // HR: Odabrani račun ostaje vidljiv; samo jedna stavka označena je odabranom, i nakon pretrage/ponovnog otvaranja.
+        // Skrivena polja šalju change kako bi odabir mišem ili tipkovnicom poništio ovisni pregled.
+        const markChoices = () => {
+            panel.querySelectorAll('[data-identity-picker-choice]').forEach((choice) => {
+                const selected = choice.dataset.identityPickerChoice === value.value;
+                choice.classList.toggle('active', selected);
+                choice.setAttribute('aria-pressed', String(selected));
+            });
+        };
+        const choose = (id, label) => {
+            value.value = String(id || '');
+            value.dataset.pickerLabel = value.value !== '' ? String(label || '') : '';
+            if (value.dataset.siteKind === 'users') value.dataset.siteManual = 'true';
+            if (value.hasAttribute('data-calendar-owner') && value.value !== '') {
+                const row = picker.closest('[data-calendar-row]');
+                row.querySelector('[data-calendar-type]').value = 'personal';
+                row.dataset.calendarPersonal = '1';
+            }
+            const reason = picker.parentElement?.querySelector('[data-site-user-reason]');
+            if (reason) reason.textContent = reason.dataset.manualLabel || '';
+            toggle.textContent = String(label || '');
+            markChoices();
+            value.dispatchEvent(new Event('change', {bubbles: true}));
+            close(true);
+        };
+        picker.addEventListener('identity-picker-select', (event) => choose(event.detail.id, event.detail.label));
         const loadPage = async (requestedPage, append = false) => {
             if (controller instanceof AbortController) controller.abort();
             controller = new AbortController();
@@ -656,7 +735,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
             loadMore.setAttribute('aria-disabled', 'true');
             results.setAttribute('aria-busy', 'true');
             status.textContent = config.userSearchLoading;
-            const url = new URL(config.userSearch, window.location.href);
+            const url = new URL(picker.dataset.searchUrl || config.userSearch, window.location.href);
             url.searchParams.set('type', 'user');
             url.searchParams.set('mode', 'creator');
             url.searchParams.set('q', search.value.trim());
@@ -685,6 +764,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
                 status.textContent = results.querySelectorAll('button').length === 0 ? config.userSearchEmpty
                     : config.userSearchCount.replace('%d', String(results.querySelectorAll('button').length));
                 loaded = true;
+                markChoices();
                 positionPanel();
             } catch (error) {
                 if (requestSequence !== sequence || panel.hidden || (error instanceof DOMException && error.name === 'AbortError')) return;
@@ -705,12 +785,23 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
             document.querySelectorAll('[data-identity-picker]').forEach((other) => { if (other !== picker) other.dispatchEvent(new Event('identity-picker-close')); });
             if (!panel.hidden) { close(); return; }
             panel.hidden = false;
+            // EN: The native top layer escapes sticky headers and table/card stacking contexts without reparenting the form.
+            //
+            // HR: Nativni gornji sloj izbjegava fiksna zaglavlja i slojeve tablice/kartice bez premještanja obrasca u DOM-u.
+            if (typeof panel.showPopover === 'function') panel.showPopover();
             toggle.setAttribute('aria-expanded', 'true');
+            markChoices();
             if (!panel.hidden) {
                 positionPanel();
                 search.focus();
                 if (!loaded) void loadPage(1);
             }
+        });
+        // EN: A mouse press must not blur the search input and hide the panel before its click selects a result.
+        //
+        // HR: Pritisak miša ne smije maknuti fokus iz pretrage i sakriti panel prije klika koji odabire rezultat.
+        panel.addEventListener('mousedown', (event) => {
+            if (event.button === 0 && event.target instanceof Element && event.target.closest('[data-identity-picker-choice]')) event.preventDefault();
         });
         panel.addEventListener('click', (event) => {
             const choice = event.target instanceof Element ? event.target.closest('[data-identity-picker-choice]') : null;
@@ -919,6 +1010,485 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         }
     });
 
+    query('#confluence-site-selection')?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const button = form.querySelector('button[type="submit"]');
+        const status = query('#confluence-site-selection-status');
+        button.disabled = true;
+        try {
+            await saveSiteDraft();
+            window.location.reload();
+        } catch (error) {
+            status.textContent = error instanceof Error ? error.message : config.failed;
+            toast(status.textContent, 'danger');
+        } finally { button.disabled = false; }
+    });
+    const siteAccessForm = query('#confluence-site-access');
+    const workflowStart = query('#site-workflow-start');
+    const siteStatus = query('#confluence-site-access-status');
+    const runSiteAction = async (button, data, reload = true) => {
+        button.disabled = true;
+        if (siteStatus) siteStatus.textContent = config.userSearchLoading;
+        try {
+            const response = await post(config.siteAccess, data);
+            if (response.report) window.location.assign(response.report);
+            else if (reload) window.location.reload();
+        } catch (error) {
+            if (siteStatus) siteStatus.textContent = error instanceof Error ? error.message : config.failed;
+            toast(siteStatus?.textContent || config.failed, 'danger');
+            button.disabled = false;
+        }
+    };
+    query('#confluence-site-access-prepare')?.addEventListener('click', (event) => {
+        void runSiteAction(event.currentTarget, {action: 'prepare', uuid: event.currentTarget.dataset.uuid});
+    });
+    query('#confluence-site-access-reset')?.addEventListener('click', (event) => {
+        void runSiteAction(event.currentTarget, {action: 'reset', uuid: event.currentTarget.dataset.uuid});
+    });
+    const siteReviewPayload = () => {
+        const selections = {users: {}, groups: {}};
+        siteAccessForm.querySelectorAll('[data-site-kind][data-source-id]').forEach((input) => {
+            if (input.dataset.siteManual === 'true') selections[input.dataset.siteKind][input.dataset.sourceId] = input.value;
+        });
+        return {
+            action: 'review', uuid: siteAccessForm.dataset.uuid, source_url: siteAccessForm.elements.source_url.value,
+            ...selections, memberships: siteAccessForm.elements.memberships.checked,
+            auto_map_users: siteAccessForm.elements.auto_map_users.checked,
+            create_unmapped_users: siteAccessForm.elements.create_unmapped_users.checked,
+            create_archival_users: siteAccessForm.elements.create_archival_users.checked,
+            auto_map_groups: siteAccessForm.elements.auto_map_groups.checked,
+            create_unmapped_groups: siteAccessForm.elements.create_unmapped_groups.checked,
+        };
+    };
+    let siteNavigationPending = false;
+    // EN: Save every component's draft before navigating; only the final site confirmation writes business data.
+    // A failed validation/network request keeps the page and its unsaved choices visible for retry.
+    //
+    // HR: Prije navigacije spremi nacrte svih komponenti; samo završna potvrda sitea upisuje poslovne podatke.
+    // Neuspjela provjera/mrežni zahtjev zadržava stranicu i nespremljene odabire za ponovni pokušaj.
+    const navigateSiteIdentities = async (destination) => {
+        if (siteNavigationPending) return;
+        if (siteAccessForm) {
+            if (!siteAccessForm.reportValidity()) return;
+            siteNavigationPending = true;
+            const controls = Array.from(siteAccessForm.querySelectorAll('input, select, button, textarea'),
+                (input) => ({input, disabled: input.disabled}));
+            controls.forEach(({input}) => { input.disabled = true; });
+            siteAccessForm.setAttribute('aria-busy', 'true');
+            if (siteStatus) siteStatus.textContent = config.userSearchLoading;
+            try {
+                await saveSiteDraft();
+            } catch (error) {
+                if (siteStatus) siteStatus.textContent = error instanceof Error ? error.message : config.failed;
+                toast(siteStatus?.textContent || config.failed, 'danger');
+                siteNavigationPending = false;
+                controls.forEach(({input, disabled}) => { input.disabled = disabled; });
+                siteAccessForm.removeAttribute('aria-busy');
+                return;
+            }
+        }
+        const next = new URL(destination, window.location.href);
+        const current = new URL(window.location.href);
+        // EN: A same-URL/fragment navigation does not reload the newly saved server-side policy.
+        //
+        // HR: Navigacija na isti URL/fragment ne učitava upravo spremljena pravila s poslužitelja.
+        if (next.origin === current.origin && next.pathname === current.pathname && next.search === current.search) window.location.reload();
+        else window.location.assign(next.href);
+    };
+    document.querySelectorAll('[data-site-identity-page]').forEach((link) => {
+        link.addEventListener('click', (event) => {
+            if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            void navigateSiteIdentities(link.href);
+        });
+    });
+    const siteIdentityFilter = query('#confluence-site-identity-filter');
+    siteIdentityFilter?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const destination = new URL(siteIdentityFilter.action, window.location.href);
+        destination.search = new URLSearchParams(new FormData(siteIdentityFilter)).toString();
+        void navigateSiteIdentities(destination.href);
+    });
+    query('#site-identity-per-page')?.addEventListener('change', () => siteIdentityFilter.requestSubmit());
+    query('#site-identity-status')?.addEventListener('change', () => siteIdentityFilter.requestSubmit());
+    siteAccessForm?.querySelectorAll('[name="auto_map_users"], [name="create_unmapped_users"], [name="auto_map_groups"], [name="create_unmapped_groups"], [name="create_archival_users"]').forEach((input) => {
+        input.addEventListener('change', () => siteIdentityFilter.requestSubmit());
+    });
+    siteAccessForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (siteNavigationPending) return;
+        const button = siteAccessForm.querySelector('[type="submit"]');
+        button.disabled = true;
+        try {
+            await saveSiteDraft();
+            window.location.reload();
+        } catch (error) { toast(error.message || config.failed, 'danger'); button.disabled = false; }
+    });
+    const invalidateSiteReview = () => { if (workflowStart) workflowStart.disabled = true; };
+    document.querySelectorAll('[data-personal-space-append]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const ids = JSON.parse(button.dataset.personalSpaceAppend);
+            document.querySelectorAll('[data-site-space]').forEach((row) => {
+                if (ids.includes(row.dataset.siteSpace)) row.querySelector('[data-space-strategy]').value = 'append';
+            });
+            invalidateSiteReview();
+        });
+    });
+    siteAccessForm?.addEventListener('input', invalidateSiteReview);
+    siteAccessForm?.addEventListener('change', invalidateSiteReview);
+    siteAccessForm?.querySelectorAll('select[data-site-kind="groups"]').forEach((input) => {
+        input.addEventListener('change', () => {
+            input.dataset.siteManual = 'true';
+            const reason = input.closest('td')?.querySelector('[data-site-user-reason]');
+            if (reason) reason.textContent = reason.dataset.manualLabel;
+        });
+    });
+    siteAccessForm?.addEventListener('click', (event) => {
+        if (event.target instanceof Element && event.target.closest('[data-identity-picker-choice]')) invalidateSiteReview();
+    });
+    const normalizedSearch = (value) => value.trim().normalize('NFKC').toLocaleLowerCase();
+    const spacePager = createSiteTablePager(query('#confluence-site-selection'), '[data-filter-row]',
+        (row) => normalizedSearch(row.textContent).includes(normalizedSearch(query('#confluence-site-filter')?.value || '')), '[name="space_ids[]"]');
+    query('#confluence-site-filter')?.addEventListener('input', () => spacePager.refresh(true));
+    query('#confluence-site-select-visible')?.addEventListener('click', () => {
+        query('#confluence-site-spaces')?.querySelectorAll('tr:not(.d-none) [name="space_ids[]"]').forEach((input) => { input.checked = true; });
+        spacePager.refresh();
+        invalidateSiteReview();
+    });
+    query('#confluence-site-select-filtered')?.addEventListener('click', () => {
+        spacePager.matchingRows().forEach((row) => { row.querySelector('[name="space_ids[]"]').checked = true; });
+        spacePager.refresh();
+        invalidateSiteReview();
+    });
+    query('#confluence-site-select-none')?.addEventListener('click', () => {
+        query('#confluence-site-spaces')?.querySelectorAll('[name="space_ids[]"]').forEach((input) => { input.checked = false; });
+        spacePager.refresh();
+        invalidateSiteReview();
+    });
+
+    query('#site-source-cleanup')?.addEventListener('click', async (event) => {
+        if (!window.confirm(config.confirmSiteCleanup)) return;
+        const button = event.currentTarget;
+        button.disabled = true;
+        try {
+            await post(config.siteCleanup, {uuid: button.dataset.uuid, confirm: 'release-source'});
+            window.location.reload();
+        } catch (error) { query('#site-source-cleanup-status').textContent = error.message || config.failed; button.disabled = false; }
+    });
+    const calendarForm = query('#confluence-site-calendars');
+    const calendarStatus = query('#site-calendar-status');
+    const invalidateCalendar = (event) => {
+        if (event?.target?.closest('[data-site-table-pagination]') || ['site-calendar-filter', 'site-calendar-owner-filter'].includes(event?.target?.id)) return;
+        invalidateSiteReview();
+    };
+    calendarForm?.addEventListener('change', invalidateCalendar);
+    calendarForm?.addEventListener('input', invalidateCalendar);
+    siteAccessForm?.addEventListener('change', invalidateCalendar);
+    calendarForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const button = calendarForm.querySelector('[type="submit"]');
+        button.disabled = true;
+        try {
+            await saveSiteDraft();
+            window.location.reload();
+        } catch (error) { calendarStatus.textContent = error.message || config.failed; button.disabled = false; }
+    });
+    const matchesCalendar = (row) => {
+        const text = normalizedSearch(query('#site-calendar-filter')?.value || '');
+        const status = query('#site-calendar-owner-filter')?.value || 'all';
+        const type = row.querySelector('[data-calendar-type]')?.value || '';
+        const needsReview = type === '' || (type === 'personal' && !row.querySelector('[data-calendar-owner]')?.value);
+        const personal = row.dataset.calendarPersonal === '1' || type === 'personal';
+        const selectedOwner = row.querySelector('[data-calendar-owner]')?.dataset.pickerLabel || '';
+        return normalizedSearch(row.dataset.calendarSearch + ' ' + selectedOwner + ' ' + row.querySelector('[name="calendar_ids[]"]').value).includes(text) && (status === 'all'
+            || (status === 'needs-review' ? needsReview : (status === 'personal' ? personal : (status === 'personal-mapped'
+                ? personal && row.dataset.calendarOwnerStatus === 'mapped' : row.dataset.calendarOwnerStatus === status))));
+    };
+    const calendarPager = createSiteTablePager(calendarForm, '[data-calendar-row]', matchesCalendar, '[name="calendar_ids[]"]');
+    const filterCalendarOwners = (reset = false) => {
+        if (!calendarForm) return;
+        calendarPager.refresh(reset);
+        const count = query('#site-calendar-filter-count');
+        if (count) count.textContent = count.dataset.label + ': ' + calendarPager.matchingRows().length + ' / ' + calendarForm.querySelectorAll('[data-calendar-row]').length;
+    };
+    query('#site-calendar-filter')?.addEventListener('input', () => filterCalendarOwners(true));
+    query('#site-calendar-owner-filter')?.addEventListener('change', () => filterCalendarOwners(true));
+    calendarForm?.addEventListener('change', () => filterCalendarOwners());
+    const ownerFilter = query('#site-calendar-owner-filter');
+    const calendarQuery = new URL(window.location.href).searchParams.get('calendar_q');
+    if (calendarQuery && query('#site-calendar-filter')) query('#site-calendar-filter').value = calendarQuery;
+    const initialOwnerFilter = new URL(window.location.href).searchParams.get('calendar_owner_status');
+    if (ownerFilter && Array.from(ownerFilter.options).some((option) => option.value === initialOwnerFilter)) ownerFilter.value = initialOwnerFilter;
+    filterCalendarOwners();
+    const acceptCalendarOwner = (button, replaceExisting) => {
+        const row = button.closest('[data-calendar-row]');
+        const picker = row?.querySelector('[data-calendar-owner]');
+        if (!picker || (!replaceExisting && picker.value !== '') || button.disabled) return;
+        const ref = button.dataset.calendarAcceptOwner;
+        picker.closest('[data-identity-picker]').dispatchEvent(new CustomEvent('identity-picker-select', {detail: {id: ref, label: button.dataset.calendarOwnerLabel}}));
+    };
+    calendarForm?.querySelectorAll('[data-calendar-accept-owner]').forEach((button) => {
+        button.addEventListener('click', () => { acceptCalendarOwner(button, true); filterCalendarOwners(); });
+    });
+    query('#site-calendar-accept-suggestions')?.addEventListener('click', () => {
+        calendarForm.querySelectorAll('[data-calendar-row]:not(.d-none) [data-calendar-accept-owner]')
+            .forEach((button) => acceptCalendarOwner(button, false));
+        filterCalendarOwners();
+    });
+    query('#site-calendar-select-visible')?.addEventListener('click', () => {
+        calendarForm.querySelectorAll('[data-calendar-row]:not(.d-none) input[type="checkbox"]').forEach((input) => { input.checked = true; });
+        filterCalendarOwners();
+        invalidateCalendar();
+    });
+    query('#site-calendar-select-filtered')?.addEventListener('click', () => {
+        calendarPager.matchingRows().forEach((row) => { row.querySelector('[name="calendar_ids[]"]').checked = true; });
+        filterCalendarOwners();
+        invalidateCalendar();
+    });
+    query('#site-calendar-select-none')?.addEventListener('click', () => {
+        calendarForm.querySelectorAll('[name="calendar_ids[]"]').forEach((input) => { input.checked = false; });
+        filterCalendarOwners();
+        invalidateCalendar();
+    });
+    // EN: Follow the existing preparation worker, including after a reload or a lost POST response.
+    // Polls never restart scanning; only phases with a measured total expose a percentage.
+    //
+    // HR: Prati postojeći postupak pripreme i nakon osvježavanja ili izgubljenog odgovora POST-a.
+    // Provjere ne pokreću ponovno čitanje; postotak imaju samo faze s izmjerenim ukupnim brojem.
+    const calendarPreparation = query('#site-calendar-preparation');
+    const calendarPrepareButton = query('[data-site-calendar-action="prepare"]');
+    const calendarPreparationBar = query('#site-calendar-preparation-bar');
+    const calendarPreparationPhase = query('#site-calendar-preparation-phase');
+    const calendarPreparationDetail = query('#site-calendar-preparation-detail');
+    let calendarPreparationTimer = null;
+    let calendarPreparationStarting = false;
+    let calendarPreparationOpening = false;
+    let calendarPreparationPolling = false;
+    let calendarPreparationFailures = 0;
+    const renderCalendarPreparation = (state) => {
+        const firstDisplay = calendarPreparation.classList.contains('d-none');
+        calendarPreparation.classList.remove('d-none');
+        if (firstDisplay) calendarPreparation.scrollIntoView({block: 'center', behavior: 'auto'});
+        const running = state.status === 'running';
+        calendarPreparation.setAttribute('aria-busy', running ? 'true' : 'false');
+        calendarPrepareButton.disabled = running;
+        const total = Number(state.total);
+        const done = Math.max(0, Number(state.done || 0));
+        const measured = state.phase === 'partition' && state.total !== null && total > 0;
+        const percent = measured ? Math.min(100, Math.floor(100 * done / total)) : null;
+        calendarPreparationBar.style.width = percent !== null ? percent + '%' : '100%';
+        calendarPreparationBar.classList.toggle('progress-bar-animated', running);
+        if (percent === null) calendarPreparationBar.removeAttribute('aria-valuenow');
+        else calendarPreparationBar.setAttribute('aria-valuenow', String(percent));
+        calendarPreparationBar.setAttribute('aria-valuemin', '0');
+        calendarPreparationBar.setAttribute('aria-valuemax', '100');
+        calendarPreparationPhase.textContent = running
+            ? (config.calendarPreparationPhases[state.phase] || config.calendarPreparationPhases.scan)
+            : config.calendarPreparationStopped;
+        const detail = [];
+        if (measured) detail.push(config.calendarPreparationEvents.replace('{done}', done.toLocaleString()).replace('{total}', total.toLocaleString()).replace('{percent}', percent));
+        else if (state.phase === 'scan' && done > 0) detail.push(config.calendarPreparationRecords.replace('{done}', done.toLocaleString()));
+        if (Number(state.started_at) > 0) detail.push(config.calendarPreparationElapsed.replace('{seconds}', Math.max(0, Math.floor(Date.now() / 1000) - state.started_at).toLocaleString()));
+        calendarPreparationDetail.textContent = detail.join(' · ');
+    };
+    const pollCalendarPreparation = async () => {
+        if (!calendarPreparation || calendarPreparationOpening || calendarPreparationPolling) return;
+        calendarPreparationTimer = null;
+        calendarPreparationPolling = true;
+        try {
+            const url = new URL(config.siteCalendars, window.location.href);
+            url.searchParams.set('uuid', calendarPreparation.dataset.uuid);
+            const response = await fetch(url, {headers: {Accept: 'application/json'}, credentials: 'same-origin', cache: 'no-store'});
+            const result = await responsePayload(response);
+            if (!response.ok) throw new Error(result.error || config.failed);
+            calendarPreparationFailures = 0;
+            const state = result.preparation;
+            if (state.status === 'ready') {
+                calendarPreparationOpening = true;
+                // EN: Preserve other settings edited while the source was being scanned.
+                //
+                // HR: Sačuvaj druge postavke uređene tijekom čitanja izvora.
+                if (siteAccessForm) await saveSiteDraft();
+                window.location.hash = 'site-calendars';
+                window.location.reload();
+                return;
+            }
+            if (state.status === 'idle' && calendarPreparationStarting) {
+                calendarPreparationTimer = window.setTimeout(pollCalendarPreparation, 1500);
+                return;
+            }
+            if (state.status === 'idle') {
+                calendarPreparation.classList.add('d-none');
+                calendarPrepareButton.disabled = false;
+                return;
+            }
+            renderCalendarPreparation(state);
+            if (state.status !== 'running') return;
+        } catch (error) {
+            calendarPreparationOpening = false;
+            calendarPreparationFailures++;
+            calendarPreparationPhase.textContent = config.calendarPreparationConnection;
+            // EN: A network error never unlocks the start button or launches a duplicate worker.
+            //
+            // HR: Mrežna greška ne otključava gumb za početak niti pokreće dodatni postupak.
+        } finally {
+            calendarPreparationPolling = false;
+        }
+        calendarPreparationTimer = window.setTimeout(pollCalendarPreparation, Math.min(15000, 2000 * (calendarPreparationFailures + 1)));
+    };
+    calendarPrepareButton?.addEventListener('click', async () => {
+        if (calendarPreparationStarting || calendarPreparationOpening) return;
+        if (calendarPreparationTimer !== null) window.clearTimeout(calendarPreparationTimer);
+        calendarPreparationStarting = true;
+        renderCalendarPreparation({status: 'running', phase: 'verify', done: 0, total: null});
+        calendarStatus.textContent = '';
+        try {
+            if (siteAccessForm) await saveSiteDraft();
+        } catch (error) {
+            calendarPreparationStarting = false;
+            renderCalendarPreparation({status: 'interrupted', phase: '', done: 0, total: null});
+            calendarStatus.textContent = error.message || config.failed;
+            return;
+        }
+        calendarPreparationTimer = window.setTimeout(pollCalendarPreparation, 1500);
+        try {
+            await post(config.siteCalendars, {action: 'prepare', uuid: calendarPrepareButton.dataset.uuid});
+        } catch (error) {
+            calendarStatus.textContent = error.message || config.calendarPreparationConnection;
+        } finally {
+            calendarPreparationStarting = false;
+            if (calendarPreparationTimer !== null) window.clearTimeout(calendarPreparationTimer);
+            await pollCalendarPreparation();
+        }
+    });
+
+    const siteContentForm = query('#confluence-site-content');
+    const contentPager = createSiteTablePager(siteContentForm, '[data-site-space]', (row) => {
+        const text = row.cells[0].textContent + ' ' + row.querySelector('[data-space-name]').value + ' ' + row.querySelector('[data-space-slug]').value;
+        return normalizedSearch(text).includes(normalizedSearch(query('#site-content-filter')?.value || ''));
+    });
+    query('#site-content-filter')?.addEventListener('input', () => contentPager.refresh(true));
+    siteContentForm?.addEventListener('invalid', (event) => {
+        const row = event.target.closest('[data-site-space]');
+        if (!row) return;
+        query('#site-content-filter').value = '';
+        contentPager.refresh();
+        contentPager.reveal(row);
+    }, true);
+    siteContentForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const button = form.querySelector('[type="submit"]');
+        button.disabled = true;
+        try { await saveSiteDraft(); window.location.reload(); }
+        catch (error) { toast(error instanceof Error ? error.message : config.failed, 'danger'); button.disabled = false; }
+    });
+    const invalidateSiteContent = (event) => {
+        if (event?.target?.closest('[data-site-table-pagination]') || ['site-content-filter', 'confluence-site-filter'].includes(event?.target?.id)) return;
+        invalidateSiteReview();
+    };
+    siteContentForm?.addEventListener('input', invalidateSiteContent);
+    siteContentForm?.addEventListener('change', invalidateSiteContent);
+    siteAccessForm?.addEventListener('input', invalidateSiteContent);
+    siteAccessForm?.addEventListener('change', invalidateSiteContent);
+    query('#confluence-site-selection')?.addEventListener('change', invalidateSiteContent);
+    // EN: Collect configuration without executing any independent component import.
+    // The server freezes and revalidates the complete selection before one confirmation.
+    //
+    // HR: Prikupi postavke bez pokretanja neovisnih komponentnih uvoza.
+    // Poslužitelj zaključava i ponovno provjerava cjelokupni odabir prije jedne potvrde.
+    const siteDraftPayload = () => {
+        const spaceIds = Array.from(document.querySelectorAll('#confluence-site-selection [name="space_ids[]"]:checked'), (input) => input.value);
+        const content = {spaces: {}};
+        siteContentForm?.querySelectorAll('[data-site-space]').forEach((row) => {
+            if (!spaceIds.includes(row.dataset.siteSpace)) return;
+            content.spaces[row.dataset.siteSpace] = {
+                name: row.querySelector('[data-space-name]').value,
+                slug: row.querySelector('[data-space-slug]').value,
+                strategy: row.querySelector('[data-space-strategy]').value,
+                owner_mode: row.querySelector('[data-space-owner-mode]')?.value || 'mapped',
+            };
+        });
+        if (siteContentForm) {
+            content.language = siteContentForm.elements.language.value;
+            ['include_attachments', 'include_comments', 'include_history', 'include_drafts', 'include_deleted'].forEach((flag) => { content[flag] = siteContentForm.elements[flag].checked; });
+        }
+        const calendarIds = Array.from(calendarForm?.querySelectorAll('[name="calendar_ids[]"]:checked') || [], (input) => input.value);
+        const calendarTypes = {}, calendarOwners = {};
+        calendarForm?.querySelectorAll('[data-calendar-row]').forEach((row) => {
+            const id = row.querySelector('[name="calendar_ids[]"]').value;
+            if (!calendarIds.includes(id)) return;
+            calendarTypes[id] = row.querySelector('[data-calendar-type]').value;
+            calendarOwners[id] = row.querySelector('[data-calendar-owner]')?.value || '';
+        });
+        const identities = siteAccessForm ? siteReviewPayload() : null;
+        return {space_ids: spaceIds, content, calendar_ids: calendarIds, calendar_types: calendarTypes, calendar_owners: calendarOwners,
+            ...(identities?.source_url ? {source_url: identities.source_url, identities} : {})};
+    };
+    const workflowButton = query('#site-workflow-review') || query('#site-workflow-resume') || workflowStart;
+    const saveSiteDraft = () => post(config.siteWorkflow, {action: 'draft', uuid: workflowButton.dataset.uuid, ...siteDraftPayload()});
+    const workflowStatus = query('#site-workflow-status');
+    const workflowProgress = query('#site-workflow-progress');
+    const workflowBar = query('#site-workflow-progress-bar');
+    const workflowPercent = query('#site-workflow-percent');
+    // EN: Show committed progress for the current step, not a guessed whole-import ETA.
+    // Preparation and linking have no known denominator and remain indeterminate.
+    //
+    // HR: Prikazuje potvrđeni napredak trenutačnog koraka, ne procjenu trajanja cijelog uvoza.
+    // Priprema i povezivanje nemaju poznat ukupan broj pa prikazuju obradu bez postotka.
+    const renderSiteWorkflowProgress = (result) => {
+        if (!workflowProgress || !workflowBar || !workflowPercent || !workflowStatus) return;
+        workflowProgress.classList.remove('d-none');
+        const measured = typeof result.progress === 'number' && Number.isFinite(result.progress);
+        const percent = measured ? Math.max(0, Math.min(100, Math.floor(result.progress))) : null;
+        workflowPercent.textContent = percent === null ? config.siteWorkflowWorking : `${percent}%`;
+        workflowBar.style.width = `${percent ?? 100}%`;
+        workflowBar.classList.toggle('progress-bar-striped', percent === null);
+        workflowBar.classList.toggle('progress-bar-animated', percent === null);
+        workflowBar.classList.remove('bg-danger');
+        if (percent === null) workflowBar.removeAttribute('aria-valuenow');
+        else workflowBar.setAttribute('aria-valuenow', String(percent));
+        let label = config.siteWorkflowPhases[result.phase] || config.importing;
+        const current = result.current || {};
+        if (result.phase === 'calendars') label += ` · ${Number(current.calendars_done || 0)} / ${Number(current.calendars_total || 0)}`;
+        if (result.phase === 'content' && Number(current.spaces_total) > 0) label += ` · ${Number(current.spaces_done || 0)} / ${Number(current.spaces_total)}`;
+        workflowStatus.textContent = label;
+    };
+    query('#site-workflow-review')?.addEventListener('click', async (event) => {
+        if (!siteAccessForm?.reportValidity() || (siteContentForm && !siteContentForm.reportValidity())) return;
+        const button = event.currentTarget;
+        button.disabled = true;
+        try {
+            const identities = siteReviewPayload();
+            await post(config.siteWorkflow, {action: 'review', uuid: button.dataset.uuid,
+                ...siteDraftPayload(), source_url: identities.source_url, identities});
+            window.location.reload();
+        } catch (error) { workflowStatus.textContent = error.message || config.failed; button.disabled = false; }
+    });
+    const runSiteWorkflow = async (button, action) => {
+        if (action === 'start' && !window.confirm(config.confirmImport)) return;
+        button.disabled = true;
+        renderSiteWorkflowProgress({phase: action === 'start' ? 'identities' : '', progress: null});
+        try {
+            let result = await post(config.siteWorkflow, {action, uuid: button.dataset.uuid, token: button.dataset.token || ''});
+            renderSiteWorkflowProgress(result);
+            while (!result.completed) {
+                result = await post(config.siteWorkflow, {action: 'process', uuid: button.dataset.uuid});
+                renderSiteWorkflowProgress(result);
+            }
+            window.location.reload();
+        } catch (error) {
+            workflowStatus.textContent = error.message || config.failed;
+            workflowBar?.classList.remove('progress-bar-striped', 'progress-bar-animated');
+            workflowBar?.classList.add('bg-danger');
+            if (workflowBar && !workflowBar.hasAttribute('aria-valuenow')) workflowPercent.textContent = config.siteWorkflowStopped;
+            button.disabled = false;
+        }
+    };
+    workflowStart?.addEventListener('click', () => { void runSiteWorkflow(workflowStart, 'start'); });
+    query('#site-workflow-resume')?.addEventListener('click', (event) => { void runSiteWorkflow(event.currentTarget, 'process'); });
+
     query('#confluence-import-form')?.addEventListener('submit', async (event) => {
         event.preventDefault();
         if (!window.confirm(config.confirmImport)) return;
@@ -1073,6 +1643,10 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
         }
     });
     window.setInterval(refreshJobs, 5000);
+    if (calendarPreparation) {
+        if (calendarPreparation.dataset.state === 'running') renderCalendarPreparation({status: 'running', phase: 'scan', done: 0, total: null});
+        if (calendarPreparation.dataset.state !== 'idle') pollCalendarPreparation();
+    }
     if (config.initialError) toast(config.initialError, 'danger');
 })();
 </script>

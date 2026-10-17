@@ -37,7 +37,11 @@ preparation data. This action is available only before content import starts.
 
 ### Import button is unavailable
 
-The preflight must finish successfully first. A personal space also needs a confirmed owner mapping.
+For one space, preflight must finish successfully. For site/multi-space exports,
+save selected spaces, prepare/confirm the required C2 mappings and save a fresh
+[C3 content review](site-content_en.md). Editing any related choices disables
+confirmation until another review. Personal spaces need a confirmed owner and
+cannot replace an unrelated Personal Workspace. Calendars use the separate [C4 workflow](site-calendars_en.md).
 
 ### A restricted page is missing for a user
 

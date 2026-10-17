@@ -27,6 +27,8 @@ final class ModuleSimbiozaConfluenceImport
 
     public const TABLE_ATTACHMENTS = 'simbioza_confluence_import_attachments';
 
+    public const TABLE_CALENDARS = 'simbioza_confluence_import_calendars';
+
     /**
      * EN: The static catalog cannot be instantiated.
      *

@@ -19,7 +19,71 @@ import job and cannot collide with a replacement or a separately imported copy.
 
 Workspace, HTML Editor, Auth, Menu and Simbioza User remain owners of their records. Optional integrations are detected through installed public service contracts; this keeps the importer out of other modules' private schemas.
 
-## Processing stages
+## Site inventory branch
+
+`ConfluenceArchive::inspect()` chooses the archive type and security limits from
+the descriptor. For a site or multi-space export, `ConfluenceExportScanner`
+delegates to `ConfluenceSiteInventory`, `ConfluenceInventoryReader` and the
+bounded `ConfluenceXmlInventoryFramer`. The original single-space reader and
+converters remain on their existing path. Register these services using the
+module's `config/services.php` rather than constructing a scanner without its
+site-inventory dependency.
+
+The inventory is a versioned, atomic JSON cache under private module data, tied
+to the ZIP's SHA-256. Only counters and allowlisted space metadata reach it.
+`saveInventorySelection()` locks the actor-owned job, validates its fingerprint
+and selected IDs, and updates only the job options. `queue()`, `queueBatch()` and
+`import()` reject an inventory-only job before the first content write. No C1
+schema migration is needed. See [site inventory](site-inventory_en.md) for limits,
+cleanup and the restart semantics of the first streaming pass.
+
+## Site identity branch
+
+The site identity branch is separate: `ConfluenceSitePrincipals` streams only
+allowlisted metadata into a private index, `ConfluenceSiteAccessService` owns
+review/apply/idempotency, and `ConfluenceSiteAuth` integrates unchanged Auth
+services. Its additive membership relation adapter deliberately does not call
+the replacement-style GUI membership setter: doing so would convert automatic
+assignments or rewrite exclusions. Standard group-change events are emitted only
+after the import transaction commits. Target fields and confirmed mappings are
+read in batches, not once per source identity. The completed `site_access` job
+keeps mappings eligible for backup independently of the unfinished content job.
+See [C2 identity import](site-identities_en.md).
+
+## Site content branch
+
+`ConfluenceSiteContentService` reviews/freezes owner-bound C3 choices, validates
+target and C2 mapping fingerprints, and coordinates one `site_import` parent with
+`site_space` children through the existing `ConfluenceImportService`. The shared
+`ConfluenceSiteContentIndex` resolves unordered ownership first, then partitions
+only requested space/version bodies. Millions of unrelated property records are
+rejected before DOM conversion; no all-history intermediate spool is created.
+The ordinary scanner/converter consume those streams without re-extracting XML.
+
+`ConfluenceImportRepository::withSiteContext()` scopes source-space keys/IDs to the
+normalized source URL and restores context in `finally`. C2 confirmed users/groups
+are batch-loaded. Page/attachment IDs stay raw for original ZIP paths. Copy aliases
+and link reconciliation remain isolated from canonical targets and other sites.
+The parent retains the archive for C4. Workspace purge clears a site's child target
+and staging, not its shared ZIP or durable child UUID, enabling explicit retry.
+Backup exports remove executable/local job options while keeping durable mappings.
+See [C3 workflow and recovery](site-content_en.md); no generic Auth/framework change.
+Inactive-owner personal migration also needs the matching Simbioza User development
+code. Before release, publish that dependency and update the importer constraint
+to its new verified tag; do not ship the importer against the old provisioning behavior.
+
+## Site calendar branch
+
+`ConfluenceSiteCalendarService` reuses confirmed C2 principals and the public
+Calendar API. The bounded AO reader/index never extracts the complete plugin XML;
+conversion/reporting, transactional checkpoints and page linking are described in
+[C4 calendar migration](site-calendars_en.md). Its durable source aliases have a
+separate backup dataset. Calendar remains optional: do not make ordinary content
+imports depend on that module or read/write Calendar-owned tables in the importer.
+Before release, publish the verified Calendar changes and require their tag when
+enabling C4; an older Calendar build does not provide this conversion contract.
+
+## Single-space processing stages
 
 1. `ConfluenceImportUploadService` creates a job and validates ordered chunks.
 2. `ConfluenceArchive` checks ZIP limits and safe entry names.

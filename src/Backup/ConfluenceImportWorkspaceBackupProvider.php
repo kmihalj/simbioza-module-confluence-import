@@ -136,7 +136,7 @@ final class ConfluenceImportWorkspaceBackupProvider implements
                 'source_space_key' => $job['source_space_key'] ?? null,
                 'source_space_name' => $job['source_space_name'] ?? null,
                 'source_space_type' => $job['source_space_type'] ?? null,
-                'options_json' => $job['options_json'] ?? null,
+                'options_json' => \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteJobOptions::portable(BackupValue::nullableString($job['options_json'] ?? null, 'job.options_json')),
                 'summary_json' => $job['summary_json'] ?? null,
                 'created_at' => $job['created_at'] ?? null,
                 'updated_at' => $job['updated_at'] ?? null,

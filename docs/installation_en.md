@@ -15,7 +15,7 @@ The module must appear after ORM, Menu, Auth, HTML Editor, Workspace and Simbioz
 ## Install
 
 ```bash
-composer require aaieduhr/simbioza-module-confluence-import:^0.3.0
+composer require aaieduhr/simbioza-module-confluence-import:^0.3.1
 vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```
@@ -39,8 +39,14 @@ The old flat `confluence_import` tree is not used.
 | `chunk_size` | 8 MiB | Resumable upload chunk size |
 | `upload_ttl` | 24 hours | Retention of unfinished uploads |
 | `max_entries` | 250,000 | ZIP entry limit |
-| `max_uncompressed_size` | 16 GiB | Total uncompressed ZIP limit |
-| `max_entry_size` | 4 GiB | Per-entry uncompressed limit |
+| `max_uncompressed_size` | 16 GiB | Single-space total uncompressed ZIP limit |
+| `max_entry_size` | 4 GiB | Single-space per-entry uncompressed limit |
+| `max_site_uncompressed_size` | 128 GiB | Site/multi-space total uncompressed ZIP limit |
+| `max_site_entry_size` | 64 GiB | Site/multi-space per-entry uncompressed limit |
+| `max_inventory_object_size` | 16 MiB | Retained site metadata object limit |
+| `max_inventory_spaces` | 10,000 | Retained space/reference count limit |
+| `max_site_identity_records` | 100,000 | Retained identity/directory/membership/permission objects |
+| `max_site_identity_index_size` | 32 MiB | Maximum complete private identity catalog |
 | `max_compression_ratio` | 250 | ZIP-bomb protection |
 | `import_execution_time_limit` | 900 seconds | Upper bound for a large-archive preflight or one import processing step |
 | `import_memory_limit_mb` | 512 MiB | Memory requested only during administrator import processing |
@@ -67,7 +73,7 @@ administrator field, while the actual value is stored with every started import.
 backslashes. Uploads and import state stay under the application's private `data`.
 The existing GUI, per-job mapping and source choices remain unchanged.
 
-Upload and content import both run in resumable phases. After mappings are
+Upload and confirmed single-space content import run in resumable phases. After mappings are
 confirmed, the server prepares a stable plan and each subsequent request
 processes a bounded number of attachments or pages. The browser displays
 progress and requests the next step until finalization completes links, the
@@ -84,3 +90,10 @@ session is created. An administrator may remove it earlier with **Cancel
 import**. This also applies to a failed preflight job if content import never
 started. Completed imports and partially executed imports are never removed by
 temporary-upload cleanup.
+
+Development adds [site/multi-space inventory](site-inventory_en.md), separate
+[identity review/import](site-identities_en.md) and [selected content](site-content_en.md).
+Interrupted initial scans restart; only complete indexes are reusable. C3 keeps
+selected-content partitions beside the private ZIP and retains the shared source
+for C4. None of these steps needs a new migration. Allow time and memory for two
+shared XML passes, then bounded per-space processing; see the C3 recovery guide.

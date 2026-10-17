@@ -20,6 +20,7 @@ if (!$stable) {
         'aaieduhr/heartphrame-module-audit' => 'https://gitlab.opencode.hr/srce/aai-eduhr/heartphrame/heartphrame-module-audit.git',
         'aaieduhr/heartphrame-module-auth' => 'https://gitlab.opencode.hr/srce/aai-eduhr/heartphrame/heartphrame-module-auth.git',
         'aaieduhr/heartphrame-module-backup' => 'https://gitlab.opencode.hr/srce/aai-eduhr/heartphrame/heartphrame-module-backup.git',
+        'aaieduhr/heartphrame-module-calendar' => 'https://gitlab.opencode.hr/srce/aai-eduhr/heartphrame/heartphrame-module-calendar.git',
         'aaieduhr/heartphrame-module-comment' => 'https://gitlab.opencode.hr/srce/aai-eduhr/heartphrame/heartphrame-module-comment.git',
         'aaieduhr/heartphrame-module-editor-html' => 'https://gitlab.opencode.hr/srce/aai-eduhr/heartphrame/heartphrame-module-html-editor.git',
         'aaieduhr/heartphrame-module-menu' => 'https://gitlab.opencode.hr/srce/aai-eduhr/heartphrame/heartphrame-module-menu.git',
@@ -32,7 +33,11 @@ if (!$stable) {
     $repositories = $manifest['repositories'] ?? [];
     foreach ($packages as $package => $url) {
         $section = isset($manifest['require'][$package]) ? 'require' : 'require-dev';
-        $manifest[$section][$package] = 'dev-main as 0.3.0';
+        $constraint = $manifest[$section][$package] ?? '^0.3.0';
+        if (preg_match('/\A\^?(\d+\.\d+\.\d+)\z/D', $constraint, $match) !== 1) {
+            throw new RuntimeException('Unsupported CI candidate constraint: ' . $package);
+        }
+        $manifest[$section][$package] = 'dev-main as ' . $match[1];
         $found = false;
         foreach ($repositories as $repository) {
             if (($repository['url'] ?? null) === $url) {

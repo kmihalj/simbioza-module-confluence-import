@@ -15,7 +15,7 @@ U `app.modules.enabled` ovaj modul mora biti iza ORM-a, Menija, Autha, HTML Edit
 ## Instalacija
 
 ```bash
-composer require aaieduhr/simbioza-module-confluence-import:^0.3.0
+composer require aaieduhr/simbioza-module-confluence-import:^0.3.1
 vendor/bin/hph simbioza-confluence-import:install-migration
 vendor/bin/hph orm-migrate up
 ```
@@ -39,8 +39,14 @@ Staro ravno stablo `confluence_import` ne koristi se.
 | `chunk_size` | 8 MiB | Veličina dijela nastavivog prijenosa |
 | `upload_ttl` | 24 sata | Zadržavanje nedovršenog prijenosa |
 | `max_entries` | 250.000 | Najveći broj ZIP zapisa |
-| `max_uncompressed_size` | 16 GiB | Ukupna raspakirana veličina |
-| `max_entry_size` | 4 GiB | Najveća pojedinačna raspakirana datoteka |
+| `max_uncompressed_size` | 16 GiB | Ukupna raspakirana veličina jednog područja |
+| `max_entry_size` | 4 GiB | Najveći raspakirani zapis jednog područja |
+| `max_site_uncompressed_size` | 128 GiB | Ukupna raspakirana veličina sitea ili više područja |
+| `max_site_entry_size` | 64 GiB | Najveći raspakirani zapis sitea ili više područja |
+| `max_inventory_object_size` | 16 MiB | Najveći zadržani objekt metapodataka |
+| `max_inventory_spaces` | 10.000 | Najveći broj zadržanih područja/referenci |
+| `max_site_identity_records` | 100.000 | Zadržani objekti identiteta/imenika/članstava/ovlasti |
+| `max_site_identity_index_size` | 32 MiB | Najveći potpuni privatni pregled identiteta |
 | `max_compression_ratio` | 250 | Zaštita od ZIP bombi |
 | `import_execution_time_limit` | 900 sekundi | Gornja granica provjere velike arhive ili jednog procesnog koraka importa |
 | `import_memory_limit_mb` | 512 MiB | Memorija koja se traži samo tijekom administratorske obrade importa |
@@ -67,7 +73,7 @@ administratorsko polje, a stvarni se URL sprema uz svaki pokrenuti import.
 obrnutih kosih crta. Prijenosi i stanje importa ostaju u privatnom `data` direktoriju.
 Postojeći GUI, mapiranja i odabir izvora po poslu ostaju nepromijenjeni.
 
-Prijenos i sadržajni import rade u nastavivim fazama. Nakon potvrde mapiranja
+Prijenos i potvrđeni sadržajni import jednog područja rade u nastavivim fazama. Nakon potvrde mapiranja
 poslužitelj pripremi stabilan plan, zatim svaki zahtjev obrađuje ograničen broj
 privitaka ili stranica. Preglednik prikazuje napredak i poziva sljedeći korak
 dok finalizacija ne dovrši poveznice, izvještaj i izvedene indekse. Prekid
@@ -84,3 +90,10 @@ prijenosa. Administrator ga prije isteka može odmah ukloniti naredbom
 **Odustani od importa**. Isto vrijedi za posao kojem početna provjera nije
 uspjela, ako sadržajni import nije započeo. Dovršeni i djelomično izvedeni
 importi nikada se ne uklanjaju čišćenjem privremenih prijenosa.
+
+Razvojna dopuna dodaje [pregled sitea/više područja](site-inventory_hr.md), zaseban
+[pregled/uvoz identiteta](site-identities_hr.md) i [odabrani sadržaj](site-content_hr.md).
+Prekinuti početni pregledi kreću ispočetka; koriste se samo potpuni indeksi. C3 čuva
+podjele odabranog sadržaja uz privatni ZIP i zajednički izvor za C4. Nijedan korak
+ne traži novu migraciju. Omogućite vrijeme i memoriju za dva zajednička XML prolaza,
+zatim ograničenu obradu područja; pogledajte C3 uputu za oporavak.

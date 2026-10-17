@@ -13,6 +13,7 @@ use AaiEduHr\SimbiozaModuleWorkspace\Event\WorkspacePermanentlyDeleting;
 use HeartPhrame\Config\Config;
 use HeartPhrame\Helper\Helper;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(PurgeConfluenceWorkspaceImport::class)]
@@ -37,7 +38,8 @@ final class PurgeConfluenceWorkspaceImportTest extends TestCase
      *
      * HR: Dokazuje da zamjena područja uklanja ZIP, privitke i nastavivi staging njegova posla.
      */
-    public function testWorkspacePurgeRemovesAllManagedJobArtifacts(): void
+    #[DataProvider('operations')]
+    public function testWorkspacePurgeRemovesOnlyOwnedJobArtifacts(string $operation): void
     {
         $this->directory = sys_get_temp_dir() . '/simbioza-confluence-workspace-purge-'
             . bin2hex(random_bytes(8));
@@ -81,7 +83,7 @@ final class PurgeConfluenceWorkspaceImportTest extends TestCase
 
         $database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)->insert([
             'uuid' => $jobUuid,
-            'operation' => 'import',
+            'operation' => $operation,
             'status' => 'failed',
             'stage' => 'failed',
             'original_name' => 'source.zip',
@@ -109,12 +111,32 @@ final class PurgeConfluenceWorkspaceImportTest extends TestCase
         $listener = new PurgeConfluenceWorkspaceImport($database, $importConfig);
         $listener(new WorkspacePermanentlyDeleting(44, 'replaced', [], [], 1));
 
-        self::assertFileDoesNotExist($archivePath);
+        if ($operation === 'site_space') {
+            self::assertFileExists($archivePath);
+            $retained = $database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)->where('uuid', '=', $jobUuid)->first();
+            self::assertIsArray($retained);
+            self::assertNull($retained['workspace_id']);
+            self::assertSame('failed', $retained['status']);
+        } else {
+            self::assertFileDoesNotExist($archivePath);
+            self::assertNull($database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
+                ->where('uuid', '=', $jobUuid)->first());
+        }
         self::assertFileDoesNotExist($attachmentPath);
         self::assertDirectoryDoesNotExist($stagingPath);
-        self::assertNull($database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
-            ->where('uuid', '=', $jobUuid)->first());
         self::assertNull($database->table(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS)
             ->where('uuid', '=', 'staged-attachment')->first());
+    }
+
+    /**
+     * EN: A standalone job owns its ZIP; a site child borrows the parent's source.
+     *
+     * HR: Samostalni posao posjeduje ZIP; podposao sitea posuđuje roditeljski izvor.
+     *
+     * @return list<array{string}>
+     */
+    public static function operations(): array
+    {
+        return [['import'], ['site_space']];
     }
 }

@@ -80,6 +80,7 @@ final class ConfluenceImportBackupProvider extends DatabaseTableBackupProvider
             $record['next_offset'] = $record['archive_size'] ?? 0;
             $record['expires_at'] = null;
             $record['error_message'] = null;
+            $record['options_json'] = \AaiEduHr\SimbiozaModuleConfluenceImport\Service\ConfluenceSiteJobOptions::portable($record['options_json'] ?? null);
         }
 
         if (($definition['dataset'] ?? '') === 'attachments') {

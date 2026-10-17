@@ -359,7 +359,7 @@ final readonly class ConfluenceImportUploadService
                 'status' => 'scanning',
                 'stage' => 'preflight',
             ]);
-            $scan = $this->scanner->scan($finalPath);
+            $scan = $this->scanner->scan($finalPath, $finalPath . '.inventory.json');
             /*
              * EN: Individual pages and attachments are read from the archive
              *     again during import. Mapping only needs summaries; retaining
@@ -417,20 +417,15 @@ final readonly class ConfluenceImportUploadService
     {
         $removed = 0;
         foreach ($this->repository->expiredTransientJobs(gmdate('Y-m-d H:i:s')) as $job) {
-            $path = is_scalar($job['archive_path'] ?? null) ? trim((string)$job['archive_path']) : '';
-            if (
-                $path !== ''
-                && str_starts_with($path, rtrim($this->config->uploadDirectory(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)
-                && is_file($path)
-            ) {
-                @unlink($path);
-            }
-
-            $jobId = is_numeric($job['id'] ?? null) ? (int)$job['id'] : 0;
-            if ($jobId > 0) {
-                $this->repository->deleteTransientJob($jobId);
-                ++$removed;
-            }
+            $result = $this->repository->withLockedJob((string)$job['uuid'], (int)$job['actor_user_id'], function (array $current): array {
+                if (!$this->canCancel($current) || empty($current['expires_at']) || $current['expires_at'] >= gmdate('Y-m-d H:i:s')) {
+                    return ['removed' => false];
+                }
+                $this->deleteManagedTransientFile($current);
+                $this->repository->deleteTransientJob((int)$current['id']);
+                return ['removed' => true];
+            });
+            $removed += (int)$result['removed'];
         }
 
         // EN: A new upload also retries safe cleanup for completed jobs when a
@@ -454,8 +449,15 @@ final readonly class ConfluenceImportUploadService
     {
         $removed = 0;
         foreach ($this->repository->completedJobsForStorageCleanup() as $job) {
+            if (in_array($job['operation'] ?? '', ['site_space', 'site_import'], true)) {
+                continue;
+            }
             $path = is_scalar($job['archive_path'] ?? null) ? trim((string)$job['archive_path']) : '';
             $jobId = is_numeric($job['id'] ?? null) ? (int)$job['id'] : 0;
+            if ($path !== '') {
+                $this->deleteManagedFile($path . '.inventory.json', $this->config->uploadDirectory());
+                $this->deleteManagedFile($path . '.principals.json', $this->config->uploadDirectory());
+            }
             if ($jobId > 0 && $path !== '' && $this->deleteManagedFile($path, $this->config->uploadDirectory())) {
                 $this->repository->clearArchivePath($jobId);
                 ++$removed;
@@ -482,17 +484,104 @@ final readonly class ConfluenceImportUploadService
      */
     public function canCancel(array $job): bool
     {
+        if (!in_array($job['options']['site_workflow']['phase'] ?? 'draft', ['draft', 'review'], true)) {
+            return false;
+        }
+        if (in_array($job['options']['site_calendars']['phase'] ?? '', ['running', 'completed', 'interrupted'], true)) {
+            return false;
+        }
+        if (($job['operation'] ?? '') === 'site_space' || (($job['operation'] ?? '') === 'site_import' && ($job['options']['site_content']['phase'] ?? 'review') !== 'review')) {
+            return false;
+        }
         $status = is_scalar($job['status'] ?? null) ? trim((string)$job['status']) : '';
         if (in_array($status, ['uploading', 'scanning', 'ready'], true)) {
             return true;
         }
 
+        $options = is_array($job['options'] ?? null) ? $job['options'] : [];
         $optionsStarted = is_scalar($job['options_json'] ?? null)
-            && trim((string)$job['options_json']) !== '';
+            && trim((string)$job['options_json']) !== ''
+            && !isset($options['inventory_selection']);
 
         return $status === 'failed'
             && !$optionsStarted
             && (!is_numeric($job['workspace_id'] ?? null) || (int)$job['workspace_id'] <= 0);
+    }
+
+    /**
+     * EN: Explicitly releases only a completed site's managed source/indexes; reports and imported data remain.
+     * The same file lock as C3 plus the owner row lock prevent cleanup racing a content/calendar worker.
+     *
+     * HR: Izričito uklanja samo upravljani izvor/indekse dovršenog sitea; izvještaji i uvezeni podaci ostaju.
+     * Ista datotečna brava kao u C3 te brava vlasničkog retka sprječavaju utrku s obradom sadržaja/kalendara.
+     *
+     * @return array<string,mixed>
+     */
+    public function releaseSiteSource(string $uuid, int $actor): array
+    {
+        $this->repository->jobByUuid($uuid, $actor);
+        $lockPath = $this->config->uploadDirectory() . '/' . $uuid . '.site.lock';
+        if (is_link($lockPath)) {
+            throw new ConfluenceImportException(__('Confluence import nije moguće zaključati.'));
+        }
+        $lock = fopen($lockPath, 'c+b');
+        if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) {
+            if (is_resource($lock)) {
+                fclose($lock);
+            }
+            throw new ConfluenceImportException(__('Uvoz je već pokrenut. Najprije ga dovršite.'));
+        }
+        try {
+            return $this->repository->withLockedJob($uuid, $actor, function () use ($uuid, $actor): array {
+                $job = $this->repository->jobByUuid($uuid, $actor);
+                if (
+                    $job['operation'] !== 'site_import' || $job['status'] !== 'completed'
+                    || ($job['options']['site_calendars']['phase'] ?? '') === 'running'
+                    || ($job['options']['site_workflow']['phase'] ?? 'completed') !== 'completed'
+                ) {
+                    throw new ConfluenceImportException(__('Radni izvor možete ukloniti tek nakon dovršetka uvoza područja i zaustavljanja svih obrada.'));
+                }
+                $children = $this->repository->jobsByUuids(array_values($job['options']['site_content']['children'] ?? []), $actor);
+                if (count($children) !== count($job['options']['site_content']['children'] ?? [])) {
+                    throw new ConfluenceImportException(__('Radni izvor možete ukloniti tek nakon dovršetka uvoza područja i zaustavljanja svih obrada.'));
+                }
+                foreach ($children as $child) {
+                    if ($child['status'] !== 'completed') {
+                        throw new ConfluenceImportException(__('Radni izvor možete ukloniti tek nakon dovršetka uvoza područja i zaustavljanja svih obrada.'));
+                    }
+                }
+                if ($job['archive_path'] !== '') {
+                    $calendarLockPath = $job['archive_path'] . '.calendars.lock';
+                    if (is_link($calendarLockPath)) {
+                        throw new ConfluenceImportException(__('Putanja Confluence indeksa nije valjana.'));
+                    }
+                    $calendarLock = fopen($calendarLockPath, 'c+b');
+                    if ($calendarLock === false || !flock($calendarLock, LOCK_EX | LOCK_NB)) {
+                        if (is_resource($calendarLock)) {
+                            fclose($calendarLock);
+                        }
+                        throw new ConfluenceImportException(__('Uvoz je već pokrenut. Najprije ga dovršite.'));
+                    }
+                    try {
+                        $this->deleteManagedTransientFile($job);
+                    } finally {
+                        flock($calendarLock, LOCK_UN);
+                        fclose($calendarLock);
+                    }
+                }
+                foreach ($children as $child) {
+                    $this->repository->clearArchivePath((int)$this->repository->jobByUuid($child['uuid'], $actor)['id']);
+                    $this->deleteManagedStagingDirectory($child['uuid']);
+                }
+                $summary = $job['summary'];
+                $summary['source_released'] = true;
+                $this->repository->updateJob((int)$job['id'], ['archive_path' => '', 'summary_json' => json_encode($summary, JSON_THROW_ON_ERROR)]);
+                return ['released' => true];
+            });
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
     }
 
     /**
@@ -512,6 +601,7 @@ final readonly class ConfluenceImportUploadService
             $uuid,
             $actorUserId,
             function (array $job, Database $database): array {
+                $this->repository->assertSiteSetupMutable($job);
                 if (!$this->canCancel($job)) {
                     throw new ConfluenceImportException(
                         __('Import koji je već počeo mijenjati sadržaj nije moguće otkazati.'),
@@ -531,6 +621,49 @@ final readonly class ConfluenceImportUploadService
     }
 
     /**
+     * EN: Stores only a reviewed inventory selection; never starts a content import.
+     * The owner, stage, source fingerprint and every selected source ID are rechecked.
+     *
+     * HR: Sprema samo pregledani odabir inventara; nikada ne pokreće uvoz sadržaja.
+     * Ponovno provjerava vlasnika, fazu, otisak izvora i svaki odabrani izvorni ID.
+     *
+     * @param array<mixed> $spaceIds
+     * @return list<string>
+     */
+    public function saveInventorySelection(string $uuid, int $actorUserId, string $sourceHash, array $spaceIds): array
+    {
+        return $this->repository->withLockedJob($uuid, $actorUserId, function () use ($uuid, $actorUserId, $sourceHash, $spaceIds): array {
+            $job = $this->repository->jobByUuid($uuid, $actorUserId);
+            $this->repository->assertSiteSetupMutable($job);
+            $scan = $job['summary'] ?? [];
+            if (
+                ($job['status'] ?? '') !== 'ready' || ($scan['inventory_only'] ?? false) !== true
+                || !is_string($scan['source_sha256'] ?? null) || !hash_equals($scan['source_sha256'], $sourceHash)
+            ) {
+                throw new ConfluenceImportException(__('Pregled sitea nije spreman ili je odabir zastario.'));
+            }
+            if (count($spaceIds) > $this->config->maxInventorySpaces()) {
+                throw new ConfluenceImportException(__('Odabir područja nije valjan.'));
+            }
+            $allowed = array_fill_keys(array_column($scan['spaces'], 'source_id'), true);
+            $selected = [];
+            foreach ($spaceIds as $id) {
+                if ((!is_string($id) && !is_int($id)) || !isset($allowed[(string)$id])) {
+                    throw new ConfluenceImportException(__('Odabir područja nije valjan.'));
+                }
+                $selected[] = (string)$id;
+            }
+            $selected = array_values(array_unique($selected));
+            $options = is_array($job['options'] ?? null) ? $job['options'] : [];
+            $options['inventory_selection'] = ['space_ids' => $selected, 'source_sha256' => $sourceHash];
+            unset($options['site_access']['preview']);
+            unset($options['site_content']);
+            $this->repository->updateJob((int)$job['id'], ['options_json' => json_encode($options, JSON_THROW_ON_ERROR)]);
+            return $selected;
+        });
+    }
+
+    /**
      * EN: Deletes the completed source archive after a successful import.
      *
      * HR: Briše završenu izvornu arhivu nakon uspješnog importa.
@@ -539,6 +672,9 @@ final readonly class ConfluenceImportUploadService
      */
     public function deleteArchive(array $job): void
     {
+        if (in_array($job['operation'] ?? '', ['site_space', 'site_import'], true)) {
+            return;
+        }
         $path = is_scalar($job['archive_path'] ?? null) ? trim((string)$job['archive_path']) : '';
         $jobId = is_numeric($job['id'] ?? null) ? (int)$job['id'] : 0;
         $batchPath = $this->config->batchDirectory() . DIRECTORY_SEPARATOR
@@ -571,6 +707,9 @@ final readonly class ConfluenceImportUploadService
      */
     private function deleteManagedFile(string $path, string $directory): bool
     {
+        if (is_link($path)) {
+            return false;
+        }
         if ($path === '' || !is_file($path)) {
             return true;
         }
@@ -654,7 +793,13 @@ final readonly class ConfluenceImportUploadService
     private function deleteManagedTransientFile(array $job): void
     {
         $path = is_scalar($job['archive_path'] ?? null) ? trim((string)$job['archive_path']) : '';
-        if ($path === '' || !is_file($path)) {
+        if ($path === '') {
+            return;
+        }
+        $this->deleteManagedContentIndex($path);
+        if (!is_file($path)) {
+            $this->deleteManagedFile($path . '.inventory.json', $this->config->uploadDirectory());
+            $this->deleteManagedFile($path . '.principals.json', $this->config->uploadDirectory());
             return;
         }
 
@@ -663,6 +808,7 @@ final readonly class ConfluenceImportUploadService
         if (
             !is_string($root)
             || !is_string($real)
+            || is_link($path)
             || !str_starts_with($real, rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)
         ) {
             throw new ConfluenceImportException(__('Datoteka importa nije unutar privatnog upload direktorija.'));
@@ -670,6 +816,57 @@ final readonly class ConfluenceImportUploadService
 
         if (!unlink($real)) {
             throw new ConfluenceImportException(__('Prenesenu Confluence arhivu nije moguće obrisati.'));
+        }
+        $this->deleteManagedFile($path . '.inventory.json', $this->config->uploadDirectory());
+        $this->deleteManagedFile($path . '.principals.json', $this->config->uploadDirectory());
+    }
+
+    /**
+     * EN: Cleans only recognized flat content partitions beside a cancelled private upload.
+     * Linked directories/files and unexpected contents fail closed; source archives are handled separately.
+     *
+     * HR: Čisti samo poznate ravne podjele sadržaja uz otkazani privatni prijenos.
+     * Povezani direktoriji/datoteke i nepoznati sadržaj odbijaju se; izvorne arhive obrađuju se odvojeno.
+     */
+    private function deleteManagedContentIndex(string $archive): void
+    {
+        $this->deleteManagedFlatIndex($archive . '.content', '/^(?:[a-f0-9]{64}\.jsonl|common\.jsonl|manifest\.(?:json|tmp))$/D');
+        $this->deleteManagedFlatIndex($archive . '.calendars', '/^(?:[a-f0-9]{64}\.jsonl|events\.tmp|catalog\.(?:json|tmp))$/D');
+        $this->deleteManagedFile($archive . '.calendars.lock', $this->config->uploadDirectory());
+        $this->deleteManagedFile($archive . '.calendars.progress.json', $this->config->uploadDirectory());
+        $this->deleteManagedFile($archive . '.calendars.progress.json.tmp', $this->config->uploadDirectory());
+    }
+
+    /**
+     * EN: Deletes only recognized private flat index files, never links or arbitrary descendants.
+     *
+     * HR: Briše samo poznate privatne ravne datoteke indeksa, nikada poveznice ili proizvoljne poddirektorije.
+     */
+    private function deleteManagedFlatIndex(string $directory, string $pattern): void
+    {
+        if (!is_dir($directory) && !is_link($directory)) {
+            return;
+        }
+        $root = realpath($this->config->uploadDirectory());
+        if (is_link($directory) || !is_string($root) || realpath(dirname($directory)) !== $root) {
+            throw new ConfluenceImportException(__('Putanja Confluence indeksa nije valjana.'));
+        }
+        $paths = [];
+        foreach (scandir($directory) ?: [] as $name) {
+            if ($name === '.' || $name === '..') {
+                continue;
+            }
+            $path = $directory . '/' . $name;
+            if (is_link($path) || !is_file($path) || preg_match($pattern, $name) !== 1) {
+                throw new ConfluenceImportException(__('Putanja Confluence indeksa nije valjana.'));
+            }
+            $paths[] = $path;
+        }
+        foreach ($paths as $path) {
+            $this->deleteManagedFile($path, $this->config->uploadDirectory());
+        }
+        if (!rmdir($directory)) {
+            throw new ConfluenceImportException(__('Confluence indeks nije moguće spremiti.'));
         }
     }
 

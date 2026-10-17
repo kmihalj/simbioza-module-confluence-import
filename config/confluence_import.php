@@ -13,6 +13,22 @@ return [
     'max_entries' => 250000,
     'max_uncompressed_size' => 16 * 1024 * 1024 * 1024,
     'max_entry_size' => 4 * 1024 * 1024 * 1024,
+    // EN: Site/multi-space XML may exceed a single-space limit; ZIP safety checks still apply.
+    // The inventory skips document bodies and never extracts these complete entries.
+    //
+    // HR: XML sitea/više područja može premašiti limit jednog područja; ZIP zaštite i dalje vrijede.
+    // Pregled preskače tijela dokumenata i nikada ne izdvaja ove potpune zapise.
+    'max_site_entry_size' => 64 * 1024 * 1024 * 1024,
+    'max_site_uncompressed_size' => 128 * 1024 * 1024 * 1024,
+    'max_inventory_object_size' => 16 * 1024 * 1024,
+    'max_inventory_spaces' => 10000,
+    // EN: Bound retained site identities, memberships and permission metadata, not all XML objects.
+    // Credentials, tokens and document bodies are never written to this index.
+    //
+    // HR: Ograniči zadržane identitete, članstva i ovlasti sitea, ne sve XML objekte.
+    // Vjerodajnice, tokeni i tijela dokumenata nikada se ne zapisuju u ovaj indeks.
+    'max_site_identity_records' => 100000,
+    'max_site_identity_index_size' => 32 * 1024 * 1024,
     'max_compression_ratio' => 250,
     // EN: A real large-Workspace import may run for up to 15 minutes.
     //

@@ -7,6 +7,7 @@ namespace AaiEduHr\SimbiozaModuleConfluenceImport\Service;
 use AaiEduHr\HeartPhrameModuleOrm\Database\Database;
 use AaiEduHr\SimbiozaModuleConfluenceImport\Exception\ConfluenceImportException;
 use AaiEduHr\SimbiozaModuleConfluenceImport\ModuleSimbiozaConfluenceImport;
+use AaiEduHr\SimbiozaModuleWorkspace\ModuleWorkspace;
 
 use function array_chunk;
 use function array_fill;
@@ -39,14 +40,216 @@ use const JSON_UNESCAPED_UNICODE;
  *
  * HR: Jedina persistence granica za poslove i izvorna Confluence mapiranja.
  */
-final readonly class ConfluenceImportRepository
+final class ConfluenceImportRepository
 {
+    /** @var array<string,mixed> */
+    private array $siteContext = [];
+
+    private bool $workflowContext = false;
+
+    private string $referenceUrl = '';
+
+    /** @var list<int> */
+    private array $referenceJobs = [];
+
+    /**
+     * EN: Bridges references to earlier space imports only when their saved source URL matches.
+     * This read context changes neither identity mappings nor the standalone import's storage format.
+     * Unknown origins and other sites remain isolated; no application records are moved or rewritten.
+     *
+     * HR: Povezuje reference s ranijim uvozima područja samo kada im odgovara spremljeni izvorni URL.
+     * Kontekst čitanja ne mijenja mapiranja identiteta ni format spremanja samostalnog uvoza.
+     * Nepoznati izvori i drugi siteovi ostaju odvojeni; zapisi aplikacije ne premještaju se niti prepisuju.
+     *
+     * @template T
+     * @param callable():T $callback
+     * @return T
+     */
+    public function withReferenceContext(string $url, callable $callback): mixed
+    {
+        if (trim($url) === '') {
+            return $callback();
+        }
+        if (ConfluenceSiteAccessService::sourceUrl($url) === $this->referenceUrl) {
+            return $callback();
+        }
+        $previous = [$this->referenceUrl, $this->referenceJobs];
+        $this->referenceUrl = ConfluenceSiteAccessService::sourceUrl($url);
+        $this->referenceJobs = [];
+        try {
+            $after = 0;
+            do {
+                $rows = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
+                ->select(['id', 'options_json'])->where('id', '>', $after)->where('operation', '=', 'import')
+                ->whereIn('status', ['running', 'completed'])->orderBy('id')->limit(200)->get();
+                foreach ($rows as $row) {
+                    $after = (int)$row['id'];
+                    $options = json_decode((string)($row['options_json'] ?? ''), true) ?? [];
+                    $source = $options['source_base_url'] ?? '';
+                    try {
+                        if (is_string($source) && $source !== '' && ConfluenceSiteAccessService::sourceUrl($source) === $this->referenceUrl) {
+                            $this->referenceJobs[] = $after;
+                        }
+                    } catch (ConfluenceImportException) {
+                        // EN: Invalid historical metadata does not establish a trusted origin.
+                        //
+                        // HR: Neispravni povijesni metapodaci ne potvrđuju pouzdan izvor.
+                    }
+                }
+            } while (count($rows) === 200);
+            return $callback();
+        } finally {
+            [$this->referenceUrl, $this->referenceJobs] = $previous;
+        }
+    }
+
+    /**
+     * EN: Only database-derived integer job IDs enter the SQL list; URLs always use bound parameters.
+     *
+     * HR: U SQL popis ulaze samo cijeli ID-jevi poslova iz baze; URL-ovi uvijek koriste vezane parametre.
+     *
+     * @return array{string,list<string>}
+     */
+    private function referenceScope(string $column = 'source_space_key', string $jobColumn = 'job_id', string $explicitKey = ''): array
+    {
+        $prefix = (string)($this->siteContext['prefix'] ?? '');
+        if ($prefix === '' && $this->referenceUrl === '' && preg_match('/^site:[a-f0-9]{64}:/D', $explicitKey) === 1) {
+            return ['1 = 1', []];
+        }
+        if (($this->siteContext['copy_scope'] ?? false) === true) {
+            $keys = array_map($this->siteKey(...), array_values($this->siteContext['aliases']));
+            return [$column . ' IN (' . implode(',', array_fill(0, count($keys), '?')) . ')', $keys];
+        }
+        if ($this->referenceUrl === '') {
+            return [$column . ($prefix !== '' ? ' LIKE ?' : ' NOT LIKE ?'), [$prefix !== '' ? $prefix . '%' : 'site:%']];
+        }
+        $prefix = 'site:' . hash('sha256', $this->referenceUrl) . ':';
+        $legacy = $this->referenceJobs === [] ? '0 = 1' : $jobColumn . ' IN (' . implode(',', $this->referenceJobs) . ')';
+        return ['(' . $column . ' LIKE ? OR (' . $column . ' NOT LIKE ? AND ' . $legacy . '))', [$prefix . '%', 'site:%']];
+    }
+
+    /**
+     * EN: Canonical namespaced references take precedence over verified standalone mappings; copies never fall back.
+     *
+     * HR: Kanonske reference s izvornim prostorom imaju prednost pred potvrđenim samostalnim mapiranjima; kopije nemaju zamjenski cilj.
+     *
+     * @return list<string>
+     */
+    private function referenceKeys(string $key): array
+    {
+        $qualified = $this->siteKey($key);
+        if ($this->referenceUrl === '' || ($this->siteContext['copy_scope'] ?? false)) {
+            return [$qualified];
+        }
+        $prefix = 'site:' . hash('sha256', $this->referenceUrl) . ':';
+        $raw = str_starts_with($qualified, $prefix) ? substr($qualified, strlen($prefix)) : $qualified;
+        if (str_starts_with($raw, 'site:')) {
+            return [$qualified];
+        }
+        return array_values(array_unique([$prefix . $raw, $raw]));
+    }
+
+    /**
+     * EN: Only the server-side coordinator may advance component steps in an executing site workflow.
+     *
+     * HR: Samo poslužiteljski koordinator smije napredovati komponentnim koracima pokrenutog uvoza sitea.
+     *
+     * @template T
+     * @param callable():T $callback
+     * @return T
+     */
+    public function withWorkflowContext(callable $callback): mixed
+    {
+        $previous = $this->workflowContext;
+        $this->workflowContext = true;
+        try {
+            return $callback();
+        } finally {
+            $this->workflowContext = $previous;
+        }
+    }
+
+    /**
+     * EN: A direct legacy endpoint cannot edit or advance one part of a frozen unified import.
+     *
+     * HR: Izravna stara krajnja točka ne smije urediti ili pokrenuti dio zaključanog zajedničkog uvoza.
+     *
+     * @param array<string,mixed> $job
+     */
+    public function assertSiteSetupMutable(array $job): void
+    {
+        $phase = $job['options']['site_workflow']['phase'] ?? 'draft';
+        if (!$this->workflowContext && !in_array($phase, ['draft', 'review'], true)) {
+            throw new ConfluenceImportException(__('Uvoz sitea je zaključan. Nastavite zajednički postupak uvoza.'));
+        }
+    }
+
+    /**
+     * EN: Runs one site child with an isolated source namespace and confirmed group mappings.
+     * Context is restored even after failure; ordinary single-space calls have no context.
+     *
+     * HR: Izvodi jedan podposao sitea s odvojenim izvorom i potvrđenim mapiranjima grupa.
+     * Kontekst vraća i nakon greške; obični pozivi jednog područja nemaju kontekst.
+     *
+     * @template T
+     * @param array<string,int> $groupMap
+     * @param array<string,string> $spaceAliases
+     * @param callable():T $callback
+     * @return T
+     */
+    public function withSiteContext(string $url, array $groupMap, callable $callback, array $spaceAliases = []): mixed
+    {
+        $old = $this->siteContext;
+        $maps = $this->siteMappings('c2:' . hash('sha256', ConfluenceSiteAccessService::sourceUrl($url)) . ':');
+        $normalizedGroups = [];
+        foreach ($groupMap as $name => $id) {
+            $normalizedGroups[mb_strtolower($name)] = $id;
+        }
+        $this->siteContext = ['url' => ConfluenceSiteAccessService::sourceUrl($url), 'groups' => $normalizedGroups, 'users' => $maps['users'], 'aliases' => $spaceAliases,
+            'prefix' => 'site:' . hash('sha256', ConfluenceSiteAccessService::sourceUrl($url)) . ':',
+            'copy_scope' => array_filter($spaceAliases, static fn(string $value, string $key): bool => $value !== $key, ARRAY_FILTER_USE_BOTH) !== []];
+        try {
+            return $this->withReferenceContext($url, $callback);
+        } finally {
+            $this->siteContext = $old;
+        }
+    }
+
+    /**
+     * EN: Qualifies source space identifiers, never local IDs or attachment archive paths.
+     *
+     * HR: Razlučuje identifikatore izvornog područja, ne lokalne ID-jeve ni arhivske putanje privitaka.
+     */
+    private function siteKey(string $key, bool $spaceId = false): string
+    {
+        $prefix = (string)($this->siteContext['prefix'] ?? '');
+        if ($key === '' || $prefix === '' || str_starts_with($key, $prefix)) {
+            return $key;
+        }
+        if (!$spaceId) {
+            $key = $this->siteContext['aliases'][$key] ?? $key;
+        }
+        if (strlen($prefix . $key) > 190) {
+            throw new ConfluenceImportException(__('Confluence metapodaci područja prelaze dopuštenu veličinu.'));
+        }
+        return $prefix . $key;
+    }
+
+    /**
+     * EN: Persists a source-qualified include reference so rendering cannot fall back to another site.
+     *
+     * HR: Sprema referencu uključivanja s izvornim prostorom kako prikaz ne bi posegnuo za drugim siteom.
+     */
+    public function referenceSpaceKey(string $key): string
+    {
+        return $this->siteKey($key);
+    }
     /**
      * EN: Receives the portable ORM.
      *
      * HR: Prima prenosivi ORM.
      */
-    public function __construct(private Database $database)
+    public function __construct(private readonly Database $database)
     {
     }
 
@@ -63,6 +266,7 @@ final readonly class ConfluenceImportRepository
             && $schema->hasTable(ModuleSimbiozaConfluenceImport::TABLE_SPACES)
             && $schema->hasTable(ModuleSimbiozaConfluenceImport::TABLE_CONTENT)
             && $schema->hasTable(ModuleSimbiozaConfluenceImport::TABLE_IDENTITIES)
+            && $schema->hasTable(ModuleSimbiozaConfluenceImport::TABLE_CALENDARS)
             && $schema->hasTable(ModuleSimbiozaConfluenceImport::TABLE_GROUPS)
             && $schema->hasTable(ModuleSimbiozaConfluenceImport::TABLE_LINKS)
             && $schema->hasTable(ModuleSimbiozaConfluenceImport::TABLE_ATTACHMENTS);
@@ -131,17 +335,20 @@ final readonly class ConfluenceImportRepository
 
     /**
      * EN: Locks an upload job and runs a strictly sequential mutation.
+     * Nested importer steps join the caller's transaction without committing or rolling it back themselves.
      *
      * HR: Zaključava upload posao i izvodi strogo sekvencijalnu izmjenu.
+     * Ugniježđeni koraci importera koriste transakciju pozivatelja bez vlastitog commita ili rollbacka.
      *
-     * @param callable(array<string,mixed>,Database):array<string,mixed> $callback
-     * @return array<string,mixed>
+     * @template TResult of array<array-key,mixed>
+     * @param callable(array<string,mixed>,Database):TResult $callback
+     * @return TResult
      */
     public function withLockedJob(string $uuid, int $actorUserId, callable $callback): array
     {
-        return $this->database->transaction(function (Database $database) use ($uuid, $actorUserId, $callback): array {
+        $run = function (Database $database) use ($uuid, $actorUserId, $callback): array {
             $row = $database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
-                ->select(['id', 'uuid', 'original_name', 'status', 'stage', 'archive_path', 'archive_size', 'next_offset', 'chunk_size',
+                ->select(['id', 'uuid', 'operation', 'original_name', 'status', 'stage', 'archive_path', 'archive_size', 'next_offset', 'chunk_size',
                     'actor_user_id', 'expires_at', 'options_json', 'workspace_id'])
                 ->where('uuid', '=', trim($uuid))
                 ->where('actor_user_id', '=', $actorUserId)
@@ -152,7 +359,42 @@ final readonly class ConfluenceImportRepository
             }
 
             return $callback($this->normalizeRow($row), $database);
-        });
+        };
+        return $this->database->getConnection()->inTransaction() ? $run($this->database) : $this->database->transaction($run);
+    }
+
+    /**
+     * EN: Returns stable native calendar targets for one source site, including subcalendar aliases.
+     *
+     * HR: Vraća stabilne nativne kalendare jednog izvornog sitea, uključujući zamjenske ID-jeve podkalendara.
+     *
+     * @return array<string,int>
+     */
+    public function calendarMappings(string $url): array
+    {
+        $result = [];
+        foreach (
+            $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_CALENDARS)
+            ->where('source_instance', '=', hash('sha256', ConfluenceSiteAccessService::sourceUrl($url)))->get() as $row
+        ) {
+            $result[(string)$row['source_calendar_id']] = (int)$row['target_calendar_id'];
+        }
+        return $result;
+    }
+
+    /**
+     * EN: Stores source provenance in the same transaction as Calendar API writes and the C4 checkpoint.
+     *
+     * HR: Sprema podrijetlo u istoj transakciji kao Calendar API zapise i C4 kontrolnu točku.
+     */
+    public function mapCalendar(string $url, string $source, int $target, int $job): void
+    {
+        $now = gmdate('Y-m-d H:i:s');
+        $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_CALENDARS)->upsert([[
+            'source_instance' => hash('sha256', ConfluenceSiteAccessService::sourceUrl($url)),
+            'source_calendar_id' => $source, 'target_calendar_id' => $target, 'job_id' => $job,
+            'created_at' => $now, 'updated_at' => $now,
+        ]], ['source_instance', 'source_calendar_id'], ['target_calendar_id', 'job_id', 'updated_at']);
     }
 
     /**
@@ -168,6 +410,103 @@ final readonly class ConfluenceImportRepository
         $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
             ->where('id', '=', $jobId)
             ->update($values);
+    }
+
+    /**
+     * EN: Batch-reads child progress without loading page reports or querying once per space.
+     *
+     * HR: Skupno čita napredak podposlova bez učitavanja izvještaja stranica ni upita po području.
+     *
+     * @param list<string> $uuids
+     * @return list<array<string,mixed>>
+     */
+    public function jobsByUuids(array $uuids, int $actor): array
+    {
+        $result = [];
+        foreach (array_chunk($uuids, 200) as $chunk) {
+            $query = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
+                ->select(['uuid', 'status', 'source_space_key', 'workspace_id'])
+                ->where('actor_user_id', '=', $actor)
+                ->whereRaw('uuid IN (' . implode(',', array_fill(0, count($chunk), '?')) . ')', $chunk);
+            foreach ($query->orderBy('id', 'ASC')->get() as $row) {
+                $result[] = $this->normalizeRow($row);
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * EN: Reads linked report summaries in bounded batches, not one query per child or all site reports at once.
+     * The parent's owner/source fingerprint is verified again by the reporting service.
+     *
+     * HR: Čita povezane sažetke izvještaja u ograničenim paketima, ne upit po podposlu ili sve izvještaje odjednom.
+     * Servis izvještaja ponovno provjerava vlasnika roditelja i otisak izvora.
+     *
+     * @param list<string> $uuids
+     * @return iterable<array<string,mixed>>
+     */
+    public function reportJobs(array $uuids, int $actor): iterable
+    {
+        foreach (array_chunk(array_values(array_unique($uuids)), 20) as $chunk) {
+            $rows = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
+                ->select(['id', 'uuid', 'actor_user_id', 'operation', 'status', 'stage', 'sha256', 'source_space_key', 'summary_json'])
+                ->where('actor_user_id', '=', $actor)
+                ->whereRaw('uuid IN (' . implode(',', array_fill(0, count($chunk), '?')) . ')', $chunk)
+                ->orderBy('id', 'ASC')->get();
+            $linkCounts = $this->reportLinkCounts(array_map(intval(...), array_column($rows, 'id')));
+            foreach ($rows as $row) {
+                yield [...$this->normalizeRow($row), 'link_counts' => $linkCounts[(int)$row['id']] ?? ['links_resolved' => 0, 'links_unresolved' => 0]];
+            }
+        }
+    }
+
+    /**
+     * EN: Aggregates current link states in bounded queries, including resolutions from later imports.
+     * Historical import counters are preserved; no page body or private link target enters the overview.
+     *
+     * HR: Zbraja aktualna stanja linkova ograničenim upitima, uključujući razrješenja kasnijih uvoza.
+     * Povijesna brojanja ostaju sačuvana; pregled ne izlaže tijelo stranice ni privatni cilj poveznice.
+     *
+     * @param list<int> $ids
+     * @return array<int,array<string,int>>
+     */
+    private function reportLinkCounts(array $ids): array
+    {
+        $counts = [];
+        foreach (array_chunk($ids, 20) as $chunk) {
+            $rows = $this->database->fetchAll('SELECT job_id, status, COUNT(*) AS total FROM '
+                . ModuleSimbiozaConfluenceImport::TABLE_LINKS . ' WHERE job_id IN ('
+                . implode(',', array_fill(0, count($chunk), '?')) . ') GROUP BY job_id, status', $chunk);
+            foreach ($rows as $row) {
+                $key = $row['status'] === 'resolved' ? 'links_resolved' : 'links_unresolved';
+                $counts[(int)$row['job_id']][$key] = (int)$row['total'];
+            }
+        }
+        return $counts;
+    }
+
+    /**
+     * EN: Selects one completed, owned space report in the verified source namespace, including older runs.
+     * Content provenance excludes same-named spaces from other sources and reports without imported pages.
+     *
+     * HR: Odabire jedan dovršen vlastiti izvještaj područja iz provjerenog izvora, uključujući ranije uvoze.
+     * Podrijetlo sadržaja isključuje istoimena područja drugih izvora i izvještaje bez uvezenih stranica.
+     *
+     * @return array<string,mixed>|null
+     */
+    public function nextSourceSpaceReport(string $url, int $actor, int $after): ?array
+    {
+        return $this->withReferenceContext($url, function () use ($actor, $after): ?array {
+            [$scope, $bindings] = $this->referenceScope('c.source_space_key', 'c.job_id');
+            $row = $this->database->fetchOne(
+                'SELECT j.* FROM ' . ModuleSimbiozaConfluenceImport::TABLE_JOBS . ' j'
+                . ' WHERE j.actor_user_id = ? AND j.status = ? AND j.operation IN (?, ?) AND j.id > ?'
+                . ' AND EXISTS (SELECT 1 FROM ' . ModuleSimbiozaConfluenceImport::TABLE_CONTENT
+                . ' c WHERE c.job_id = j.id AND ' . $scope . ') ORDER BY j.id ASC LIMIT 1',
+                [$actor, 'completed', 'site_space', 'import', max(0, $after), ...$bindings]
+            );
+            return is_array($row) ? $this->normalizeRow($row) : null;
+        });
     }
 
     /**
@@ -214,12 +553,13 @@ final readonly class ConfluenceImportRepository
         // HR: Posao u bazi čuva samo inventar; velike zapise ponovno čitamo iz ZIP-a.
         unset($scan['pages'], $scan['attachments']);
         $space = is_array($scan['spaces'][0] ?? null) ? $scan['spaces'][0] : [];
+        $inventory = ($scan['inventory_only'] ?? false) === true;
         $this->updateJob($jobId, [
             'status' => 'ready',
-            'stage' => 'mapping',
-            'source_space_key' => $this->string($space['source_key'] ?? ''),
-            'source_space_name' => $this->string($space['name'] ?? ''),
-            'source_space_type' => $this->string($space['type'] ?? 'global'),
+            'stage' => $inventory ? 'inventory' : 'mapping',
+            'source_space_key' => $inventory ? '' : $this->string($space['source_key'] ?? ''),
+            'source_space_name' => $inventory ? __('Pregled Confluence izvoza') : $this->string($space['name'] ?? ''),
+            'source_space_type' => $inventory ? $this->string($scan['archive_type'] ?? '') : $this->string($space['type'] ?? 'global'),
             'summary_json' => $this->json($scan),
             'error_message' => null,
         ]);
@@ -289,7 +629,7 @@ final readonly class ConfluenceImportRepository
     public function completedJobsForStorageCleanup(): array
     {
         $rows = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
-            ->select(['id', 'uuid', 'archive_path'])
+            ->select(['id', 'uuid', 'archive_path', 'operation'])
             ->where('status', '=', 'completed')
             ->orderBy('id', 'ASC')
             ->get();
@@ -329,7 +669,7 @@ final readonly class ConfluenceImportRepository
     public function expiredTransientJobs(string $now): array
     {
         $rows = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
-            ->select(['id', 'status', 'archive_path', 'options_json', 'workspace_id'])
+            ->select(['id', 'uuid', 'actor_user_id', 'operation', 'status', 'archive_path', 'options_json', 'workspace_id'])
             ->where('expires_at', '<', trim($now))
             ->orderBy('id', 'ASC')
             ->get();
@@ -353,7 +693,7 @@ final readonly class ConfluenceImportRepository
     public function deleteTransientJob(int $jobId): void
     {
         $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_JOBS)
-            ->select(['status', 'options_json', 'workspace_id'])
+            ->select(['operation', 'status', 'options_json', 'workspace_id'])
             ->where('id', '=', $jobId)
             ->first();
         if (!is_array($row) || !$this->isTransientJobRow($row)) {
@@ -366,22 +706,33 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
-     * EN: Recognizes a job that has not started content import. A failed
-     * preflight remains transient while no import options have been stored.
+     * EN: Recognizes a job that has not started content import. An inventory
+     * selection is not confirmed content-import options.
      *
-     * HR: Prepoznaje posao koji nije započeo sadržajni import. Neuspjela
-     * početna provjera ostaje privremena dok nema spremljenih import opcija.
+     * HR: Prepoznaje posao koji nije započeo sadržajni import. Odabir inventara
+     * nije potvrda opcija sadržajnog importa.
      *
      * @param array<mixed,mixed> $row
      */
     private function isTransientJobRow(array $row): bool
     {
+        $decoded = json_decode((string)($row['options_json'] ?? ''), true);
+        if (
+            in_array($row['operation'] ?? '', ['site_import', 'site_space'], true)
+            || in_array($decoded['site_calendars']['phase'] ?? '', ['running', 'completed', 'interrupted'], true)
+        ) {
+            return false;
+        }
         if (in_array($row['status'] ?? null, ['uploading', 'scanning', 'ready'], true)) {
             return true;
         }
 
+        $optionsJson = is_scalar($row['options_json'] ?? null) ? trim((string)$row['options_json']) : '';
+        $options = $optionsJson !== '' ? json_decode($optionsJson, true) : null;
+        $inventorySelectionOnly = is_array($options) && array_keys($options) === ['inventory_selection'];
+
         return ($row['status'] ?? null) === 'failed'
-            && (!is_scalar($row['options_json'] ?? null) || trim((string)$row['options_json']) === '')
+            && ($optionsJson === '' || $inventorySelectionOnly)
             && (!is_numeric($row['workspace_id'] ?? null) || (int)$row['workspace_id'] <= 0);
     }
 
@@ -395,14 +746,14 @@ final readonly class ConfluenceImportRepository
      */
     public function mapSpace(array $space, array $workspace, int $jobId): void
     {
-        $sourceId = $this->string($space['source_id'] ?? '');
+        $sourceId = $this->siteKey($this->string($space['source_id'] ?? ''), true);
         $existing = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_SPACES)
             ->where('source_instance', '=', 'archive')
             ->where('source_space_id', '=', $sourceId)
             ->first();
         $now = gmdate('Y-m-d H:i:s');
         $values = [
-            'source_space_key' => $this->string($space['source_key'] ?? ''),
+            'source_space_key' => $this->siteKey($this->string($space['source_key'] ?? '')),
             'source_space_type' => $this->string($space['type'] ?? 'global'),
             'source_space_name' => $this->string($space['name'] ?? ''),
             'source_owner_key' => $this->nullableString($space['owner_source_key'] ?? null),
@@ -436,7 +787,7 @@ final readonly class ConfluenceImportRepository
      */
     public function spaceBySourceId(string $sourceId): ?array
     {
-        $sourceId = trim($sourceId);
+        $sourceId = $this->siteKey(trim($sourceId), true);
         if ($sourceId === '') {
             return null;
         }
@@ -450,6 +801,32 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
+     * EN: Batch-loads selected source targets for site review without an N+1 mapping lookup.
+     *
+     * HR: Skupno učitava odabrane izvorne ciljeve za pregled sitea bez N+1 dohvata mapiranja.
+     *
+     * @param list<string> $ids
+     * @return array<string,array<string,mixed>>
+     */
+    public function spacesBySourceIds(array $ids): array
+    {
+        $result = [];
+        foreach (array_chunk($ids, 200) as $chunk) {
+            $keys = array_map(fn(string $id): string => $this->siteKey($id, true), $chunk);
+            foreach (
+                $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_SPACES)
+                ->where('source_instance', '=', 'archive')->whereIn('source_space_id', $keys)->get() as $row
+            ) {
+                $row = $this->normalizeRow($row);
+                $key = (string)$row['source_space_id'];
+                $prefix = (string)($this->siteContext['prefix'] ?? '');
+                $result[$prefix !== '' && str_starts_with($key, $prefix) ? substr($key, strlen($prefix)) : $key] = $row;
+            }
+        }
+        return $result;
+    }
+
+    /**
      * EN: Resolves a Confluence space key to the latest stored local mapping.
      *
      * HR: Razrješava Confluence ključ područja u zadnje spremljeno lokalno mapiranje.
@@ -458,18 +835,19 @@ final readonly class ConfluenceImportRepository
      */
     public function spaceBySourceKey(string $sourceKey): ?array
     {
-        $sourceKey = trim($sourceKey);
-        if ($sourceKey === '') {
+        if (trim($sourceKey) === '') {
             return null;
         }
-
-        $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_SPACES)
-            ->where('source_instance', '=', 'archive')
-            ->whereRaw('LOWER(source_space_key) = LOWER(?)', [$sourceKey])
-            ->orderBy('updated_at', 'DESC')
-            ->first();
-
-        return is_array($row) ? $this->normalizeRow($row) : null;
+        [$scope, $bindings] = $this->referenceScope('source_space_key', 'job_id', $sourceKey);
+        foreach ($this->referenceKeys(trim($sourceKey)) as $key) {
+            $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_SPACES)
+                ->where('source_instance', '=', 'archive')->whereRaw($scope, $bindings)
+                ->whereRaw('LOWER(source_space_key) = LOWER(?)', [$key])->orderBy('updated_at', 'DESC')->first();
+            if (is_array($row)) {
+                return $this->normalizeRow($row);
+            }
+        }
+        return null;
     }
 
     /**
@@ -484,9 +862,11 @@ final readonly class ConfluenceImportRepository
     public function workspaceSlugsBySourceKey(): array
     {
         $result = [];
+        [$scope, $bindings] = $this->referenceScope();
         foreach (
             $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_SPACES)
                 ->where('source_instance', '=', 'archive')
+                ->whereRaw($scope, $bindings)
                 ->orderBy('updated_at', 'ASC')
                 ->get() as $row
         ) {
@@ -494,6 +874,19 @@ final readonly class ConfluenceImportRepository
                 continue;
             }
             $sourceKey = strtoupper($this->string($row['source_space_key'] ?? ''));
+            $prefix = $this->referenceUrl !== '' ? 'site:' . hash('sha256', $this->referenceUrl) . ':' : (string)($this->siteContext['prefix'] ?? '');
+            if ($prefix !== '' && str_starts_with($sourceKey, strtoupper($prefix))) {
+                $sourceKey = substr($sourceKey, strlen($prefix));
+                foreach ($this->siteContext['aliases'] ?? [] as $originalKey => $alias) {
+                    if (strtoupper((string)$originalKey) === $sourceKey && strtoupper($alias) !== $sourceKey) {
+                        continue 2;
+                    }
+                }
+                $original = array_search($sourceKey, array_map(strtoupper(...), $this->siteContext['aliases'] ?? []), true);
+                if ($original !== false) {
+                    $sourceKey = strtoupper((string)$original);
+                }
+            }
             $workspaceSlug = $this->string($row['target_workspace_slug'] ?? '');
             if ($sourceKey !== '' && $workspaceSlug !== '') {
                 $result[$sourceKey] = $workspaceSlug;
@@ -576,6 +969,11 @@ final readonly class ConfluenceImportRepository
             return null;
         }
 
+        if ($this->siteContext !== []) {
+            $sourceKey = str_starts_with($sourceKey, 'confluence-user:') || str_starts_with($sourceKey, 'internal-user:')
+                ? $sourceKey : 'confluence-user:' . $sourceKey;
+            return $this->siteContext['users'][ConfluenceSiteAccessService::mappingKey((string)$this->siteContext['url'], 'users', $sourceKey)] ?? null;
+        }
         $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_IDENTITIES)
             ->where('source_user_key', '=', trim($sourceKey))
             ->where('mapping_status', '=', 'mapped')
@@ -647,6 +1045,9 @@ final readonly class ConfluenceImportRepository
      */
     public function mappedGroupId(string $sourceName): ?int
     {
+        if ($this->siteContext !== []) {
+            return $this->siteContext['groups'][mb_strtolower($sourceName)] ?? null;
+        }
         $sourceName = trim($sourceName);
         if ($sourceName === '') {
             return null;
@@ -663,6 +1064,37 @@ final readonly class ConfluenceImportRepository
     }
 
     /**
+     * EN: Loads confirmed site mappings in two queries, never one query per source principal.
+     * The prefix is an importer-generated hash, not a free-form SQL pattern.
+     *
+     * HR: Učitava potvrđena mapiranja sitea u dva upita, ne jednim upitom po identitetu.
+     * Prefiks je hash koji generira importer, a ne slobodno unesen SQL uzorak.
+     *
+     * @return array{users:array<string,int>,groups:array<string,int>}
+     */
+    public function siteMappings(string $prefix): array
+    {
+        if (preg_match('/^c2:[a-f0-9]{64}:$/D', $prefix) !== 1) {
+            throw new ConfluenceImportException(__('Izvorni site nije valjan.'));
+        }
+        $result = ['users' => [], 'groups' => []];
+        foreach (
+            [['users', ModuleSimbiozaConfluenceImport::TABLE_IDENTITIES, 'source_user_key', 'target_user_id'],
+            ['groups', ModuleSimbiozaConfluenceImport::TABLE_GROUPS, 'source_group_name', 'target_group_id']] as [$kind, $table, $source, $target]
+        ) {
+            foreach (
+                $this->database->table($table)->select([$source, $target])->where($source, 'LIKE', $prefix . '%')
+                ->where('confirmed', '=', true)->where('mapping_status', '=', 'mapped')->get() as $row
+            ) {
+                if ((int)$row[$target] > 0) {
+                    $result[$kind][(string)$row[$source]] = (int)$row[$target];
+                }
+            }
+        }
+        return $result;
+    }
+
+    /**
      * EN: Stores the mapping between a source page and target node.
      *
      * HR: Sprema vezu izvorne stranice i ciljnog čvora.
@@ -672,7 +1104,7 @@ final readonly class ConfluenceImportRepository
      */
     public function mapContent(array $page, array $target, int $jobId, string $status = 'imported'): void
     {
-        $spaceKey = $this->string($target['source_space_key'] ?? '');
+        $spaceKey = $this->siteKey($this->string($target['source_space_key'] ?? ''));
         $sourceId = $this->string($page['source_id'] ?? '');
         $existing = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_CONTENT)
             ->where('source_space_key', '=', $spaceKey)
@@ -720,14 +1152,17 @@ final readonly class ConfluenceImportRepository
      */
     public function contentBySource(string $spaceKey, string $sourceId): ?array
     {
-        $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_CONTENT)
-            ->whereRaw('LOWER(source_space_key) = LOWER(?)', [trim($spaceKey)])
-            ->where('logical_source_id', '=', trim($sourceId))
-            ->where('import_status', '=', 'imported')
-            ->orderBy('source_version', 'DESC')
-            ->first();
-
-        return is_array($row) ? $this->normalizeRow($row) : null;
+        [$scope, $bindings] = $this->referenceScope('source_space_key', 'job_id', $spaceKey);
+        foreach ($this->referenceKeys(trim($spaceKey)) as $key) {
+            $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_CONTENT)
+                ->whereRaw($scope, $bindings)->whereRaw('LOWER(source_space_key) = LOWER(?)', [$key])
+                ->where('logical_source_id', '=', trim($sourceId))->where('import_status', '=', 'imported')
+                ->orderBy('source_version', 'DESC')->first();
+            if (is_array($row)) {
+                return $this->normalizeRow($row);
+            }
+        }
+        return null;
     }
 
     /**
@@ -747,14 +1182,17 @@ final readonly class ConfluenceImportRepository
             return null;
         }
 
-        $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_CONTENT)
-            ->whereRaw('LOWER(source_space_key) = LOWER(?)', [$spaceKey])
-            ->whereRaw('(logical_source_id = ? OR source_content_id = ?)', [$sourceId, $sourceId])
-            ->where('import_status', '=', 'imported')
-            ->orderBy('source_version', 'DESC')
-            ->first();
-
-        return is_array($row) ? $this->normalizeRow($row) : null;
+        [$scope, $bindings] = $this->referenceScope('source_space_key', 'job_id', $spaceKey);
+        foreach ($this->referenceKeys($spaceKey) as $key) {
+            $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_CONTENT)
+                ->whereRaw($scope, $bindings)->whereRaw('LOWER(source_space_key) = LOWER(?)', [$key])
+                ->whereRaw('(logical_source_id = ? OR source_content_id = ?)', [$sourceId, $sourceId])
+                ->where('import_status', '=', 'imported')->orderBy('source_version', 'DESC')->first();
+            if (is_array($row)) {
+                return $this->normalizeRow($row);
+            }
+        }
+        return null;
     }
 
     /**
@@ -781,7 +1219,9 @@ final readonly class ConfluenceImportRepository
             }
         }
 
+        [$scope, $bindings] = $this->referenceScope('source_space_key', 'job_id', $canonicalKey);
         $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_CONTENT)
+            ->whereRaw($scope, $bindings)
             ->whereRaw('LOWER(source_space_key) = LOWER(?)', [$canonicalKey])
             ->where('import_status', '=', 'imported')
             ->whereNull('source_parent_id')
@@ -850,11 +1290,15 @@ final readonly class ConfluenceImportRepository
             return null;
         }
 
-        $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_CONTENT)
+        $query = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_CONTENT)
             ->where('logical_source_id', '=', $sourceId)
-            ->where('import_status', '=', 'imported')
-            ->orderBy('source_version', 'DESC')
-            ->first();
+            ->where('import_status', '=', 'imported');
+        [$scope, $bindings] = $this->referenceScope();
+        $query->whereRaw($scope, $bindings);
+        if (($this->siteContext['copy_scope'] ?? false) === true) {
+            $query->whereIn('source_space_key', array_map($this->siteKey(...), array_values($this->siteContext['aliases'])));
+        }
+        $row = $query->orderBy('source_version', 'DESC')->first();
 
         return is_array($row) ? $this->normalizeRow($row) : null;
     }
@@ -868,14 +1312,17 @@ final readonly class ConfluenceImportRepository
      */
     public function contentByTitle(string $spaceKey, string $title): ?array
     {
-        $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_CONTENT)
-            ->whereRaw('LOWER(source_space_key) = LOWER(?)', [trim($spaceKey)])
-            ->where('source_title', '=', trim($title))
-            ->where('import_status', '=', 'imported')
-            ->orderBy('source_version', 'DESC')
-            ->first();
-
-        return is_array($row) ? $this->normalizeRow($row) : null;
+        [$scope, $bindings] = $this->referenceScope('source_space_key', 'job_id', $spaceKey);
+        foreach ($this->referenceKeys(trim($spaceKey)) as $key) {
+            $row = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_CONTENT)
+                ->whereRaw($scope, $bindings)->whereRaw('LOWER(source_space_key) = LOWER(?)', [$key])
+                ->where('source_title', '=', trim($title))->where('import_status', '=', 'imported')
+                ->orderBy('source_version', 'DESC')->first();
+            if (is_array($row)) {
+                return $this->normalizeRow($row);
+            }
+        }
+        return null;
     }
 
     /**
@@ -912,6 +1359,32 @@ final readonly class ConfluenceImportRepository
         }
 
         return $result;
+    }
+
+    /**
+     * EN: Reads one add-only target snapshot, including disabled nodes whose slugs
+     * remain occupied. Only mappings from the verified source may identify old pages.
+     * No Workspace or Editor records are written through this integration boundary.
+     *
+     * HR: Čita jedan snimak cilja za dodavanje, uključujući isključene čvorove čiji
+     * slugovi ostaju zauzeti. Stare stranice određuju samo mapiranja potvrđenog izvora.
+     * Ova integracijska granica ne zapisuje Workspace ni Editor podatke.
+     *
+     * @return array{nodes:list<array<string,mixed>>,mappings:list<array<string,mixed>>}
+     */
+    public function personalAppendSnapshot(string $spaceKey, int $workspaceId): array
+    {
+        [$scope, $bindings] = $this->referenceScope('source_space_key', 'job_id', $spaceKey);
+        $keys = array_map(strtolower(...), $this->referenceKeys(trim($spaceKey)));
+        $placeholders = implode(',', array_fill(0, count($keys), '?'));
+        $mappings = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_CONTENT)
+            ->where('source_type', '=', 'page')
+            ->where('target_workspace_id', '=', $workspaceId)->whereRaw($scope, $bindings)
+            ->whereRaw('LOWER(source_space_key) IN (' . $placeholders . ')', $keys)
+            ->orderBy('source_version', 'ASC')->get();
+        $nodes = $this->database->table(ModuleWorkspace::TABLE_WORKSPACE_NODES)
+            ->where('workspace_id', '=', $workspaceId)->get();
+        return ['nodes' => $nodes, 'mappings' => $mappings];
     }
 
     /**
@@ -982,8 +1455,8 @@ final readonly class ConfluenceImportRepository
                 'uuid' => $this->string($link['uuid'] ?? $this->newLinkUuid()),
                 'job_id' => $jobId,
                 'source_page_id' => $this->string($link['source_page_id'] ?? ''),
-                'source_space_key' => $this->string($link['source_space_key'] ?? ''),
-                'destination_space_key' => $this->nullableString($link['destination_space_key'] ?? null),
+                'source_space_key' => $this->siteKey($this->string($link['source_space_key'] ?? '')),
+                'destination_space_key' => $this->nullableString($this->siteKey($this->string($link['destination_space_key'] ?? ''))),
                 'destination_page_id' => $this->nullableString($link['destination_page_id'] ?? null),
                 'destination_page_title' => $this->nullableString($link['destination_page_title'] ?? null),
                 'original_target' => $this->nullableString($link['original_target'] ?? null),
@@ -1064,15 +1537,20 @@ final readonly class ConfluenceImportRepository
      */
     public function linksForReconciliationBatch(string $destinationSpaceKey, int $afterId, int $limit): array
     {
-        $destinationSpaceKey = trim($destinationSpaceKey);
+        $destinationKeys = $this->referenceKeys(trim($destinationSpaceKey));
         $query = $this->database->table(ModuleSimbiozaConfluenceImport::TABLE_LINKS)
             ->where('id', '>', max(0, $afterId));
+        [$scope, $bindings] = $this->referenceScope();
+        $query->whereRaw($scope, $bindings);
+        if (($this->siteContext['copy_scope'] ?? false) === true) {
+            $query->whereIn('source_space_key', array_map($this->siteKey(...), array_values($this->siteContext['aliases'])));
+        }
         if ($destinationSpaceKey === '') {
             $query->where('status', '=', 'unresolved');
         } else {
             $query->whereRaw(
-                "(status = 'unresolved' OR (LOWER(destination_space_key) = LOWER(?) AND status <> 'manually_resolved'))",
-                [$destinationSpaceKey],
+                "(status = 'unresolved' OR ((" . implode(' OR ', array_fill(0, count($destinationKeys), 'LOWER(destination_space_key) = LOWER(?)')) . ") AND status <> 'manually_resolved'))",
+                $destinationKeys,
             );
         }
 
@@ -1093,12 +1571,20 @@ final readonly class ConfluenceImportRepository
      */
     public function countLinksForReconciliation(string $destinationSpaceKey): int
     {
-        $destinationSpaceKey = trim($destinationSpaceKey);
+        $destinationKeys = $this->referenceKeys(trim($destinationSpaceKey));
         $where = "status = 'unresolved'";
         $bindings = [];
         if ($destinationSpaceKey !== '') {
-            $where = "(status = 'unresolved' OR (LOWER(destination_space_key) = LOWER(?) AND status <> 'manually_resolved'))";
-            $bindings[] = $destinationSpaceKey;
+            $where = "(status = 'unresolved' OR ((" . implode(' OR ', array_fill(0, count($destinationKeys), 'LOWER(destination_space_key) = LOWER(?)')) . ") AND status <> 'manually_resolved'))";
+            $bindings = $destinationKeys;
+        }
+        [$scope, $scopeBindings] = $this->referenceScope();
+        $where = '(' . $where . ') AND ' . $scope;
+        $bindings = [...$bindings, ...$scopeBindings];
+        if (($this->siteContext['copy_scope'] ?? false) === true) {
+            $keys = array_map($this->siteKey(...), array_values($this->siteContext['aliases']));
+            $where .= ' AND source_space_key IN (' . implode(',', array_fill(0, count($keys), '?')) . ')';
+            $bindings = [...$bindings, ...$keys];
         }
         $row = $this->database->fetchOne(
             'SELECT COUNT(*) AS total FROM ' . ModuleSimbiozaConfluenceImport::TABLE_LINKS . ' WHERE ' . $where,
@@ -1664,6 +2150,13 @@ final readonly class ConfluenceImportRepository
                 : null;
             if (is_array($decoded)) {
                 $result[$targetKey] = $decoded;
+            }
+        }
+
+        $prefix = (string)($this->siteContext['prefix'] ?? '');
+        foreach (['source_space_id', 'source_space_key', 'destination_space_key'] as $key) {
+            if ($prefix !== '' && is_string($result[$key] ?? null) && str_starts_with($result[$key], $prefix)) {
+                $result[$key] = substr($result[$key], strlen($prefix));
             }
         }
 

@@ -69,7 +69,7 @@ final readonly class ConfluenceExportReader
      *
      * HR: Pretvara jedan object element u zatvoreni normalizirani model.
      */
-    private function parseObject(string $xml): ConfluenceObject
+    public function parseObject(#[\SensitiveParameter] string $xml): ConfluenceObject
     {
         $document = new DOMDocument();
         $previous = libxml_use_internal_errors(true);

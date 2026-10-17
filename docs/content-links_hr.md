@@ -24,6 +24,12 @@ postane escapirani Confluence zapis.
 
 ## Poveznice
 
+Kod međusobnih poveznica samostalnog uvoza područja i uvoza sitea njihove spremljene
+glavne adrese izvora moraju odgovarati nakon normalizacije, uključujući podputanju.
+Nepoznati ili različiti izvori ne povezuju se samo zato što imaju jednak ključ
+područja ili ID stranice. Taj kontekst čitanja ne premješta mapiranja i ne zamjenjuje
+prešutno postojeće ciljeve; kopije zadržavaju odvojeni prostor referenci.
+
 Pretvornik u završnom HTML-u prepoznaje moderne `/spaces/SPACE/pages/ID/title`, stare `/display/SPACE/title`, kratke `/x/TOKEN`, `viewpage.action?pageId=ID`, poveznice na naslovnicu područja i URL-ove privitaka. Završni prolaz izvodi se nakon pretvorbe svih makroa kako bi obuhvatio i poveznice koje su proizveli sigurni HTML makroi.
 
 Administrator prije pojedinačnog ili batch importa zadaje osnovni URL izvornog
@@ -47,7 +53,7 @@ Code, noformat, info, note, tip i warning strukture imaju sigurne HTML prikaze. 
 
 Moduli Calendar i Task ostaju vlasnici živih kalendara i zadataka. Uvezeni
 zadaci koriste uobičajeni ACL, CSRF zaštitu, spremanje stanja i audit trag Task
-modula. Confluence XML čuva identitet Team Calendara, ali ne i njegove događaje.
+modula. Confluence XML jednog područja čuva identitet Team Calendara, ali ne i njegove događaje.
 Zato `calendar` makro ostaje označen na stranici i u trajnom izvještaju dok
 administrator izričito ne prenese ICS u novi timski/resursni kalendar ili ne
 odabere postojeći čitljivi kalendar. Calendar modul provjerava vrstu i ovlasti,

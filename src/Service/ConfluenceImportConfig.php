@@ -156,6 +156,66 @@ final readonly class ConfluenceImportConfig
     }
 
     /**
+     * EN: Site and multi-space exports have separate bounded XML/plugin limits.
+     *
+     * HR: Izvozi sitea i više područja imaju zasebne ograničene XML/plugin limite.
+     */
+    public function maxSiteEntrySize(): int
+    {
+        return $this->integer('max_site_entry_size', 68719476736);
+    }
+
+    /**
+     * EN: Limits declared uncompressed site data without extracting it.
+     *
+     * HR: Ograničava deklarirane raspakirane podatke sitea bez njihova izdvajanja.
+     */
+    public function maxSiteUncompressedSize(): int
+    {
+        return $this->integer('max_site_uncompressed_size', 137438953472);
+    }
+
+    /**
+     * EN: Bounds one selected metadata object and the space catalog in memory.
+     *
+     * HR: Ograničava jedan odabrani objekt metapodataka i popis područja u memoriji.
+     */
+    public function maxInventoryObjectSize(): int
+    {
+        return $this->integer('max_inventory_object_size', 16777216);
+    }
+
+    /**
+     * EN: Bounds the inventory catalog independently of the number of documents.
+     *
+     * HR: Ograničava pregled područja neovisno o broju dokumenata.
+     */
+    public function maxInventorySpaces(): int
+    {
+        return $this->integer('max_inventory_spaces', 10000);
+    }
+
+    /**
+     * EN: Bounds the retained identity/access metadata of one site export.
+     *
+     * HR: Ograničava zadržane metapodatke identiteta i pristupa jednog izvoza sitea.
+     */
+    public function maxSiteIdentityRecords(): int
+    {
+        return $this->integer('max_site_identity_records', 100000);
+    }
+
+    /**
+     * EN: Caps a private identity index before parsing or publishing it.
+     *
+     * HR: Ograničava privatni indeks identiteta prije čitanja ili objave.
+     */
+    public function maxSiteIdentityIndexSize(): int
+    {
+        return $this->integer('max_site_identity_index_size', 33554432);
+    }
+
+    /**
      * EN: Maximum allowed compression ratio.
      *
      * HR: Najveći dopušteni omjer kompresije.
