@@ -90,7 +90,10 @@ final class ConfluenceImportWorkspaceBackupProvider implements
             self::ID,
             ModuleSimbiozaConfluenceImport::PACKAGE_NAME,
             1,
-            ['hr' => 'Confluence podaci i privitci područja', 'en' => 'Workspace Confluence data and attachments'],
+            [
+                'hr' => 'Pomoćni podaci uvoza iz Confluencea i izvorni privitci (ako postoje)',
+                'en' => 'Auxiliary Confluence import data and source attachments (when present)',
+            ],
             ['workspace-scope'],
             [BackupScope::WORKSPACE],
             true,
