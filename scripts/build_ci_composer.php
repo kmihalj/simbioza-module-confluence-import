@@ -32,7 +32,8 @@ if (!$stable) {
     $repositories = $manifest['repositories'] ?? [];
     foreach ($packages as $package => $url) {
         $section = isset($manifest['require'][$package]) ? 'require' : 'require-dev';
-        $manifest[$section][$package] = 'dev-main as 0.3.0';
+        $manifest[$section][$package] = 'dev-main as '
+            . ($package === 'aaieduhr/heartphrame-module-backup' ? '0.3.2' : '0.3.0');
         $found = false;
         foreach ($repositories as $repository) {
             if (($repository['url'] ?? null) === $url) {
