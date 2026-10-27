@@ -52,7 +52,7 @@ final readonly class ConfluenceExportReader
                 }
 
                 $xml = $reader->readOuterXml();
-                if (!is_string($xml) || $xml === '') {
+                if ($xml === '') {
                     continue;
                 }
 
