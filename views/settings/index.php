@@ -401,7 +401,7 @@ if (isset($menuRenderer) && is_object($menuRenderer)) {
 
 <div class="toast-container position-fixed bottom-0 end-0 p-3 confluence-import-toast-container"><div class="toast border-0 confluence-import-toast" id="confluence-import-toast" role="status" aria-live="polite" aria-atomic="true"><div class="toast-header bg-primary text-white" id="confluence-import-toast-header"><strong class="me-auto" id="confluence-import-toast-title"><?= $this->escape(__('Informacija')) ?></strong><button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="<?= $this->escape(__('Zatvori')) ?>"></button></div><div class="toast-body" id="confluence-import-toast-body"></div></div></div>
 
-<script>
+<script nonce="<?= $this->escape(is_string($scriptNonce ?? null) ? $scriptNonce : '') ?>">
 (() => {
     'use strict';
     const config = <?= json_encode([

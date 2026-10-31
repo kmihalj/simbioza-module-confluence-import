@@ -1,5 +1,7 @@
 # Simbioza Module Confluence Import
 
+> Release 0.3.2 supports host Content Security Policy nonces for existing interface scripts while preserving standalone behavior.
+
 Third-party scripts are reviewed through the Editor registry: an exact locally
 approved match is selected automatically only on imported pages containing it.
 New scripts remain pending; the grouped report can approve/select one or all

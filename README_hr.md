@@ -1,5 +1,7 @@
 # Simbioza modul za Confluence import
 
+> Izdanje 0.3.2 podržava Content Security Policy nonce domaćina za postojeće skripte sučelja, uz očuvanje samostalnog rada.
+
 Vanjske skripte provjeravaju se kroz registar Editora: točno lokalno odobreno
 podudaranje automatski se odabire samo na uvezenim stranicama koje ga sadrže.
 Nove skripte ostaju na čekanju; grupirani izvještaj omogućuje odobrenje/uključivanje

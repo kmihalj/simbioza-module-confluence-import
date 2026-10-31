@@ -524,7 +524,7 @@ $normalizeCalendarName = static function (string $name): string {
         </section>
     </div>
 </div>
-<script>
+<script nonce="<?= $this->escape(is_string($scriptNonce ?? null) ? $scriptNonce : '') ?>">
 document.querySelectorAll('[data-localized-file-input]').forEach(function (input) {
     var filename = input.closest('.input-group')?.querySelector('[data-localized-file-name]');
     if (!filename) {
