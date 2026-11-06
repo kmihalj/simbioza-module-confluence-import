@@ -8,8 +8,6 @@ Nove skripte ostaju na čekanju; grupirani izvještaj omogućuje odobrenje/uklju
 jedne ili svih pripadajućih stranica. H5P nema iznimku. Editorov
 `docs/external-scripts_hr.md` opisuje sigurnost, pregled upotrebe i backup.
 
-> Priprema izdanja 0.3.0: navedene naredbe za označena izdanja vrijede nakon koordinirane objave aplikacije i modula. Razvojna provjera koristi lokalne pakete; starija izdanja nisu zamjena za ovu konfiguraciju i shemu.
-
 Engleska verzija: [README.md](README.md)
 
 Modul specifičan za Simbiozu koji sigurno uvozi Confluence XML backup jednog spacea u područje. Čuva stablo stranica, aktualni sadržaj, privitke, unutarnje poveznice i izričito mapirane ovlasti. Povijest stranica i privitaka, nacrti i obrisane stranice opcionalni su i zadano isključeni.

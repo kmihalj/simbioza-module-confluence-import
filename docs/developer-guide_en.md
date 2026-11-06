@@ -58,7 +58,11 @@ Editor, and their derived indexes. It does not read any
 routes as soon as their targets can be resolved, and dynamic search forms store
 ordinary Workspace slugs. The module can therefore be disabled after imports
 are complete; its tables are needed only for re-import, reports, and
-administrator-facing provenance.
+administrator-facing provenance. Before disabling the importer, review any
+unresolved links that still use its resolver route. Those links need the
+module until their targets are imported and reconciliation has replaced them
+with ordinary Workspace URLs. Already materialized native pages and files
+continue through their owning modules.
 
 Page attachment registration fetches all matching rows in one query and
 confirms the ownership transfer to Editor in batches. Image web variants are
@@ -150,7 +154,7 @@ an HTML-table macro. Existing visible labels are preserved; date/time/timezone
 strings are not silently reformatted or shifted. Attribute values never become
 executable markup. Adjacent literal text such as `, 13:00, Srce` remains intact.
 
-The DABAR meeting-date regression covers the source form from the supplied
-archive and the final sanitized HTML. A previously imported version which
-already lost its date cannot infer it without the original archive; converter
-changes protect future imports, not a fabricated date based on the page title.
+Regression fixtures cover the source storage format and the final sanitized
+HTML. A previously imported version which already lost its date cannot recover
+it from a page title; compare it with the original archive and use a controlled
+re-import if needed. Conversion changes preserve source dates on new imports.

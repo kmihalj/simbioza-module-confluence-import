@@ -8,8 +8,6 @@ New scripts remain pending; the grouped report can approve/select one or all
 matching pages. H5P has no exception. See the Editor's `docs/external-scripts_en.md`
 for security, usage reports and backup behavior.
 
-> Release 0.3.0 preparation: the tagged installation commands below apply after coordinated publication of the application and modules. Development verification uses local packages; older releases cannot replace this configuration and schema.
-
 Croatian version: [README_hr.md](README_hr.md)
 
 Simbioza-specific module for safely importing a Confluence XML space backup into a Workspace. It preserves the page tree, current content, attachments, internal links and explicitly mapped access rules. Page and attachment history, drafts and deleted pages are optional and disabled by default.

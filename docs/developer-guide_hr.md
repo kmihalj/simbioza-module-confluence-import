@@ -58,6 +58,10 @@ tablice. Privremene resolver poveznice zamjenjuju se trajnim rutama čim se cilj
 može razriješiti, a dinamičke forme pretrage spremaju obične Workspace slugove.
 Zato se modul nakon dovršenih importa može isključiti; njegove tablice služe
 samo ponovnom importu, izvještaju i administratorskom porijeklu podataka.
+Prije isključivanja pregledajte nerazriješene poveznice koje još koriste
+resolver modula. One ga trebaju dok se cilj ne uveze i usklađivanje ih ne
+zamijeni običnim Workspace URL-ovima. Već pretvorene izvorne stranice i
+datoteke i dalje prikazuju njihovi vlasnički moduli.
 
 Registracija privitaka jedne stranice dohvaća sve pripadne retke jednim upitom i
 skupno potvrđuje prijenos vlasništva Editoru. Izrada web-varijanti slika nije dio
@@ -149,7 +153,7 @@ Postojeće vidljive oznake ostaju iste; datum/vrijeme/vremenska zona ne mijenjaj
 se prešutno. Atribut nikad ne postaje izvršni HTML. Susjedni doslovni tekst,
 primjerice `, 13:00, Srce`, ostaje sačuvan.
 
-Regresijski test datuma sastanka DABAR-a pokriva izvorni oblik iz dostavljene
-arhive i završni sanitizirani HTML. Prethodno uvezena verzija koja je već izgubila
-datum ne može ga pouzdano zaključiti bez arhive; izmjena convertera štiti nove
-uvoze, ne izmišlja datum iz naslova stranice.
+Regresijski primjeri pokrivaju izvorni format i završni sanitizirani HTML.
+Prethodno uvezena verzija koja je već izgubila datum ne može ga rekonstruirati
+iz naslova stranice; usporedite je s izvornom arhivom i po potrebi provedite
+kontrolirani ponovni uvoz. Izmjene pretvorbe čuvaju izvorne datume novih uvoza.

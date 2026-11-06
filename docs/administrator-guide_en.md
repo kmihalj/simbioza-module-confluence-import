@@ -18,7 +18,9 @@ Create an XML export of exactly one Confluence space. Do not unpack or change th
    If this Confluence
    source was imported before, also choose **Replace the existing Workspace**
    or **Import a separate copy**. Replacement permanently removes the earlier
-   imported Workspace before any new page is written. A copy keeps the
+   imported Workspace before any new page is written. Create and verify a
+   backup of that Workspace before choosing replacement; cancelling a later
+   failed import does not restore the removed source. A copy keeps the
    existing Workspace unchanged and uses isolated source and attachment
    identities. Replacement preserves public page and attachment links and
    rechecks references from other imported Workspaces during finalization.

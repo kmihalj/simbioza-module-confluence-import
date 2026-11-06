@@ -18,7 +18,9 @@ Izradite XML izvoz točno jednog Confluence spacea. ZIP nemojte raspakirati ni m
    poveznice. Ako je isti Confluence izvor
    već uvezen, odaberite i **Zamijeni postojeće područje** ili **Uvezi zasebnu
    kopiju**. Zamjena trajno uklanja ranije uvezeno područje prije prvog novog
-   zapisa. Kopija ostavlja postojeće područje netaknuto i koristi izolirane
+   zapisa. Prije zamjene izradite i provjerite backup postojećeg Područja;
+   odustajanje nakon kasnijeg neuspjelog uvoza ne vraća uklonjeni izvor.
+   Kopija ostavlja postojeće područje netaknuto i koristi izolirane
    identitete izvora i privitaka. Zamjena čuva javne poveznice na stranice i
    privitke te u završnoj fazi ponovno provjerava reference iz drugih uvezenih
    područja.
